@@ -101,6 +101,12 @@ tbody tr:hover{ background:#fafbfc; }
 td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }   /* 数字右对齐更整齐 */
 .mono{ font-variant-numeric:tabular-nums; }
 
+/* 花名册：操作列推到最右侧，与前面列保持明显间距 */
+#empTable{ table-layout:auto; }
+#empTable th.ops,
+#empTable td.ops{ text-align:right; width:1%; white-space:nowrap; }
+#empTable td.ops .btn{ margin-left:6px; }   /* 按钮之间留点间距 */
+
 /* ---------- 8. 考勤表（真 <table>，标准布局：序号|姓名|部门|时段|日期|汇总） ---------- */
 /* 用 border-collapse:separate + border-spacing:0，配合 sticky 固定列时线条也能对齐 */
 .att-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:#fff; }
@@ -111,7 +117,7 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }   /* 数�
   text-align:center; padding:0; white-space:nowrap;
 }
 .att-table thead th{ background:var(--bg); color:var(--muted); font-weight:500; height:30px; padding:0 4px; }
-.att-table thead th.date{ color:var(--text); font-weight:500; min-width:30px; width:1%; }
+.att-table thead th.date{ color:var(--text); font-weight:500; min-width:32px; width:1%; }
 .att-table thead th.wk{ font-weight:400; }
 /* 表头日期/星期的节假日配色（用 !important 压住 sticky 列的背景） */
 .hd-weekend{ background:#f0f2f5 !important; color:#94a3b8 !important; }   /* 周末：灰 */
@@ -132,7 +138,8 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }   /* 数�
 .att-table td.cell-holiday{ background:#fafbfc; }          /* 节假日当天底纹 */
 
 /* 汇总列（右侧：出勤/事假/病假/缺勤/调休/年假/加班） */
-.att-table .sumcol{ min-width:48px; padding:0 6px; font-variant-numeric:tabular-nums; }
+/* 刻意压窄：7 列合计宽度不能超过左侧日期区太多，避免比例失调 */
+.att-table .sumcol{ min-width:34px; padding:0 3px; font-variant-numeric:tabular-nums; font-size:12px; }
 .att-table td.sumcol{ color:var(--text); font-weight:500; }
 .att-table thead th.sumcol{ background:var(--bg); }
 
