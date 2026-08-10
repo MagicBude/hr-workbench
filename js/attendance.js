@@ -103,6 +103,15 @@ export function initAttendance() {
   grid.addEventListener("mousedown", onGridMouseDown);
   document.addEventListener("mousemove", onGridMouseMove);
   document.addEventListener("mouseup", onGridMouseUp);
+  // 双重保险：双击任意带状态单元格也打开时长编辑器（防止角标太小点不中/缓存未生效时仍有入口）
+  grid.addEventListener("dblclick", (ev) => {
+    const td = ev.target.closest("td.cell");
+    if (!td) return;
+    const rec = getAtt(document.getElementById("attMonth").value || "2026-08", td.dataset.emp);
+    const cur = (rec[td.dataset.day] && rec[td.dataset.day][td.dataset.shift]) || "";
+    const curS = (typeof cur === "object") ? cur.s : cur;
+    if (curS) openDurationEditor(td.dataset.emp, td.dataset.day, td.dataset.shift);
+  });
 }
 
 // 小工具：转义（与 roster.js 同款，避免部门名破坏 HTML）
