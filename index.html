@@ -96,6 +96,7 @@
           <div class="field"><label>入职日期</label><input id="empHire" type="date"></div>
           <div class="field"><label>基本月薪 (¥)</label><input id="empSalary" type="number" min="0" placeholder="8000"></div>
           <button class="btn btn-primary" id="addEmpBtn">添加员工</button>
+          <button class="btn" id="expRosterBtn">导出 Excel</button>
         </div>
         <div style="overflow-x:auto;">
           <table id="empTable">
@@ -113,6 +114,7 @@
         <div class="row">
           <div class="field"><label>考勤月份</label><input id="attMonth" type="month" value="2026-08"></div>
           <button class="btn" id="holidayBtn">节假日设置</button>
+          <button class="btn" id="expAttBtn">导出 Excel</button>
         </div>
         <div class="hint" style="margin-bottom:10px;">每天分「上午 / 下午 / 加班」三个时段，点击循环切换（√→事→病→缺→调→年→加→空）；选「调」自动扣可调休余额，选「加」可自动转调休。节假日自动标色（放假红 / 调休上班蓝），点「节假日设置」可调整。</div>
         <div class="att-wrap"><div class="att-grid" id="attGrid"></div></div>
@@ -128,6 +130,7 @@
           <button class="btn btn-primary" id="genPayBtn">生成 / 刷新薪资</button>
           <button class="btn" id="ratioBtn">社保公积金比例设置</button>
           <button class="btn" id="csvBtn">导出 CSV</button>
+          <button class="btn" id="expPayBtn">导出 Excel</button>
         </div>
         <div style="overflow-x:auto;">
           <table id="payTable">
@@ -184,6 +187,8 @@
     <div class="modal" id="modal"></div>
   </div>
 
+  <!-- 本地 SheetJS（Excel 导出用，零 CDN） -->
+  <script src="vendor/xlsx.mini.min.js"></script>
   <!-- 入口脚本：type="module" 开启 ES Modules 模块化 -->
   <script type="module" src="js/main.js"></script>
 </body>

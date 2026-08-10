@@ -355,6 +355,7 @@ polish: 全链路测试、移动端适配、样式统一与帮助提示
 - [x] **Phase 1 花名册增强**：编辑按钮、行号、拖拽排序、可调休余额（精确到分钟），已提交。
 - [x] **Phase 2 考勤表重构**：国家节假日 + 自定义放假、上午/下午/加班三时段、表头星期、调休/加班自动联动余额、界面美化，已提交。
 - [x] **Phase 3 薪资缴纳明细与比例设置**：公司/个人缴纳分项展示、组织默认比例 + 员工社保基数覆盖、比例设置弹窗，已提交。
-- [ ] **Phase 4 Excel 导出**：花名册/考勤/薪资导出 `.xlsx`（本地 `vendor/xlsx.mini.min.js`，零 CDN）。
+- [x] **Phase 4 Excel 导出**：花名册/考勤/薪资导出 `.xlsx`（本地 `vendor/xlsx.mini.min.js`，零 CDN），已提交。
+- [ ] **Phase 5 Polish 与综合测试**：旧数据迁移回测、移动端适配、性能、帮助提示、弹窗 Enter/Esc。
 
-**下一步**：开始 Phase 4（Excel 导出）。需先把 SheetJS 独立文件下载到 `vendor/` 本地目录（不引用 CDN），再写 `js/export.js`。每个 Phase 完成后提交一次 `git commit`。
+**下一步**：开始 Phase 5（打磨与测试）。每个 Phase 完成后提交一次 `git commit`。

@@ -16,6 +16,7 @@ import { initRoster, renderRoster } from "./roster.js";
 import { initAttendance, renderAttendance } from "./attendance.js";
 import { initPayroll, renderPayroll } from "./payroll.js";
 import { initDashboard, renderDashboard } from "./dashboard.js";
+import { exportRosterXlsx, exportAttendanceXlsx, exportPayrollXlsx } from "./export.js";
 
 // ---------- 顶部：组织下拉框渲染 ----------
 function renderOrgs() {
@@ -162,6 +163,13 @@ function bindTabs() {
   });
 }
 
+// ---------- 绑定各模块"导出 Excel"按钮 ----------
+function bindExport() {
+  document.getElementById("expRosterBtn").addEventListener("click", exportRosterXlsx);
+  document.getElementById("expAttBtn").addEventListener("click", () => exportAttendanceXlsx(document.getElementById("attMonth").value || "2026-08"));
+  document.getElementById("expPayBtn").addEventListener("click", () => exportPayrollXlsx(document.getElementById("payMonth").value || "2026-08"));
+}
+
 // ============================================================
 // 启动！
 // ============================================================
@@ -174,4 +182,5 @@ initDashboard();
 bindTopbar();              // 4) 顶部栏与 Tab 绑定
 document.getElementById("modalMask").addEventListener("click", (e) => { if (e.target === e.currentTarget) closeModal(); });
 bindTabs();
+bindExport();              // 4.5) 各模块"导出 Excel"按钮
 renderAll();               // 5) 首次绘制全部内容
