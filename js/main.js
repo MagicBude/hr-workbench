@@ -12,8 +12,8 @@
 import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg, migrateCurrent } from "./store.js";
 import { buildSample } from "./sample.js";
 import { openModal, closeModal, downloadFile, curMonth, curDay, showHelp } from "./ui.js";
-import { initRoster, renderRoster } from "./roster.js";
-import { initAttendance, renderAttendance } from "./attendance.js";
+import { initRoster, renderRoster, resetEmpColWidths } from "./roster.js";
+import { initAttendance, renderAttendance, resetAttColWidths } from "./attendance.js";
 import { initPayroll, renderPayroll } from "./payroll.js";
 import { initDashboard, renderDashboard } from "./dashboard.js";
 import { exportRosterXlsx, exportAttendanceXlsx, exportPayrollXlsx } from "./export.js";
@@ -170,6 +170,12 @@ function bindExport() {
   document.getElementById("expPayBtn").addEventListener("click", () => exportPayrollXlsx(document.getElementById("payMonth").value || "2026-08"));
 }
 
+// ---------- 绑定"恢复默认列宽"按钮 ----------
+function bindResetColWidths() {
+  document.getElementById("resetEmpColBtn").addEventListener("click", resetEmpColWidths);
+  document.getElementById("resetAttColBtn").addEventListener("click", resetAttColWidths);
+}
+
 // ---------- 弹窗键盘操作：Esc 关闭 / Enter 保存 ----------
 function bindGlobalKeys() {
   document.addEventListener("keydown", (e) => {
@@ -214,6 +220,7 @@ bindTopbar();              // 4) 顶部栏与 Tab 绑定
 document.getElementById("modalMask").addEventListener("click", (e) => { if (e.target === e.currentTarget) closeModal(); });
 bindTabs();
 bindExport();              // 4.5) 各模块"导出 Excel"按钮
+bindResetColWidths();      // 4.55) 恢复默认列宽按钮
 bindGlobalKeys();          // 4.6) 弹窗 Esc 关闭 / Enter 保存
 bindHelp();                // 4.7) 帮助按钮（规则说明）
 renderAll();               // 5) 首次绘制全部内容

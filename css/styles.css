@@ -101,10 +101,18 @@ tbody tr:hover{ background:#fafbfc; }
 td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }   /* 数字右对齐更整齐 */
 .mono{ font-variant-numeric:tabular-nums; }
 
-/* 列宽拖拽手柄（Excel 式）：表头右侧可拖动调列宽 */
-thead th{ position:relative; }
-.col-resize{ position:absolute; top:0; right:-3px; width:7px; height:100%; cursor:col-resize; z-index:6; }
-.col-resize:hover{ background:rgba(33,118,199,.25); }
+/* 列宽拖拽手柄（Excel 式）：给表头右侧留 8px 空间，手柄紧贴右内边距 */
+thead th{ position:relative; padding-right:8px; }
+.col-resize{
+  position:absolute; top:0; right:0; width:8px; height:100%;
+  cursor:col-resize; z-index:6;
+}
+/* 在手柄里画一条居右的 2px 竖线作为视觉标识；hover 变蓝 */
+.col-resize::after{
+  content:""; position:absolute; top:15%; right:3px; width:2px; height:70%;
+  background:rgba(0,0,0,.12); border-radius:1px; pointer-events:none;
+}
+.col-resize:hover::after{ background:var(--blue); }
 body.col-resizing, body.col-resizing *{ cursor:col-resize !important; user-select:none !important; }
 
 /* 花名册：固定布局便于列宽拖拽；操作列是末列，天然在最右侧 */
@@ -122,7 +130,7 @@ body.col-resizing, body.col-resizing *{ cursor:col-resize !important; user-selec
   border-right:1px solid var(--border); border-bottom:1px solid var(--border);
   text-align:center; padding:0; white-space:nowrap;
 }
-.att-table thead th{ background:var(--bg); color:var(--muted); font-weight:500; height:30px; padding:0 4px; }
+.att-table thead th{ background:var(--bg); color:var(--muted); font-weight:500; height:30px; padding:0 8px 0 4px; }
 .att-table thead th.date{ color:var(--text); font-weight:500; min-width:32px; }
 .att-table thead th.wk{ font-weight:400; }
 /* 表头日期/星期的节假日配色（用 !important 压住 sticky 列的背景） */

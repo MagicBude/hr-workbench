@@ -23,6 +23,12 @@ function saveColW(tag, w) { localStorage.setItem(colwKey(tag), JSON.stringify(w)
 // 花名册默认列宽（序号/姓名/部门/入职/月薪/可调休/操作）
 const EMP_DEF_W = [44, 110, 120, 120, 110, 90, 120];
 
+// 恢复默认列宽：清除记忆并刷新
+export function resetEmpColWidths() {
+  localStorage.removeItem(colwKey("emp"));
+  window.__renderAll();
+}
+
 // 花名册筛选项（仅内存，不持久化）：按姓名模糊匹配 + 按部门精确匹配
 let rosterFilter = { name: "", dept: "" };
 

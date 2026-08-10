@@ -170,6 +170,12 @@ export function renderAttendance() {
 function colwKey(tag) { return STORAGE_PREFIX + state.current + "_colw_" + tag; }
 function loadColW(tag) { try { return JSON.parse(localStorage.getItem(colwKey(tag))); } catch { return null; } }
 function saveColW(tag, w) { localStorage.setItem(colwKey(tag), JSON.stringify(w)); }
+
+// 恢复默认列宽：清除记忆并刷新
+export function resetAttColWidths() {
+  localStorage.removeItem(colwKey("att"));
+  renderAttendance();
+}
 // 由存储的 {fixed,date,sum} 展开成每列宽度数组（长度 = 4 + N + 7）
 function attWidths(N) {
   const s = loadColW("att") || {};
