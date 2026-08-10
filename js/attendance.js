@@ -13,7 +13,7 @@
 // ============================================================
 
 import { state, persist, getDepartments, computeRestMinutes } from "./store.js";
-import { STORAGE_PREFIX, STATUSES, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026, SUM_KEYS, HALF_DAY_MINUTES } from "./config.js";
+import { STORAGE_PREFIX, STATUSES, STATUS_LABEL, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026, SUM_KEYS, HALF_DAY_MINUTES } from "./config.js";
 import { sumRec } from "./sample.js";
 import { openModal, closeModal, showToast, enableColResize } from "./ui.js";
 
@@ -486,6 +486,15 @@ function openDurationEditor(empId, day, shift) {
   const label = STATUS_LABEL[curS] || curS;
   const total = (typeof cur === "object" && cur.min != null) ? cur.min : defaultMinFor(curS);
   let h = Math.floor(total / 60), m = total % 60;
+  const st = state.data.settings || {};
+  const ratio = st.overtimeToRestRatio || 1;
+  const durationHint = curS === "调"
+    ? "将从「可调休」余额中扣除此时长；余额不足将阻止保存。"
+    : curS === "加" && st.overtimeToRest
+      ? `将按实际加班时长 × ${ratio} 计入「可调休」余额。`
+      : curS === "加"
+        ? "当前未开启「加班转调休」，该时长仅记录。"
+        : "该时长仅记录，不影响可调休余额。";
 
   openModal(`
     <h3>设置时长 · ${label}</h3>
@@ -507,7 +516,7 @@ function openDurationEditor(empId, day, shift) {
       <button class="btn btn-sm" data-chip="120">2h</button>
       <button class="btn btn-sm" data-chip="240">4h</button>
     </div>
-    <div class="hint">${curS === "调" ? "将从「可调休」余额中扣除此时长；余额不足将阻止保存。" : "该时长仅记录，不影响可调休余额。"}</div>
+    <div class="hint">${durationHint}</div>
     <div class="modal-actions">
       <button class="btn" id="dCancel">取消</button>
       <button class="btn btn-primary" id="dOk">确定</button>
