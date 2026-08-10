@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  HR Workbench · 通用人事考勤薪资工作台
+  ------------------------------------------------------------
+  这是“页面骨架”文件，只负责摆放页面结构（HTML），
+  不包含任何业务逻辑。所有行为都写在 js/ 目录下的模块里，
+  由 js/main.js 这个入口脚本统一驱动。
+
+  为什么这样拆分？
+    以前很多人把 HTML/CSS/JS 全写在一个文件里，虽然“双击就能开”，
+    但代码一长就极难维护。这里采用“多文件 + 原生 ES Modules”：
+      - index.html  : 结构
+      - css/styles.css : 样式
+      - js/*.js     : 各个功能模块（数据、考勤、薪资……）
+    好处：每个文件各管一摊，改功能时很好定位；将来接后端也只需改数据层。
+
+  注意（重要）：因为用了 ES Modules（type="module"），
+  本地直接双击打开会被浏览器安全策略拦截，必须用一个“本地服务器”打开，
+  例如在本目录运行：  python -m http.server 8000   然后访问 http://localhost:8000
+  部署到 GitHub Pages 则没有这个限制，正常访问即可。
+  ============================================================
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <!-- viewport-fit=cover 让页面在刘海屏手机上也能铺满，配合 CSS 里的 env(safe-area-inset-*) 使用 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>HR Workbench · 通用人事考勤薪资工作台</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- ============ 顶部栏：标题 + 组织切换 + 数据备份 ============ -->
+  <header>
+    <div class="brand"><span class="logo">HR</span> HR Workbench</div>
+
+    <!-- 组织（公司）切换：支持多家公司数据互相隔离 -->
+    <div class="org-switch">
+      <select id="orgSelect" aria-label="选择组织"></select>
+      <button class="btn" id="addOrgBtn" title="新建组织">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>组织
+      </button>
+    </div>
+
+    <!-- 数据备份三件套：导出 JSON / 导入恢复 / 清空 -->
+    <button class="btn" id="exportBtn" title="导出 JSON 备份">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>导出
+    </button>
+    <button class="btn" id="importBtn" title="导入恢复">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M12 21V9m0 0l-4 4m4-4l4 4M5 3h14"/></svg>导入
+    </button>
+    <button class="btn btn-danger" id="clearBtn" title="清空示例数据">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>清空
+    </button>
+    <!-- 隐藏的文件选择器：点击“导入”时触发它 -->
+    <input type="file" id="importFile" accept="application/json" hidden>
+  </header>
+
+  <!-- ============ 置顶区：今天要处理 ============ -->
+  <!-- 打开页面第一眼就能看到“逾期/待办”，等价于一种不打扰的提醒 -->
+  <section id="today">
+    <h2>
+      <svg class="icon" viewBox="0 0 24 24" style="stroke:var(--warn)"><path d="M12 8v5l3 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      今天要处理
+    </h2>
+    <div id="todoList"></div>
+  </section>
+
+  <!-- ============ 底部 Tab 导航（移动端固定在底部） ============ -->
+  <nav class="tabs">
+    <button data-tab="roster" class="active">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-8 0v2M12 11a4 4 0 100-8 4 4 0 000 8z"/></svg>花名册
+    </button>
+    <button data-tab="attendance">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"/></svg>考勤
+    </button>
+    <button data-tab="payroll">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M12 1v22M17 5H9a3 3 0 000 6h6a3 3 0 010 6H7"/></svg>薪资
+    </button>
+    <button data-tab="dashboard">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-5 3 3 5-7"/></svg>看板
+    </button>
+  </nav>
+
+  <!-- ============ 主体：四个功能模块 ============ -->
+  <main>
+
+    <!-- 模块一：员工花名册 -->
+    <section class="section active" id="roster">
+      <div class="card">
+        <h3>员工花名册</h3>
+        <div class="row">
+          <div class="field"><label>姓名</label><input id="empName" placeholder="如 张三"></div>
+          <div class="field"><label>部门</label><input id="empDept" placeholder="如 销售部"></div>
+          <div class="field"><label>入职日期</label><input id="empHire" type="date"></div>
+          <div class="field"><label>基本月薪 (¥)</label><input id="empSalary" type="number" min="0" placeholder="8000"></div>
+          <button class="btn btn-primary" id="addEmpBtn">添加员工</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table id="empTable">
+            <thead><tr><th>姓名</th><th>部门</th><th>入职日期</th><th class="num">基本月薪</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 模块二：考勤记录 -->
+    <section class="section" id="attendance">
+      <div class="card">
+        <h3>考勤记录</h3>
+        <div class="row">
+          <div class="field"><label>考勤月份</label><input id="attMonth" type="month" value="2026-08"></div>
+        </div>
+        <div class="hint" style="margin-bottom:10px;">点击日期格循环切换状态：出勤 / 事假 / 病假 / 缺勤 / 调休 / 年假 / 加班</div>
+        <div class="att-wrap"><div class="att-grid" id="attGrid"></div></div>
+      </div>
+    </section>
+
+    <!-- 模块三：薪资核算 -->
+    <section class="section" id="payroll">
+      <div class="card">
+        <h3>薪资核算</h3>
+        <div class="row">
+          <div class="field"><label>薪资月份</label><input id="payMonth" type="month" value="2026-08"></div>
+          <button class="btn btn-primary" id="genPayBtn">生成 / 刷新薪资</button>
+          <button class="btn" id="csvBtn">导出 CSV</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table id="payTable">
+            <thead><tr>
+              <th>姓名</th><th>部门</th><th class="num">基本月薪</th><th class="num">出差补贴</th>
+              <th class="num">奖金</th><th class="num">加班费</th><th class="num">本月应发</th>
+              <th class="num">个人五险一金</th><th class="num">个税</th><th class="num">实发薪资</th>
+            </tr></thead>
+            <tbody></tbody>
+            <tfoot></tfoot>
+          </table>
+        </div>
+        <div class="hint">五险一金按基本月薪默认比例自动计算（公司+个人），个税按 (应发−个人缴纳−5000) 的 10% 简化估算，均可手动修改。</div>
+      </div>
+    </section>
+
+    <!-- 模块四：月度看板 -->
+    <section class="section" id="dashboard">
+      <div class="card">
+        <h3>月度看板</h3>
+        <div class="row">
+          <div class="field"><label>统计月份</label><input id="dashMonth" type="month" value="2026-08"></div>
+        </div>
+        <div class="kpi" id="kpi"></div>
+        <div class="charts">
+          <div class="box">
+            <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">本月出勤率</div>
+            <div id="donut"></div>
+          </div>
+          <div class="box">
+            <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">工资总额趋势（实发，按月）</div>
+            <div id="trend"></div>
+            <div class="legend" id="trendLegend"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============ 弹窗容器（新建组织等用） ============ -->
+  <div class="modal-mask" id="modalMask">
+    <div class="modal" id="modal"></div>
+  </div>
+
+  <!-- 入口脚本：type="module" 开启 ES Modules 模块化 -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

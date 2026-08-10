@@ -1,0 +1,162 @@
+/* ============================================================
+   styles.css — 全部样式集中在这里
+   说明：用 CSS 变量（:root 里 --xxx）统一管理颜色/圆角，
+        以后想换主题色，只改这几行即可。
+   ============================================================ */
+
+/* ---------- 1. 设计变量（主题色、间距等） ---------- */
+:root{
+  --blue:#185FA5;          /* 主色：按钮、链接、强调 */
+  --blue-50:#E6F1FB;       /* 主色的浅底色 */
+  --bg:#f4f6f9;            /* 页面背景 */
+  --card:#ffffff;          /* 卡片背景 */
+  --text:#1f2329;          /* 主文字 */
+  --muted:#6b7280;         /* 次要/说明文字 */
+  --border:#e5e7eb;        /* 边框线 */
+  --danger:#d8504a;        /* 危险/逾期红 */
+  --danger-bg:#fdecea;     /* 红色浅底 */
+  --ok:#1d9e75;            /* 成功/收入绿（国内习惯：收入绿） */
+  --warn:#ba7517;          /* 提醒橙 */
+  --warn-bg:#fdf3e0;
+  --radius:12px;           /* 统一圆角 */
+  --shadow:0 1px 3px rgba(0,0,0,.06);
+}
+
+/* ---------- 2. 基础重置 ---------- */
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; }
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--text); font-size:14px; line-height:1.6;
+  -webkit-text-size-adjust:100%;                 /* 手机上不允许自动放大字体 */
+  padding-bottom:calc(64px + env(safe-area-inset-bottom)); /* 给底部 Tab 留位 + 刘海安全区 */
+}
+h1,h2,h3{ margin:0; font-weight:500; }
+button{ font-family:inherit; cursor:pointer; }
+input,select{
+  font-family:inherit; font-size:16px;           /* 16px 防止 iOS 聚焦时页面被放大 */
+  padding:8px 10px; border:1px solid var(--border); border-radius:8px;
+  background:#fff; color:var(--text); width:100%;
+}
+input:focus,select:focus{ outline:none; border-color:var(--blue); }
+
+/* ---------- 3. 通用按钮 ---------- */
+.btn{
+  display:inline-flex; align-items:center; gap:6px; min-height:44px; padding:0 14px;
+  border:1px solid var(--border); border-radius:10px; background:#fff; color:var(--text);
+  font-size:14px; transition:.15s;
+}
+.btn:hover{ border-color:var(--blue); color:var(--blue); }
+.btn-primary{ background:var(--blue); color:#fff; border-color:var(--blue); }
+.btn-primary:hover{ background:#0c447c; color:#fff; }
+.btn-danger{ color:var(--danger); border-color:#f2c4c1; }
+.btn-danger:hover{ background:var(--danger-bg); color:var(--danger); }
+/* 内联 SVG 图标统一尺寸 */
+.btn svg{ width:18px; height:18px; display:block; }
+.icon{ width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+
+/* ---------- 4. 顶部栏 ---------- */
+header{
+  position:sticky; top:0; z-index:30; background:#fff; border-bottom:1px solid var(--border);
+  padding:10px 16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+}
+.brand{ display:flex; align-items:center; gap:8px; font-weight:500; font-size:16px; margin-right:auto; }
+.brand .logo{ width:26px; height:26px; border-radius:7px; background:var(--blue); color:#fff;
+  display:flex; align-items:center; justify-content:center; }
+.org-switch{ display:flex; align-items:center; gap:6px; }
+.org-switch select{ min-width:150px; width:auto; }
+
+/* ---------- 5. 今天要处理置顶区 ---------- */
+#today{
+  margin:14px 16px 0; background:var(--card); border:1px solid var(--border);
+  border-radius:var(--radius); box-shadow:var(--shadow); padding:12px 14px;
+}
+#today h2{ font-size:14px; color:var(--muted); margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+.todo{ display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; background:var(--bg); margin-bottom:6px; }
+.todo:last-child{ margin-bottom:0; }
+.todo.danger{ background:var(--danger-bg); }              /* 逾期项用红色背景强调 */
+.todo .dot{ width:8px; height:8px; border-radius:50%; background:var(--warn); flex:0 0 auto; }
+.todo.danger .dot{ background:var(--danger); }
+.todo .txt{ flex:1; font-size:13px; }
+.todo .txt b{ color:var(--danger); }
+.todo .go{ min-height:34px; padding:0 12px; border-radius:8px; border:1px solid var(--border); background:#fff; font-size:13px; }
+.empty{ color:var(--muted); font-size:13px; padding:6px 2px; }
+
+/* ---------- 6. 主体与卡片 ---------- */
+main{ max-width:1080px; margin:0 auto; padding:14px 16px 30px; }
+.card{
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:16px; margin-bottom:16px;
+}
+.card h3{ font-size:15px; margin-bottom:12px; }
+.row{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; }
+.field{ display:flex; flex-direction:column; gap:4px; min-width:140px; }
+.field label{ font-size:12px; color:var(--muted); }
+
+/* ---------- 7. 表格 ---------- */
+table{ width:100%; border-collapse:collapse; font-size:13px; }
+th,td{ padding:9px 10px; text-align:left; border-bottom:1px solid var(--border); }
+th{ color:var(--muted); font-weight:500; background:var(--bg); }
+tbody tr:hover{ background:#fafbfc; }
+td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }   /* 数字右对齐更整齐 */
+.mono{ font-variant-numeric:tabular-nums; }
+
+/* ---------- 8. 考勤网格（员工 × 日期） ---------- */
+.att-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:10px; }
+.att-grid{ display:grid; grid-template-columns:120px repeat(31,34px) 150px; min-width:1320px; }
+.att-grid > div{
+  border-right:1px solid var(--border); border-bottom:1px solid var(--border);
+  padding:6px 4px; text-align:center; font-size:12px;
+}
+.att-head{ background:var(--bg); font-weight:500; color:var(--muted); }
+.att-name{ text-align:left; padding-left:10px; background:#fff; position:sticky; left:0; z-index:2; font-weight:500; }
+.att-sum{ text-align:left; padding-left:8px; background:#fff; position:sticky; right:0; font-size:11px; color:var(--muted); }
+.cell{ cursor:pointer; user-select:none; border-radius:4px; min-height:30px; display:flex; align-items:center; justify-content:center; }
+.cell:hover{ outline:1px solid var(--blue); }
+
+/* ---------- 9. 看板（KPI 卡片 + 图表） ---------- */
+.kpi{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
+.kpi .box{ background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; }
+.kpi .v{ font-size:22px; font-weight:500; color:var(--blue); }
+.kpi .l{ font-size:12px; color:var(--muted); margin-top:2px; }
+.charts{ display:grid; grid-template-columns:300px 1fr; gap:16px; }
+.charts .box{ background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; }
+.legend{ display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:8px; }
+.legend i{ display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:middle; }
+
+/* ---------- 10. 底部 Tab 导航 ---------- */
+nav.tabs{
+  position:fixed; left:0; right:0; bottom:0; z-index:30; display:flex;
+  background:#fff; border-top:1px solid var(--border); padding-bottom:env(safe-area-inset-bottom);
+}
+nav.tabs button{
+  flex:1; border:none; background:none; min-height:54px; color:var(--muted);
+  font-size:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+}
+nav.tabs button.active{ color:var(--blue); }
+nav.tabs button svg{ width:22px; height:22px; }
+
+/* 模块默认隐藏，只有带 .active 的才显示 */
+.section{ display:none; }
+.section.active{ display:block; }
+
+/* ---------- 11. 弹窗 ---------- */
+.modal-mask{ position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:50; display:none;
+  align-items:center; justify-content:center; padding:20px; }
+.modal-mask.show{ display:flex; }
+.modal{ background:#fff; border-radius:14px; padding:20px; width:100%; max-width:420px; max-height:86vh; overflow:auto; }
+.modal h3{ font-size:16px; margin-bottom:14px; }
+.modal .row{ margin-bottom:12px; }
+.modal-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:10px; }
+.hint{ font-size:12px; color:var(--muted); margin-top:6px; }
+
+/* ---------- 12. 移动端适配（窄屏单列） ---------- */
+@media (max-width:768px){
+  header{ flex-wrap:wrap; }
+  .brand{ font-size:15px; }
+  .org-switch{ order:3; width:100%; }
+  .org-switch select{ width:100%; }
+  .kpi{ grid-template-columns:repeat(2,1fr); }
+  .charts{ grid-template-columns:1fr; }
+  .row .field{ flex:1; min-width:120px; }
+}

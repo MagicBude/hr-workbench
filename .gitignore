@@ -1,0 +1,14 @@
+# 依赖（本项目零依赖，留空也行，写出来以防以后加工具）
+node_modules/
+
+# 系统 / 编辑器文件
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# 日志
+*.log
+
+# 临时校验文件
+_check.js
