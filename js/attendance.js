@@ -98,20 +98,11 @@ export function initAttendance() {
     + getDepartments().map(d => `<option value="${escAttr(d)}">${escAttr(d)}</option>`).join("");
   fn.addEventListener("input", () => { attFilter.name = fn.value; renderAttendance(); });
   fd.addEventListener("change", () => { attFilter.dept = fd.value; renderAttendance(); });
-  // 事件委托：单击循环切换 + 拖拽框选批量应用
+  // 事件委托：单击循环切换 + 拖拽框选批量应用 + 时长角标
   const grid = document.getElementById("attGrid");
   grid.addEventListener("mousedown", onGridMouseDown);
   document.addEventListener("mousemove", onGridMouseMove);
   document.addEventListener("mouseup", onGridMouseUp);
-  // 时长角标单独绑定 click：避免被框选的 preventDefault 拦截，确保「点此设置时长」能弹出编辑器
-  grid.addEventListener("click", (ev) => {
-    const dur = ev.target.closest(".dur");
-    if (!dur) return;
-    const td = dur.closest("td.cell");
-    if (!td) return;
-    openDurationEditor(td.dataset.emp, td.dataset.day, td.dataset.shift);
-    ev.stopPropagation();
-  });
 }
 
 // 小工具：转义（与 roster.js 同款，避免部门名破坏 HTML）
@@ -318,8 +309,13 @@ function cellCoord(td) {
   return { ei: +td.dataset.ei, di: +td.dataset.di, si: +td.dataset.si, empId: td.dataset.emp, day: td.dataset.day, shift: td.dataset.shift };
 }
 function onGridMouseDown(ev) {
-  // 点击「时长」角标：不参与框选，让 click 事件自然触发 openDurationEditor
-  if (ev.target.closest(".dur")) return;
+  // 点击「时长」角标：直接用 mousedown 打开编辑器（比 click 更稳，不会被后续逻辑吞掉）
+  const dur = ev.target.closest(".dur");
+  if (dur) {
+    const td = dur.closest("td.cell");
+    if (td) openDurationEditor(td.dataset.emp, td.dataset.day, td.dataset.shift);
+    return;
+  }
   const td = ev.target.closest("td.cell");
   if (!td) return;
   closeBulkBar();                 // 任何新的按下先关掉上一次工具条
