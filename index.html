@@ -115,6 +115,7 @@
           <div class="field"><label>考勤月份</label><input id="attMonth" type="month" value="2026-08"></div>
           <button class="btn" id="holidayBtn">节假日设置</button>
           <button class="btn" id="expAttBtn">导出 Excel</button>
+          <button class="btn btn-sm help-btn" id="helpAttBtn" title="考勤规则说明">?</button>
         </div>
         <div class="hint" style="margin-bottom:10px;">每天分「上午 / 下午 / 加班」三个时段，点击循环切换（√→事→病→缺→调→年→加→空）；选「调」自动扣可调休余额，选「加」可自动转调休。节假日自动标色（放假红 / 调休上班蓝），点「节假日设置」可调整。</div>
         <div class="att-wrap"><div class="att-grid" id="attGrid"></div></div>
@@ -131,6 +132,7 @@
           <button class="btn" id="ratioBtn">社保公积金比例设置</button>
           <button class="btn" id="csvBtn">导出 CSV</button>
           <button class="btn" id="expPayBtn">导出 Excel</button>
+          <button class="btn btn-sm help-btn" id="helpPayBtn" title="薪资计算说明">?</button>
         </div>
         <div style="overflow-x:auto;">
           <table id="payTable">

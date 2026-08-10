@@ -48,3 +48,11 @@ export function curMonth() {
 export function curDay() {
   return new Date().getDate();
 }
+
+// 帮助弹窗：显示一组说明文字（计算规则 / 口径说明）
+// title: 标题；lines: 字符串数组（可用 <b> 等行内标签）
+export function showHelp(title, lines) {
+  openModal(`<h3>${title}</h3><ul class="help-list">${lines.map(l => `<li>${l}</li>`).join("")}</ul>
+    <div class="modal-actions"><button class="btn btn-primary" id="helpOk">知道了</button></div>`);
+  document.getElementById("helpOk").addEventListener("click", closeModal);
+}

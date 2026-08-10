@@ -11,7 +11,7 @@
 
 import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg, migrateCurrent } from "./store.js";
 import { buildSample } from "./sample.js";
-import { openModal, closeModal, downloadFile, curMonth, curDay } from "./ui.js";
+import { openModal, closeModal, downloadFile, curMonth, curDay, showHelp } from "./ui.js";
 import { initRoster, renderRoster } from "./roster.js";
 import { initAttendance, renderAttendance } from "./attendance.js";
 import { initPayroll, renderPayroll } from "./payroll.js";
@@ -170,6 +170,37 @@ function bindExport() {
   document.getElementById("expPayBtn").addEventListener("click", () => exportPayrollXlsx(document.getElementById("payMonth").value || "2026-08"));
 }
 
+// ---------- 弹窗键盘操作：Esc 关闭 / Enter 保存 ----------
+function bindGlobalKeys() {
+  document.addEventListener("keydown", (e) => {
+    const mask = document.getElementById("modalMask");
+    if (!mask.classList.contains("show")) return;          // 弹窗没开就不处理
+    if (e.key === "Escape") closeModal();
+    else if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
+      const btn = document.querySelector("#modal .btn-primary");
+      if (btn) { e.preventDefault(); btn.click(); }         // Enter 触发"主按钮"
+    }
+  });
+}
+
+// ---------- 帮助按钮（规则说明弹窗） ----------
+function bindHelp() {
+  document.getElementById("helpAttBtn").addEventListener("click", () => showHelp("考勤规则说明", [
+    "每天分 <b>上午 / 下午 / 加班</b> 三个时段，点击循环切换：√出勤→事→病→缺→调→年→加→空",
+    "选 <b>调</b> 自动扣可调休余额（半天=4小时），余额不足会提示并阻止",
+    "选 <b>加</b> 且开启「加班转调休」时，自动按 半天×比例 增加可调休余额",
+    "节假日：<b>红=放假</b>（不计出勤）、<b>蓝=调休上班</b>，可在「节假日设置」调整",
+    "汇总：上/下午各算 0.5 天，加班按次计"
+  ]));
+  document.getElementById("helpPayBtn").addEventListener("click", () => showHelp("薪资计算说明", [
+    "五险一金 = <b>社保基数 × 比例</b>（基数默认=基本月薪，可在员工编辑里单独设置）",
+    "比例在「社保公积金比例设置」里改，分<b>公司缴纳</b>与<b>个人缴纳</b>两部分",
+    "本月应发 = 基本月薪 + 出差补贴 + 奖金 + 加班费",
+    "个税 = max(0, 应发 − 个人缴纳合计 − 5000) × 10%（演示简化，非真实累进税率）",
+    "实发 = 应发 − 个人缴纳合计 − 个税"
+  ]));
+}
+
 // ============================================================
 // 启动！
 // ============================================================
@@ -183,4 +214,6 @@ bindTopbar();              // 4) 顶部栏与 Tab 绑定
 document.getElementById("modalMask").addEventListener("click", (e) => { if (e.target === e.currentTarget) closeModal(); });
 bindTabs();
 bindExport();              // 4.5) 各模块"导出 Excel"按钮
+bindGlobalKeys();          // 4.6) 弹窗 Esc 关闭 / Enter 保存
+bindHelp();                // 4.7) 帮助按钮（规则说明）
 renderAll();               // 5) 首次绘制全部内容
