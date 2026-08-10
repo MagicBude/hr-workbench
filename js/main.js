@@ -10,6 +10,7 @@
 // ============================================================
 
 import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg, migrateCurrent } from "./store.js";
+import { STORAGE_PREFIX } from "./config.js";
 import { buildSample } from "./sample.js";
 import { openModal, closeModal, downloadFile, curMonth, curDay, showHelp } from "./ui.js";
 import { initRoster, renderRoster, resetEmpColWidths } from "./roster.js";
@@ -126,7 +127,7 @@ function bindTopbar() {
     downloadFile(JSON.stringify(payload, null, 2), "hr-workbench_" + getCurrentOrgId() + "_" + d + ".json", "application/json");
   });
 
-  // 导入恢复（选择文件后读取并覆盖当前组织）
+  // 导入恢复（选择文件后读取并覆盖目标组织）
   document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
   document.getElementById("importFile").addEventListener("change", (e) => {
     const f = e.target.files[0];
@@ -135,12 +136,29 @@ function bindTopbar() {
     reader.onload = () => {
       try {
         const obj = JSON.parse(reader.result);
-        if (!confirm("导入将覆盖当前组织（" + getCurrentOrgId() + "）的全部数据，确认继续？")) return;
-        if (obj.data) { state.data = obj.data; persist(); }
-        migrateCurrent();   // 导入的旧数据也升级到新结构（补 restMinutes 等字段）
-        renderAll();
-        alert("导入成功");
-      } catch (err) { alert("文件解析失败：" + err.message); }
+        if (typeof obj !== "object" || !obj || !obj.data) throw new Error("文件格式不对：缺少 data 字段");
+        // 备份文件自带组织信息（org.id）→ 自动创建/切换到该组织，让数据正确归属，
+        // 避免误覆盖当前正在用的组织；没有 org 信息时则覆盖当前组织（兼容旧备份）。
+        let org = null, targetName = "";
+        if (obj.org && obj.org.id) {
+          org = state.orgs.find(o => o.id === obj.org.id) || { id: obj.org.id, name: obj.org.name || obj.org.id };
+          targetName = org.name;
+        }
+        if (!confirm("导入将覆盖组织「" + (targetName || getCurrentOrgId()) + "」的全部数据，确认继续？")) return;
+        if (org) {
+          if (!state.orgs.find(o => o.id === org.id)) {
+            state.orgs.push(org);
+            localStorage.setItem(STORAGE_PREFIX + "orgs", JSON.stringify(state.orgs));
+          }
+          state.current = org.id;
+          localStorage.setItem(STORAGE_PREFIX + "current", org.id);
+        }
+        state.data = obj.data;
+        persist();          // 写入目标组织的数据键
+        migrateCurrent();   // 升级到新结构（补 restMinutes / rec 形态 / 部门列表等）
+        renderAll();        // 含刷新组织下拉
+        alert("导入成功" + (targetName ? "（已切换/创建组织：" + targetName + "）" : ""));
+      } catch (err) { alert("导入失败：" + err.message); }
     };
     reader.readAsText(f);
     e.target.value = "";   // 清空，保证同一文件可重复选择
