@@ -8,8 +8,8 @@
 //       离线或部署 GitHub Pages 都能正常导出。
 // ============================================================
 
-import { state } from "./store.js";
-import { WEEK_LABEL } from "./config.js";
+import { state, computeRestMinutes } from "./store.js";
+import { WEEK_LABEL, SUM_KEYS } from "./config.js";
 
 // 该月实际天数
 function daysInMonth(month) {
@@ -27,7 +27,7 @@ export function exportRosterXlsx() {
   const rows = [["序号", "姓名", "部门", "入职日期", "基本月薪", "可调休(小时)", "社保基数"]];
   state.data.employees.forEach((e, i) => {
     rows.push([i + 1, e.name, e.dept, e.hireDate || "", e.baseSalary,
-      round1((e.restMinutes || 0) / 60), e.insuranceBase ?? ""]);
+      round1(computeRestMinutes(e.id) / 60), e.insuranceBase ?? ""]);
   });
   writeBook(rows, "花名册", "花名册.xlsx");
 }
@@ -40,11 +40,11 @@ export function exportAttendanceXlsx(month) {
   // 表头第 1 行：固定列 + 日期 + 汇总列名
   const head1 = ["序号", "姓名", "部门", "时段"];
   for (let d = 1; d <= N; d++) head1.push(String(d));
-  head1.push("出勤", "事假", "病假", "缺勤", "调休", "年假", "加班");
+  head1.push(...SUM_KEYS);
   // 表头第 2 行：星期（与日期列对齐）
   const head2 = ["", "", "", ""];
   for (let d = 1; d <= N; d++) head2.push(WEEK_LABEL[weekdayOf(month, d)]);
-  head2.push("", "", "", "", "", "", "");
+  head2.push(...SUM_KEYS.map(() => ""));
 
   const rows = [head1, head2];
   state.data.employees.forEach((e, i) => {
@@ -59,7 +59,7 @@ export function exportAttendanceXlsx(month) {
         // 新结构取对应时段；旧结构单值只放到"上午"行
         row.push(cell && typeof cell === "object" ? (cell[sh] || "") : (sh === "am" ? (cell || "") : ""));
       }
-      row.push(...(si === 0 ? [s.出勤, s.事假, s.病假, s.缺勤, s.调休, s.年假, s.加班] : ["", "", "", "", "", "", ""]));
+      row.push(...(si === 0 ? SUM_KEYS.map(k => s[k]) : SUM_KEYS.map(() => "")));
       rows.push(row);
     });
   });

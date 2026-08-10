@@ -16,7 +16,7 @@
 //   getOrgs/addOrg/setCurrentOrg/...  组织相关
 // ============================================================
 
-import { STORAGE_PREFIX, HOLIDAYS_2026, DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
+import { STORAGE_PREFIX, HOLIDAYS_2026, DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS, HALF_DAY_MINUTES } from "./config.js";
 import { sumRec } from "./sample.js";
 
 // ---------- 内存中的运行时状态（整个应用共享这一份） ----------
@@ -54,7 +54,8 @@ function migrate(data) {
   if (!data) return data;
   // 1) 员工补新字段
   data.employees = (data.employees || []).map(e => ({
-    restMinutes: 0,      // 可调休余额（分钟），缺省 0
+    restMinutes: 0,      // 兼容旧字段（新逻辑改用 restSeedMinutes + 动态计算）
+    restSeedMinutes: (e.restSeedMinutes != null) ? e.restSeedMinutes : (e.restMinutes || 0), // 初始可调休余额（分钟）
     insuranceBase: null, // 社保基数，null 表示用基本月薪
     ...e                 // 展开原对象，保留已有字段（新字段仅在缺失时生效）
   }));
@@ -154,4 +155,44 @@ export function addDepartment(name) {
   if (!n) return;
   const list = state.data.settings.departments || (state.data.settings.departments = []);
   if (!list.includes(n)) { list.push(n); persist(); }
+}
+
+// ---------- 可调休余额（动态计算，分钟级） ----------
+// 可用余额 = 初始余额(restSeedMinutes) + 加班累计(分钟) − 调休累计(分钟)。
+// 每次考勤变动后无需手动维护计数器，按记录实时算，不会漂移。
+export function computeRestMinutes(empId) {
+  const st = (state.data && state.data.settings) || {};
+  const half = st.halfDayMinutes || HALF_DAY_MINUTES; // 整段请假默认按半天(240 分钟)计
+  const otDefault = 60;                                // 加班未设时长时默认 1 小时
+  const ratio = st.overtimeToRestRatio || 1;
+  let used = 0, earned = 0;
+  const atts = (state.data && state.data.attendance) || [];
+  for (const a of atts) {
+    if (a.empId !== empId) continue;
+    const rec = a.rec || {};
+    for (const day in rec) {
+      const cell = rec[day];
+      if (!cell) continue;
+      ["am", "pm"].forEach(sh => {
+        const v = cell[sh];
+        if (!v) return;
+        const s = (typeof v === "object") ? v.s : v;
+        if (s === "调") {
+          const m = (typeof v === "object" && v.min != null) ? v.min : half;
+          used += m;
+        }
+      });
+      const ot = cell.ot;
+      if (ot) {
+        const os = (typeof ot === "object") ? ot.s : ot;
+        if (os === "加" && st.overtimeToRest) {
+          const m = (typeof ot === "object" && ot.min != null) ? ot.min : otDefault;
+          earned += m * ratio;
+        }
+      }
+    }
+  }
+  const emp = (state.data && state.data.employees || []).find(x => x.id === empId);
+  const seed = (emp && emp.restSeedMinutes) || 0;
+  return Math.round(seed + earned - used);
 }

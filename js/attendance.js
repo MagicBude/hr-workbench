@@ -12,13 +12,38 @@
 // 布局：用真 <table> + border-collapse，保证横竖线对齐；左侧员工信息列 sticky 固定。
 // ============================================================
 
-import { state, persist, getDepartments } from "./store.js";
-import { STORAGE_PREFIX, STATUSES, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026 } from "./config.js";
+import { state, persist, getDepartments, computeRestMinutes } from "./store.js";
+import { STORAGE_PREFIX, STATUSES, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026, SUM_KEYS, HALF_DAY_MINUTES } from "./config.js";
 import { sumRec } from "./sample.js";
 import { openModal, closeModal, showToast, enableColResize } from "./ui.js";
 
-// 汇总列顺序（与表头一致）：出勤 事假 病假 缺勤 调休 年假 加班
-const SUM_KEYS = ["出勤", "事假", "病假", "缺勤", "调休", "年假", "加班"];
+// ---------- 时长相关：可带时长的状态 ----------
+// 除出勤√外，其它状态都支持填分钟：
+//   - 调/年/事/病/缺：整段请假默认按半天(240 分钟)，可改为任意分钟（如请 2 小时）
+//   - 加：加班，默认 1 小时（用户选择），可按分钟调
+//   - 迟/退：迟到/早退，默认 30 分钟
+function isDurationStatus(s) { return s && s !== "√"; }
+function defaultMinFor(s) {
+  const half = (state.data.settings && state.data.settings.halfDayMinutes) || HALF_DAY_MINUTES;
+  if (s === "加") return 60;
+  if (s === "迟" || s === "退") return 30;
+  return half; // 调/年/事/病/缺 整段按半天
+}
+// 把单元格值（字符串 或 {s,min}）解析成展示所需 {s,min,color}
+function cellView(v) {
+  const s = (v && typeof v === "object") ? v.s : v;
+  const min = (v && typeof v === "object" && v.min != null) ? v.min : null;
+  const color = s ? STATUS_COLOR[s] : null;
+  return { s: s || "", min, color };
+}
+// 分钟 → 简短文案：240→"4h"，60→"1h"，30→"30m"，90→"1h30m"
+function fmtMin(m) {
+  m = Math.round(m || 0);
+  if (m <= 0) return "0m";
+  if (m % 60 === 0) return (m / 60) + "h";
+  if (m < 60) return m + "m";
+  return Math.floor(m / 60) + "h" + (m % 60) + "m";
+}
 
 // 考勤筛选（仅内存）：按姓名模糊匹配 + 按部门精确匹配
 let attFilter = { name: "", dept: "" };
@@ -67,7 +92,7 @@ export function initAttendance() {
   // 事件委托：整个 tbody 只绑一个点击监听，靠单元格 data-* 定位，性能好、代码简洁
   document.getElementById("attGrid").addEventListener("click", (ev) => {
     const td = ev.target.closest("td.cell");
-    if (td) onCellClick(td.dataset);
+    if (td) onCellClick(td, ev);
   });
 }
 
@@ -143,8 +168,12 @@ export function renderAttendance() {
       for (let d = 1; d <= N; d++) {                                   // 各日期格
         const hol = holidayOf(month, d);
         const v = rec[d] ? (rec[d][sh] || "") : "";
-        const color = v ? ` style="background:${STATUS_COLOR[v].bg};color:${STATUS_COLOR[v].fg}"` : "";
-        body += `<td class="cell${hol ? " cell-holiday" : ""}" data-emp="${e.id}" data-day="${d}" data-shift="${sh}"${color}>${v}</td>`;
+        const { s, min, color } = cellView(v);
+        const bg = color ? ` style="background:${color.bg};color:${color.fg}"` : "";
+        // 时长角标：可带时长的状态都显示（整段请假显示 4h，加班默认 1h，迟到默认 30m）
+        const showMin = min != null ? min : (isDurationStatus(s) ? defaultMinFor(s) : null);
+        const badge = showMin != null ? `<span class="dur" title="点此设置时长">${fmtMin(showMin)}</span>` : "";
+        body += `<td class="cell${hol ? " cell-holiday" : ""}" data-emp="${e.id}" data-day="${d}" data-shift="${sh}"${bg}>${s}${badge}</td>`;
       }
       if (si === 0) SUM_KEYS.forEach(k => { body += `<td class="sumcol" rowspan="3">${fmt1(s[k])}</td>`; });
       body += "</tr>";
@@ -206,54 +235,129 @@ function syncAttSticky(table) {
 // 半天数显示：整数不带小数点，0.5 显示为 0.5
 function fmt1(n) { return (n % 1 === 0) ? String(n) : n.toFixed(1); }
 
-// 单元格点击：循环切换状态，并处理调休/加班的余额联动
-function onCellClick(ds) {
-  const { emp: empId, day, shift } = ds;
+// 单元格点击：点格子循环切换状态；点「时长」角标打开时长编辑（不切换状态）
+function onCellClick(td, ev) {
+  const empId = td.dataset.emp, day = td.dataset.day, shift = td.dataset.shift;
   const month = document.getElementById("attMonth").value || "2026-08";
   const emp = state.data.employees.find(x => x.id === empId);
   if (!emp) return;
-  const rec = { ...getAtt(month, empId) };                    // 复制 rec，避免直接改原对象
-  const cell = { ...(rec[day] || { am: "", pm: "", ot: "" }) }; // 复制该日三时段
+  // 点「时长」角标 → 打开时长编辑，不切换状态
+  if (ev && ev.target.closest(".dur")) { openDurationEditor(empId, day, shift); return; }
+
+  const rec = { ...getAtt(month, empId) };
+  const cell = { ...(rec[day] || { am: "", pm: "", ot: "" }) };
   const cur = cell[shift] || "";
+  const curS = (typeof cur === "object") ? cur.s : cur;
 
   // 根据时段与日期类型决定可循环状态：
   //   - 加班行（ot）只能「加 / 空」切换；
   //   - 上午/下午行（am/pm）在普通工作日不能选「加」，循环 √→事→病→缺→调→年→空；
-  //   - 上午/下午行在周末或节假日放假时允许「加」（来上班算加班），走完整循环 √→事→病→缺→调→年→加→空。
+  //   - 上午/下午行在周末或节假日放假时允许「加」（来上班算加班），走完整循环（含迟/退/加）。
   const d = Number(day);
   const wd = weekdayOf(month, d);
   const hol = holidayOf(month, d);
-  const isRestDay = (wd === 0 || wd === 6) || (hol && hol.type === "holiday"); // 周末或节假日放假
+  const isRestDay = (wd === 0 || wd === 6) || (hol && hol.type === "holiday");
   const isOt = shift === "ot";
   const canOvertime = isOt || isRestDay;
   const cycle = canOvertime ? [...STATUSES, ""] : ["√", "事", "病", "缺", "调", "年", ""];
-  let idx = (cycle.indexOf(cur) + 1) % cycle.length;
+  let idx = (cycle.indexOf(curS) + 1) % cycle.length;
   let next = cycle[idx];
 
-  // —— 关键修复：普通行调休余额不足时【跳过】"调"，继续循环到下一个状态 ——
-  //    之前的写法是弹窗阻断，导致永远停在"缺"无法继续往后切。现在跳过并 toast 提示。
+  // 调休余额（动态计算）不足时跳过「调」，继续循环（不阻断）
   const st = state.data.settings || {};
-  const half = st.halfDayMinutes || 240;
-  if (!isOt && next === "调" && (emp.restMinutes || 0) < half) {
-    showToast(emp.name + " 可调休余额不足（需 " + (half / 60) + " 小时，当前 " + ((emp.restMinutes || 0) / 60).toFixed(1) + " 小时），已跳过「调休」");
-    idx = (idx + 1) % cycle.length;
-    next = cycle[idx];
+  const half = st.halfDayMinutes || HALF_DAY_MINUTES;
+  if (!isOt && next === "调") {
+    // 当前格子若已占「调」，先把这部分释放再判断可用
+    const curMin = (typeof cur === "object" && cur.s === "调" && cur.min != null) ? cur.min : (curS === "调" ? half : 0);
+    const avail = computeRestMinutes(empId) + curMin;
+    if (avail < half) {
+      showToast(emp.name + " 可调休余额不足（可用 " + (avail / 60).toFixed(1) + " 小时，需 " + (half / 60) + " 小时），已跳过「调休」");
+      idx = (idx + 1) % cycle.length;
+      next = cycle[idx];
+    }
   }
 
-  applyRestDelta(emp, cur, next, half, st);   // 应用余额增减（进入/离开 调、加）
-  cell[shift] = next;
+  // 存储：加/迟/退 存为带时长的对象（默认 1h / 30m），其余状态存为纯字符串（整段=半天）
+  if (next === "") cell[shift] = "";
+  else if (next === "加" || next === "迟" || next === "退") cell[shift] = { s: next, min: defaultMinFor(next) };
+  else cell[shift] = next;
+
   rec[day] = cell;
-  saveAtt(month, empId, rec);                 // saveAtt 内部已 persist
-  window.__renderAll();                        // 刷新所有模块（考勤/花名册余额/今天要处理）
+  saveAtt(month, empId, rec);
+  window.__renderAll();
 }
 
-// 调休/加班余额增减（调用前已保证「调」余额充足，无需阻断）
-function applyRestDelta(emp, from, to, half, st) {
-  if (from === "调") emp.restMinutes = (emp.restMinutes || 0) + half;   // 离开调休：释放半天
-  if (to === "调") emp.restMinutes = (emp.restMinutes || 0) - half;     // 进入调休：占用半天
-  const ratio = st.overtimeToRestRatio || 1;
-  if (from === "加" && st.overtimeToRest) emp.restMinutes = (emp.restMinutes || 0) - Math.round(half * ratio); // 离开加班：撤销
-  if (to === "加" && st.overtimeToRest) emp.restMinutes = (emp.restMinutes || 0) + Math.round(half * ratio);   // 进入加班：转调休
+// 时长编辑弹窗（点单元格里的「时长」角标触发）：步进器设小时/分钟 + 快捷档
+function openDurationEditor(empId, day, shift) {
+  const month = document.getElementById("attMonth").value || "2026-08";
+  const emp = state.data.employees.find(x => x.id === empId);
+  if (!emp) return;
+  const rec = getAtt(month, empId);
+  const cell = rec[day] || {};
+  const cur = cell[shift] || "";
+  const curS = (typeof cur === "object") ? cur.s : cur;
+  if (!curS) return;                       // 无状态不弹（角标只在有状态时出现）
+  const label = STATUS_LABEL[curS] || curS;
+  const total = (typeof cur === "object" && cur.min != null) ? cur.min : defaultMinFor(curS);
+  let h = Math.floor(total / 60), m = total % 60;
+
+  openModal(`
+    <h3>设置时长 · ${label}</h3>
+    <div class="field" style="display:flex;align-items:center;gap:12px;">
+      <span style="width:44px;">小时</span>
+      <button class="btn btn-sm" id="dHdec">−</button>
+      <b id="dH" style="min-width:24px;text-align:center;">${h}</b>
+      <button class="btn btn-sm" id="dHinc">+</button>
+    </div>
+    <div class="field" style="display:flex;align-items:center;gap:12px;">
+      <span style="width:44px;">分钟</span>
+      <button class="btn btn-sm" id="dMdec">−</button>
+      <b id="dM" style="min-width:24px;text-align:center;">${m}</b>
+      <button class="btn btn-sm" id="dMinc">+</button>
+    </div>
+    <div class="row" style="gap:6px;margin:12px 0;">
+      <button class="btn btn-sm" data-chip="30">0.5h</button>
+      <button class="btn btn-sm" data-chip="60">1h</button>
+      <button class="btn btn-sm" data-chip="120">2h</button>
+      <button class="btn btn-sm" data-chip="240">4h</button>
+    </div>
+    <div class="hint">${curS === "调" ? "将从「可调休」余额中扣除此时长；余额不足将阻止保存。" : "该时长仅记录，不影响可调休余额。"}</div>
+    <div class="modal-actions">
+      <button class="btn" id="dCancel">取消</button>
+      <button class="btn btn-primary" id="dOk">确定</button>
+    </div>`);
+
+  const hEl = document.getElementById("dH"), mEl = document.getElementById("dM");
+  const upd = () => { hEl.textContent = h; mEl.textContent = m; };
+  const setH = v => { h = Math.max(0, Math.min(23, v)); upd(); };
+  const setM = v => { m = Math.max(0, Math.min(59, v)); upd(); };
+  document.getElementById("dHdec").onclick = () => setH(h - 1);
+  document.getElementById("dHinc").onclick = () => setH(h + 1);
+  document.getElementById("dMdec").onclick = () => setM(m - 1);
+  document.getElementById("dMinc").onclick = () => setM(m + 1);
+  document.querySelectorAll("[data-chip]").forEach(b => b.onclick = () => {
+    const mm = +b.dataset.chip; setH(Math.floor(mm / 60)); setM(mm % 60);
+  });
+  document.getElementById("dCancel").onclick = closeModal;
+  document.getElementById("dOk").onclick = () => {
+    const min = h * 60 + m;
+    if (curS === "调") {
+      // 余额检查：把当前格子已占的「调」释放后再判断能否负担新时长
+      const curMin = (typeof cur === "object" && cur.min != null) ? cur.min : defaultMinFor("调");
+      const avail = computeRestMinutes(empId) + curMin;
+      if (min > avail) {
+        showToast(emp.name + " 可调休余额不足（可用 " + (avail / 60).toFixed(1) + " 小时），已取消");
+        closeModal(); return;
+      }
+    }
+    const r = { ...getAtt(month, empId) };
+    const c = { ...(r[day] || { am: "", pm: "", ot: "" }) };
+    c[shift] = { s: curS, min };
+    r[day] = c;
+    saveAtt(month, empId, r);
+    closeModal();
+    window.__renderAll();
+  };
 }
 
 // ---------- 节假日设置弹窗 ----------

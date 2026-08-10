@@ -12,13 +12,13 @@ import { STATUS_LABEL, INSURANCE_RATIO, BIG_SICKNESS, TAX_THRESHOLD, TAX_RATE, H
 
 // 生成一份完整的示例数据（data 对象）
 export function buildSample() {
-  // 1) 员工花名册：5 个虚构员工（restMinutes=可调休余额分钟数，insuranceBase=null 用月薪）
+  // 1) 员工花名册：5 个虚构员工（restSeedMinutes=初始可调休余额分钟数；可用余额=初始+加班−调休 动态算）
   const employees = [
-    { id: "e1", name: "张三", dept: "总经办", hireDate: "2020-03-01", baseSalary: 18000, restMinutes: 960, insuranceBase: null },
-    { id: "e2", name: "李四", dept: "销售部", hireDate: "2021-06-15", baseSalary: 12000, restMinutes: 480, insuranceBase: null },
-    { id: "e3", name: "王五", dept: "行政部", hireDate: "2022-09-01", baseSalary: 8000,  restMinutes: 120, insuranceBase: null },
-    { id: "e4", name: "赵六", dept: "财务部", hireDate: "2023-02-10", baseSalary: 9000,  restMinutes: 0,   insuranceBase: null },
-    { id: "e5", name: "孙七", dept: "销售部", hireDate: "2024-07-20", baseSalary: 7500,  restMinutes: 240, insuranceBase: null }
+    { id: "e1", name: "张三", dept: "总经办", hireDate: "2020-03-01", baseSalary: 18000, restSeedMinutes: 960, insuranceBase: null },
+    { id: "e2", name: "李四", dept: "销售部", hireDate: "2021-06-15", baseSalary: 12000, restSeedMinutes: 480, insuranceBase: null },
+    { id: "e3", name: "王五", dept: "行政部", hireDate: "2022-09-01", baseSalary: 8000,  restSeedMinutes: 120, insuranceBase: null },
+    { id: "e4", name: "赵六", dept: "财务部", hireDate: "2023-02-10", baseSalary: 9000,  restSeedMinutes: 0,   insuranceBase: null },
+    { id: "e5", name: "孙七", dept: "销售部", hireDate: "2024-07-20", baseSalary: 7500,  restSeedMinutes: 240, insuranceBase: null }
   ];
 
   const attendance = [];
@@ -63,8 +63,9 @@ export function buildSample() {
 //   新结构（分时段）：rec = { 1:{am:"√",pm:"√",ot:""}, ... }
 //   旧结构（单格）  ：rec = { 1:"√", ... }
 // 规则：上午/下午各算 0.5 天（按状态累计），加班时段单独计“次”。
+// 注：迟到/早退 也计 0.5（占用一个半天槽位）；可调休余额的分钟级精度在动态计算里体现。
 export function sumRec(rec) {
-  const s = { 出勤: 0, 事假: 0, 病假: 0, 缺勤: 0, 调休: 0, 年假: 0, 加班: 0 };
+  const s = { 出勤: 0, 事假: 0, 病假: 0, 缺勤: 0, 调休: 0, 年假: 0, 加班: 0, 迟到: 0, 早退: 0 };
   for (const k in rec) {
     const cell = rec[k];
     if (cell && typeof cell === "object") {
@@ -72,14 +73,19 @@ export function sumRec(rec) {
       ["am", "pm"].forEach(sh => {
         const v = cell[sh];
         if (!v) return;
-        if (v === "√") s.出勤 += 0.5;
-        else if (STATUS_LABEL[v] && v !== "加") s[STATUS_LABEL[v]] += 0.5;
+        const sv = (typeof v === "object") ? v.s : v;
+        if (sv === "√") s.出勤 += 0.5;
+        else if (sv) s[STATUS_LABEL[sv]] = (s[STATUS_LABEL[sv]] || 0) + 0.5;
       });
-      if (cell.ot) s.加班 += 1;   // 加班时段单独计次
+      const ot = cell.ot;
+      if (ot) {
+        const os = (typeof ot === "object") ? ot.s : ot;
+        if (os === "加") s.加班 += 1;   // 加班时段单独计次
+      }
     } else {
       // 旧结构：整天一个状态
       if (cell === "√") s.出勤++;
-      else if (STATUS_LABEL[cell]) s[STATUS_LABEL[cell]]++;
+      else if (STATUS_LABEL[cell]) s[STATUS_LABEL[cell]] = (s[STATUS_LABEL[cell]] || 0) + 1;
     }
   }
   return s;
