@@ -114,9 +114,11 @@ export function enableColResize(opts) {
   }
   if (!widths) widths = cols.map((c, i) => parseFloat(c.style.width) || (byCol[i] ? Math.round(byCol[i].getBoundingClientRect().width) : min));
 
-  // 给每个表头加拖拽手柄（已加过则跳过，避免重复绑定）
+  // 每次重建 colgroup 后同步重建手柄。花名册的 thead 会复用，如果沿用旧手柄，
+  // 其事件闭包仍指向已被 cg.innerHTML 清掉的旧 col，拖动就不会作用于当前表格。
   ths.forEach(th => {
-    if (th.querySelector(".col-resize")) return;
+    const oldHandle = th.querySelector(".col-resize");
+    if (oldHandle) oldHandle.remove();
     const h = document.createElement("span");
     h.className = "col-resize";
     th.appendChild(h);
