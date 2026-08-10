@@ -49,7 +49,7 @@ hr-workbench/
 
 ```bash
 cd hr-workbench
-python -m http.server 8000
+python -m http.server 800
 # 然后浏览器访问 http://localhost:8000
 ```
 
@@ -68,7 +68,7 @@ python -m http.server 8000
 ## 部署到 GitHub Pages
 
 1. 把本仓库推到 GitHub（`https://github.com/MagicBude/hr-workbench`）。
-2. 仓库 **Settings → Pages → Build and deployment → Source 选 "Deploy from a branch"**，分支选 `main`，目录选 `/ (root)`。
+2. 仓库 **Settings → Pages → Build and deployment → Source 选 "Deploy from a branch"**，分支选 `master`，目录选 `/ (root)`。
 3. 等待约 1 分钟，获得 `https://magicbude.github.io/hr-workbench/` 公网地址。
 4. 手机浏览器打开 → 分享 → 「添加到主屏幕」，即可当 APP 使用。
 
