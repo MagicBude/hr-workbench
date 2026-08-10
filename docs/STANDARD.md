@@ -39,7 +39,7 @@
   - 薪资表：文本左 + 数字右 + 表头分组标题居中。
 - 数字列统一加 `font-variant-numeric:tabular-nums`，保证等宽、对齐整齐。
 
-![表格列对齐规则](assets/table-align-rules.png)
+![表格列对齐规则](assets/table-align-rules.svg)
 
 ---
 

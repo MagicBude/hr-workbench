@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 492" font-family="'PingFang SC','Microsoft YaHei','Segoe UI',sans-serif">
+  <!-- 背景 -->
+  <rect width="680" height="492" fill="#ffffff"/>
+
+  <!-- 标题 -->
+  <text x="340" y="34" text-anchor="middle" font-size="21" font-weight="700" fill="#0f172a">表格列对齐三原则</text>
+  <text x="340" y="56" text-anchor="middle" font-size="12.5" fill="#64748b">按数据类型自动选择对齐方式 · 不提供逐列手动覆盖</text>
+
+  <!-- ===================== 卡片 1：左对齐 ===================== -->
+  <rect x="20" y="80" width="210" height="370" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+  <path d="M 20,90 a 10,10 0 0 1 10,-10 h 190 a 10,10 0 0 1 10,10 v 36 h -210 z" fill="#2563eb"/>
+  <text x="125" y="110" text-anchor="middle" font-size="17" font-weight="700" fill="#ffffff">← 左对齐</text>
+  <text x="35" y="150" font-size="11" fill="#94a3b8">示例（文本贴左边界）</text>
+  <rect x="35" y="158" width="180" height="136" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <line x1="35" y1="192" x2="215" y2="192" stroke="#e2e8f0"/>
+  <line x1="35" y1="226" x2="215" y2="226" stroke="#e2e8f0"/>
+  <line x1="35" y1="260" x2="215" y2="260" stroke="#e2e8f0"/>
+  <text x="45" y="182" font-size="13" fill="#334155" text-anchor="start">张三</text>
+  <text x="45" y="216" font-size="13" fill="#334155" text-anchor="start">销售部</text>
+  <text x="45" y="250" font-size="13" fill="#334155" text-anchor="start">2026-03-01</text>
+  <text x="45" y="284" font-size="13" fill="#334155" text-anchor="start">技术工程师</text>
+  <line x1="35" y1="316" x2="215" y2="316" stroke="#e2e8f0"/>
+  <text x="35" y="340" font-size="11.5" font-weight="700" fill="#475569">用于</text>
+  <text x="35" y="362" font-size="11.5" fill="#475569" text-anchor="start">姓名、部门、入职日期</text>
+  <text x="35" y="382" font-size="11.5" fill="#475569" text-anchor="start">描述性文本</text>
+
+  <!-- ===================== 卡片 2：右对齐 ===================== -->
+  <rect x="245" y="80" width="210" height="370" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+  <path d="M 245,90 a 10,10 0 0 1 10,-10 h 190 a 10,10 0 0 1 10,10 v 36 h -210 z" fill="#d97706"/>
+  <text x="350" y="110" text-anchor="middle" font-size="17" font-weight="700" fill="#ffffff">右对齐 →</text>
+  <text x="260" y="150" font-size="11" fill="#94a3b8">示例（数值贴右边界）</text>
+  <rect x="260" y="158" width="180" height="136" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <line x1="260" y1="192" x2="440" y2="192" stroke="#e2e8f0"/>
+  <line x1="260" y1="226" x2="440" y2="226" stroke="#e2e8f0"/>
+  <line x1="260" y1="260" x2="440" y2="260" stroke="#e2e8f0"/>
+  <text x="430" y="182" font-size="13" fill="#334155" text-anchor="end">8,000</text>
+  <text x="430" y="216" font-size="13" fill="#334155" text-anchor="end">120.5</text>
+  <text x="430" y="250" font-size="13" fill="#334155" text-anchor="end">980.00</text>
+  <text x="430" y="284" font-size="13" fill="#334155" text-anchor="end">7,020</text>
+  <line x1="260" y1="316" x2="440" y2="316" stroke="#e2e8f0"/>
+  <text x="260" y="340" font-size="11.5" font-weight="700" fill="#475569">用于</text>
+  <text x="260" y="362" font-size="11.5" fill="#475569" text-anchor="start">基本月薪、可调休</text>
+  <text x="260" y="382" font-size="11.5" fill="#475569" text-anchor="start">社保缴纳、实发</text>
+
+  <!-- ===================== 卡片 3：居中对齐 ===================== -->
+  <rect x="470" y="80" width="210" height="370" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+  <path d="M 470,90 a 10,10 0 0 1 10,-10 h 190 a 10,10 0 0 1 10,10 v 36 h -210 z" fill="#0d9488"/>
+  <text x="575" y="110" text-anchor="middle" font-size="17" font-weight="700" fill="#ffffff">↔ 居中对齐</text>
+  <text x="485" y="150" font-size="11" fill="#94a3b8">示例（标记居中）</text>
+  <rect x="485" y="158" width="180" height="136" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <line x1="485" y1="192" x2="665" y2="192" stroke="#e2e8f0"/>
+  <line x1="485" y1="226" x2="665" y2="226" stroke="#e2e8f0"/>
+  <line x1="485" y1="260" x2="665" y2="260" stroke="#e2e8f0"/>
+  <text x="575" y="182" font-size="12" fill="#334155" text-anchor="middle">√ 事 病 缺 调 年 加</text>
+  <text x="575" y="216" font-size="13" fill="#334155" text-anchor="middle">部门    姓名</text>
+  <text x="575" y="250" font-size="13" fill="#334155" text-anchor="middle">1  2  3  …  31</text>
+  <text x="575" y="284" font-size="13" fill="#334155" text-anchor="middle">表头分组标题</text>
+  <line x1="485" y1="316" x2="665" y2="316" stroke="#e2e8f0"/>
+  <text x="485" y="340" font-size="11.5" font-weight="700" fill="#475569">用于</text>
+  <text x="485" y="362" font-size="11.5" fill="#475569" text-anchor="start">考勤状态 √ 事 病 缺…</text>
+  <text x="485" y="382" font-size="11.5" fill="#475569" text-anchor="start">表头标题、日历日期</text>
+
+  <!-- 页脚 -->
+  <text x="340" y="474" text-anchor="middle" font-size="11" fill="#94a3b8">数字列统一使用 tabular-nums 等宽对齐</text>
+</svg>
