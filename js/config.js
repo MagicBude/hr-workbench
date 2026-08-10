@@ -92,6 +92,11 @@ export const DEFAULT_SETTINGS = {
   overtimeToRest: true,                 // 加班是否自动转为可调休
   overtimeToRestRatio: 1.0,             // 加班分钟 × 比例 = 增加的可调休分钟
   halfDayMinutes: HALF_DAY_MINUTES,     // 半天分钟数（调休扣减 / 加班增加的单位）
+  enableLateEarly: true,                // 是否允许迟到 / 早退状态
+  enforceRestBalance: true,             // 调休时是否强制校验可用余额
+  showTodayTodos: true,                 // 是否显示首页“今天要处理”
+  compactTables: false,                 // 是否使用紧凑表格密度
+  defaultMonth: "",                     // 默认月份；空字符串表示当前月份
   departments: []                       // 部门列表（组织级选项，避免手输拼出幽灵部门）
 };
 

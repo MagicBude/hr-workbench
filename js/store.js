@@ -44,7 +44,10 @@ function writeJSON(key, value) {
 
 // 返回一个"空数据"模板（新增组织时用）
 export function emptyData() {
-  return { employees: [], attendance: [], payroll: [] };
+  return {
+    employees: [], attendance: [], payroll: [],
+    settings: { ...DEFAULT_SETTINGS, departments: [], insuranceRatio: JSON.parse(JSON.stringify(INSURANCE_RATIO)), bigSickness: BIG_SICKNESS }
+  };
 }
 
 // ---------- 数据迁移：把旧版本数据升级到当前结构（向后兼容） ----------
@@ -71,7 +74,7 @@ function migrate(data) {
   // 3) 节假日：缺省用 2026 国家法定节假日
   if (!data.holidays) data.holidays = { ...HOLIDAYS_2026 };
   // 4) 组织设置：缺省用默认值（加班转调休开关、半天分钟数等）
-  if (!data.settings) data.settings = { ...DEFAULT_SETTINGS };
+  data.settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
   // 5) 社保比例 / 大病医疗：缺省用全局默认（Phase 3 可在"比例设置"里改）
   if (!data.settings.insuranceRatio) data.settings.insuranceRatio = JSON.parse(JSON.stringify(INSURANCE_RATIO));
   if (data.settings.bigSickness == null) data.settings.bigSickness = BIG_SICKNESS;
@@ -164,7 +167,7 @@ export function computeRestMinutes(empId) {
   const st = (state.data && state.data.settings) || {};
   const half = st.halfDayMinutes || HALF_DAY_MINUTES; // 整段请假默认按半天(240 分钟)计
   const otDefault = 60;                                // 加班未设时长时默认 1 小时
-  const ratio = st.overtimeToRestRatio || 1;
+  const ratio = st.overtimeToRestRatio ?? 1;
   let used = 0, earned = 0;
   const atts = (state.data && state.data.attendance) || [];
   for (const a of atts) {
@@ -173,23 +176,19 @@ export function computeRestMinutes(empId) {
     for (const day in rec) {
       const cell = rec[day];
       if (!cell) continue;
-      ["am", "pm"].forEach(sh => {
+      ["am", "pm", "ot"].forEach(sh => {
         const v = cell[sh];
         if (!v) return;
         const s = (typeof v === "object") ? v.s : v;
-        if (s === "调") {
+        if (s === "调" && sh !== "ot") {
           const m = (typeof v === "object" && v.min != null) ? v.min : half;
           used += m;
         }
-      });
-      const ot = cell.ot;
-      if (ot) {
-        const os = (typeof ot === "object") ? ot.s : ot;
-        if (os === "加" && st.overtimeToRest) {
-          const m = (typeof ot === "object" && ot.min != null) ? ot.min : otDefault;
+        if (s === "加" && st.overtimeToRest) {
+          const m = (typeof v === "object" && v.min != null) ? v.min : otDefault;
           earned += m * ratio;
         }
-      }
+      });
     }
   }
   const emp = (state.data && state.data.employees || []).find(x => x.id === empId);

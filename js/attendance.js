@@ -281,15 +281,19 @@ function onCellClick(td, ev) {
   const hol = holidayOf(month, d);
   const isRestDay = (wd === 0 || wd === 6) || (hol && hol.type === "holiday");
   const isOt = shift === "ot";
-  const canOvertime = isOt || isRestDay;
-  const cycle = canOvertime ? [...STATUSES, ""] : ["√", "事", "病", "缺", "调", "年", ""];
+  const st = state.data.settings || {};
+  const enabledStatuses = st.enableLateEarly === false ? STATUSES.filter(s => s !== "迟" && s !== "退") : STATUSES;
+  const cycle = isOt
+    ? ["加", ""]
+    : isRestDay
+      ? [...enabledStatuses, ""]
+      : ["√", "事", "病", "缺", "调", "年", ""];
   let idx = (cycle.indexOf(curS) + 1) % cycle.length;
   let next = cycle[idx];
 
   // 调休余额（动态计算）不足时跳过「调」，继续循环（不阻断）
-  const st = state.data.settings || {};
   const half = st.halfDayMinutes || HALF_DAY_MINUTES;
-  if (!isOt && next === "调") {
+  if (!isOt && next === "调" && st.enforceRestBalance !== false) {
     // 当前格子若已占「调」，先把这部分释放再判断可用
     const curMin = (typeof cur === "object" && cur.s === "调" && cur.min != null) ? cur.min : (curS === "调" ? half : 0);
     const avail = computeRestMinutes(empId) + curMin;
@@ -372,7 +376,8 @@ function showBulkBar(ev) {
   const bar = document.createElement("div");
   bar.id = "bulkBar";
   bar.className = "att-bulk-bar";
-  const items = [["√", "出勤"], ["事", "事假"], ["病", "病假"], ["缺", "缺勤"], ["调", "调休"], ["年", "年假"], ["加", "加班"], ["迟", "迟到"], ["退", "早退"], ["清除", "清除/重置"]];
+  let items = [["√", "出勤"], ["事", "事假"], ["病", "病假"], ["缺", "缺勤"], ["调", "调休"], ["年", "年假"], ["加", "加班"], ["迟", "迟到"], ["退", "早退"], ["清除", "清除/重置"]];
+  if (state.data.settings.enableLateEarly === false) items = items.filter(([s]) => s !== "迟" && s !== "退");
   bar.innerHTML = `<span class="ttl">批量（${cells.length} 格）</span>`
     + items.map(([s, t]) => `<button class="bk" data-s="${s}" title="${t}">${s === "清除" ? "✕" : s}</button>`).join("")
     + `<button class="bk close" data-close="1" title="关闭">×</button>`;
@@ -420,14 +425,14 @@ function applyBulk(cells, status) {
   }
   closeBulkBar();
   window.__renderAll();
-  if (skipped) showToast(`已应用 ${applied} 格，跳过 ${skipped} 格（工作日不可加班 / 可调休余额不足）`);
+  if (skipped) showToast(`已应用 ${applied} 格，跳过 ${skipped} 格（所选状态不适用于这些单元格）`);
   else if (applied) showToast(`已批量应用 ${applied} 格`);
 }
 // 设置单个格状态；avail 为“进入本格前的可用余额”，返回更新后的可用余额（批量内联动）
 function setCellStatus(emp, rec, day, shift, status, avail) {
   const st = state.data.settings || {};
   const half = st.halfDayMinutes || HALF_DAY_MINUTES;
-  const ratio = st.overtimeToRestRatio || 1;
+  const ratio = st.overtimeToRestRatio ?? 1;
   const month = document.getElementById("attMonth").value || "2026-08";
   const d = Number(day);
   const isRestDay = !isWorkday(month, d);
@@ -458,7 +463,7 @@ function setCellStatus(emp, rec, day, shift, status, avail) {
     const curMin = (typeof cur === "object" && cur.s === "调" && cur.min != null) ? cur.min : (cur === "调" ? half : 0);
     const newMin = (typeof cur === "object" && cur.s === "调" && cur.min != null) ? cur.min : half;
     const canUse = avail + curMin;              // 先把本格已占的调休释放
-    if (canUse < newMin) return { applied: false, avail };
+    if (st.enforceRestBalance !== false && canUse < newMin) return { applied: false, avail };
     avail = canUse - newMin;
     const c = { ...(rec[day] || blank) };
     c[shift] = (typeof cur === "object" && cur.s === "调") ? cur : "调";
@@ -487,9 +492,11 @@ function openDurationEditor(empId, day, shift) {
   const total = (typeof cur === "object" && cur.min != null) ? cur.min : defaultMinFor(curS);
   let h = Math.floor(total / 60), m = total % 60;
   const st = state.data.settings || {};
-  const ratio = st.overtimeToRestRatio || 1;
+  const ratio = st.overtimeToRestRatio ?? 1;
   const durationHint = curS === "调"
-    ? "将从「可调休」余额中扣除此时长；余额不足将阻止保存。"
+    ? (st.enforceRestBalance === false
+      ? "将从「可调休」余额中扣除此时长；当前允许余额为负数。"
+      : "将从「可调休」余额中扣除此时长；余额不足将阻止保存。")
     : curS === "加" && st.overtimeToRest
       ? `将按实际加班时长 × ${ratio} 计入「可调休」余额。`
       : curS === "加"
@@ -498,13 +505,13 @@ function openDurationEditor(empId, day, shift) {
 
   openModal(`
     <h3>设置时长 · ${label}</h3>
-    <div class="field" style="display:flex;align-items:center;gap:12px;">
+    <div class="field duration-stepper">
       <span style="width:44px;">小时</span>
       <button class="btn btn-sm" id="dHdec">−</button>
       <b id="dH" style="min-width:24px;text-align:center;">${h}</b>
       <button class="btn btn-sm" id="dHinc">+</button>
     </div>
-    <div class="field" style="display:flex;align-items:center;gap:12px;">
+    <div class="field duration-stepper">
       <span style="width:44px;">分钟</span>
       <button class="btn btn-sm" id="dMdec">−</button>
       <b id="dM" style="min-width:24px;text-align:center;">${m}</b>
@@ -536,7 +543,7 @@ function openDurationEditor(empId, day, shift) {
   document.getElementById("dCancel").onclick = closeModal;
   document.getElementById("dOk").onclick = () => {
     const min = h * 60 + m;
-    if (curS === "调") {
+    if (curS === "调" && (state.data.settings || {}).enforceRestBalance !== false) {
       // 余额检查：把当前格子已占的「调」释放后再判断能否负担新时长
       const curMin = (typeof cur === "object" && cur.min != null) ? cur.min : defaultMinFor("调");
       const avail = computeRestMinutes(empId) + curMin;

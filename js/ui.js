@@ -8,7 +8,9 @@
 
 // 打开弹窗：参数是弹窗内部的 HTML 字符串
 export function openModal(html) {
-  document.getElementById("modal").innerHTML = html;
+  const modal = document.getElementById("modal");
+  modal.className = "modal";
+  modal.innerHTML = html;
   document.getElementById("modalMask").classList.add("show");
 }
 // 关闭弹窗

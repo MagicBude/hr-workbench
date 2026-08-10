@@ -8,9 +8,10 @@
 // ============================================================
 
 import { state, persist } from "./store.js";
-import { fmtMoney, downloadFile, openModal, closeModal } from "./ui.js";
+import { fmtMoney, downloadFile } from "./ui.js";
 import { buildPayroll } from "./sample.js";
 import { INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
+import { openSettings } from "./settings.js";
 
 // 公司缴纳 / 个人缴纳的项目顺序（与表头一致）
 const COMP_KEYS = ["养老", "医疗", "工伤", "失业", "生育", "公积金"];
@@ -77,7 +78,7 @@ export function initPayroll() {
   });
 
   document.getElementById("csvBtn").addEventListener("click", exportCSV);
-  document.getElementById("ratioBtn").addEventListener("click", openRatioModal);
+  document.getElementById("ratioBtn").addEventListener("click", () => openSettings("payroll"));
   document.getElementById("payMonth").addEventListener("change", renderPayroll);
 }
 
@@ -140,47 +141,6 @@ export function renderPayroll() {
       persist();
       window.__renderAll();
     });
-  });
-}
-
-// ---------- 社保公积金比例设置弹窗 ----------
-function openRatioModal() {
-  const r = ratioOf();
-  const c = r.company, p = r.personal;
-  const compInputs = COMP_KEYS.map(k =>
-    `<div class="field"><label>${k}</label><input class="rc" data-k="${k}" type="number" step="0.001" min="0" value="${c[k]}"></div>`).join("");
-  const persInputs = PERS_KEYS.filter(k => k !== "大病医疗").map(k =>
-    `<div class="field"><label>${k}</label><input class="rp" data-k="${k}" type="number" step="0.001" min="0" value="${p[k]}"></div>`).join("");
-  openModal(`
-    <h3>社保公积金比例设置</h3>
-    <div class="hint" style="margin-bottom:10px;">以「社保基数」按比例计算（基数默认=基本月薪，可在员工编辑里单独设置）。比例为小数，如 0.16 = 16%。</div>
-    <div class="grp-title">公司缴纳</div>
-    <div class="ratio-grid">${compInputs}</div>
-    <div class="grp-title">个人缴纳</div>
-    <div class="ratio-grid">
-      ${persInputs}
-      <div class="field"><label>大病医疗(元/月)</label><input class="rb" type="number" min="0" value="${bigSickness()}"></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn" id="ratioCancel">取消</button>
-      <button class="btn" id="ratioReset">恢复默认</button>
-      <button class="btn btn-primary" id="ratioSave">保存</button>
-    </div>`);
-  document.getElementById("ratioCancel").addEventListener("click", closeModal);
-  document.getElementById("ratioReset").addEventListener("click", () => {
-    state.data.settings = state.data.settings || {};
-    state.data.settings.insuranceRatio = JSON.parse(JSON.stringify(INSURANCE_RATIO));
-    state.data.settings.bigSickness = BIG_SICKNESS;
-    persist(); closeModal(); window.__renderAll();
-  });
-  document.getElementById("ratioSave").addEventListener("click", () => {
-    state.data.settings = state.data.settings || {};
-    const nr = { company: {}, personal: {} };
-    document.querySelectorAll(".rc").forEach(i => nr.company[i.dataset.k] = +i.value || 0);
-    document.querySelectorAll(".rp").forEach(i => nr.personal[i.dataset.k] = +i.value || 0);
-    state.data.settings.insuranceRatio = nr;
-    state.data.settings.bigSickness = +document.querySelector(".rb").value || BIG_SICKNESS;
-    persist(); closeModal(); window.__renderAll();
   });
 }
 

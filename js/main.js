@@ -18,6 +18,7 @@ import { initAttendance, renderAttendance, resetAttColWidths, isWorkday } from "
 import { initPayroll, renderPayroll } from "./payroll.js";
 import { initDashboard, renderDashboard } from "./dashboard.js";
 import { exportRosterXlsx, exportAttendanceXlsx, exportPayrollXlsx } from "./export.js";
+import { initSettings, applyOrgSettings } from "./settings.js";
 
 // ---------- 顶部：组织下拉框渲染 ----------
 function renderOrgs() {
@@ -98,6 +99,7 @@ function bindTopbar() {
   // 切换组织
   document.getElementById("orgSelect").addEventListener("change", (e) => {
     setCurrentOrg(e.target.value);
+    applyOrgSettings(true);
     renderAll();
   });
 
@@ -117,6 +119,7 @@ function bindTopbar() {
       if (!name) { alert("请输入组织名称"); return; }
       addOrg(name);
       closeModal();
+      applyOrgSettings(true);
       renderAll();
     });
   });
@@ -157,6 +160,7 @@ function bindTopbar() {
         state.data = obj.data;
         persist();          // 写入目标组织的数据键
         migrateCurrent();   // 升级到新结构（补 restMinutes / rec 形态 / 部门列表等）
+        applyOrgSettings(true);
         renderAll();        // 含刷新组织下拉
         alert("导入成功" + (targetName ? "（已切换/创建组织：" + targetName + "）" : ""));
       } catch (err) { alert("导入失败：" + err.message); }
@@ -170,6 +174,7 @@ function bindTopbar() {
     if (!confirm("确认清空当前组织全部数据（员工/考勤/薪资）？此操作不可撤销。")) return;
     state.data = emptyData();
     persist();
+    applyOrgSettings(true);
     renderAll();
     alert("已清空示例数据，可重新录入。");
   });
@@ -211,9 +216,9 @@ function bindGlobalKeys() {
 // ---------- 帮助按钮（规则说明弹窗） ----------
 function bindHelp() {
   document.getElementById("helpAttBtn").addEventListener("click", () => showHelp("考勤规则说明", [
-    "每天分 <b>上午 / 下午 / 加班</b> 三个时段，点击循环切换：√→事→病→缺→调→年→加→迟→退→空",
+    "每天分 <b>上午 / 下午 / 加班</b> 三个时段：普通工作日上午/下午不含加班状态，休息日可选择完整状态；加班行只在<b>加 / 空</b>之间切换",
     "带时长的状态（调/年/事/病/缺/加/迟/退）格子里有蓝色「时长」角标，点它设 <b>小时/分钟</b>：加班默认 1 小时，迟到/早退默认 30 分钟，请假整段默认 4 小时",
-    "选 <b>调</b> 从可调休余额扣对应分钟（余额=初始+加班累计−调休累计，动态计算，精确到分钟），不足会提示并跳过",
+    "选 <b>调</b> 从可调休余额扣对应分钟（余额=初始+加班累计−调休累计，动态计算，精确到分钟）；开启余额校验时，不足会提示并跳过",
     "选 <b>加</b> 且开启「加班转调休」时，按实际加班分钟×比例 增加可调休余额",
     "<b>迟/退</b> 为迟到/早退，带分钟，不影响可调休余额",
     "节假日：<b>红=放假</b>（不计出勤）、<b>蓝=调休上班</b>，可在「节假日设置」调整",
@@ -221,7 +226,7 @@ function bindHelp() {
   ]));
   document.getElementById("helpPayBtn").addEventListener("click", () => showHelp("薪资计算说明", [
     "五险一金 = <b>社保基数 × 比例</b>（基数默认=基本月薪，可在员工编辑里单独设置）",
-    "比例在「社保公积金比例设置」里改，分<b>公司缴纳</b>与<b>个人缴纳</b>两部分",
+    "比例在「薪资参数设置」里改，分<b>公司缴纳</b>与<b>个人缴纳</b>两部分",
     "本月应发 = 基本月薪 + 出差补贴 + 奖金 + 加班费",
     "个税 = max(0, 应发 − 个人缴纳合计 − 5000) × 10%（演示简化，非真实累进税率）",
     "实发 = 应发 − 个人缴纳合计 − 个税"
@@ -237,6 +242,7 @@ initRoster();              // 3) 各模块事件绑定（一次）
 initAttendance();
 initPayroll();
 initDashboard();
+initSettings();
 bindTopbar();              // 4) 顶部栏与 Tab 绑定
 document.getElementById("modalMask").addEventListener("click", (e) => { if (e.target === e.currentTarget) closeModal(); });
 bindTabs();
@@ -244,4 +250,5 @@ bindExport();              // 4.5) 各模块"导出 Excel"按钮
 bindResetColWidths();      // 4.55) 恢复默认列宽按钮
 bindGlobalKeys();          // 4.6) 弹窗 Esc 关闭 / Enter 保存
 bindHelp();                // 4.7) 帮助按钮（规则说明）
+applyOrgSettings(true);     // 4.8) 应用当前组织的界面偏好与默认月份
 renderAll();               // 5) 首次绘制全部内容
