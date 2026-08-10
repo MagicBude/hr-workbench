@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/*.test.js"
+    "check": "node scripts/check-js.js",
+    "test": "node --test tests/*.test.js",
+    "verify": "npm run check && npm test"
   }
 }

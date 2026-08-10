@@ -1,4 +1,6 @@
-# HR Workbench 优化计划表
+# HR Workbench 优化计划表（历史基线）
+
+> 本文保留早期 Phase 1–10 的实施过程，便于追溯，不再作为当前数据结构和验收口径的权威来源。当前实现以 [`SPEC.md`](SPEC.md)、[`STANDARD.md`](STANDARD.md)、[`ARCHITECTURE.md`](ARCHITECTURE.md) 为准；最新优化状态与后续事项见 [`OPTIMIZATION_BACKLOG.md`](OPTIMIZATION_BACKLOG.md)。
 
 > 目标：把当前 MVP 逐步升级为一个更完整、更易用、更像 Excel 的通用人事考勤薪资工作台。  
 > 节奏：**分 5 个 Phase，每个 Phase 独立完成并提交一次 git commit**，方便随时回退和验收。
@@ -9,7 +11,7 @@
 
 1. **零运行时 CDN 依赖**：所有第三方库（如需要）都下载到本地 `vendor/` 目录，保证离线可用、可部署 GitHub Pages。  
 2. **向后兼容**：旧数据在加载时自动升级到新的数据结构，用户之前导入的 `斯迈孚导入数据.json` 仍然可用。  
-3. **教材级中文注释**：新增代码继续保留详细注释，方便初学者阅读。  
+3. **可持续中文注释**：重点解释业务口径和设计原因，避免逐行翻译与阶段性补丁描述。
 4. **数据层隔离**：所有结构变更都通过 `store.js` / `sample.js` 收敛，业务模块只读 `state.data`。  
 5. **移动端优先**：表格在手机上可横向滚动，关键操作按钮不小于 44×44px。
 

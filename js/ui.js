@@ -75,6 +75,13 @@ export function showToast(msg) {
   __toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
 }
 
+// 业务模块只声明受影响的视图，不直接依赖入口模块，避免循环 import。
+// 入口尚未完成初始化时回退为全量刷新，保证独立调用也不会静默失效。
+export function requestRefresh(...modules) {
+  if (typeof window.__refresh === "function") window.__refresh(...modules);
+  else if (typeof window.__renderAll === "function") window.__renderAll();
+}
+
 // ============================================================
 // enableColResize — Excel 式列宽拖拽（零依赖）
 // ------------------------------------------------------------

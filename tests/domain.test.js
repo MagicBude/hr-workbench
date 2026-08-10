@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { attendanceMetrics, escapeHtml, estimateTax, isEmployeeActiveOn, isWorkdayDate, validateImportPayload } from "../js/domain.js";
+import { attendanceMetrics, buildPayrollRecord, escapeHtml, estimateTax, isEmployeeActiveInMonth, isEmployeeActiveOn, isWorkdayDate, summarizeAttendance, validateImportPayload } from "../js/domain.js";
 
 test("员工入离职日期限定有效在职区间", () => {
   const emp = { hireDate: "2026-08-10", leaveDate: "2026-08-20", employmentStatus: "departed" };
@@ -8,6 +8,12 @@ test("员工入离职日期限定有效在职区间", () => {
   assert.equal(isEmployeeActiveOn(emp, "2026-08-10"), true);
   assert.equal(isEmployeeActiveOn(emp, "2026-08-20"), true);
   assert.equal(isEmployeeActiveOn(emp, "2026-08-21"), false);
+});
+
+test("月中入职又离职的员工仍属于该月有效员工", () => {
+  const emp = { hireDate: "2026-08-10", leaveDate: "2026-08-20", employmentStatus: "departed" };
+  assert.equal(isEmployeeActiveInMonth(emp, "2026-08"), true);
+  assert.equal(isEmployeeActiveInMonth(emp, "2026-09"), false);
 });
 
 test("节假日覆盖周末和工作日", () => {
@@ -48,7 +54,18 @@ test("个税估算与 HTML 转义", () => {
   assert.equal(escapeHtml('<img onerror="x">'), "&lt;img onerror=&quot;x&quot;&gt;");
 });
 
+test("考勤汇总和初始薪资记录使用统一领域函数", () => {
+  const summary = summarizeAttendance({ 1: { am: "√", pm: "迟", ot: { s: "加", min: 90 } } });
+  assert.deepEqual({ 出勤: summary.出勤, 迟到: summary.迟到, 加班: summary.加班 }, { 出勤: 0.5, 迟到: 0.5, 加班: 1 });
+  const payroll = buildPayrollRecord("2026-08", "e1", 10000);
+  assert.equal(payroll.status, "draft");
+  assert.equal(payroll.taxManual, false);
+  assert.equal(payroll.net, payroll.gross - payroll.persTotal - payroll.tax);
+});
+
 test("导入数据拒绝异形字段", () => {
   assert.throws(() => validateImportPayload({ data: { employees: {}, attendance: [], payroll: [] } }), /employees/);
   assert.throws(() => validateImportPayload({ data: { employees: [{ name: 123 }], attendance: [], payroll: [] } }), /name/);
+  assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1" }, { id: "e1" }], attendance: [], payroll: [] } }), /重复 id/);
+  assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1", employmentStatus: "unknown" }], attendance: [], payroll: [] } }), /employmentStatus/);
 });

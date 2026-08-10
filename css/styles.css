@@ -264,7 +264,7 @@ body.compact-tables table{ font-size:12px; }
   .ratio-grid{ grid-template-columns:repeat(2,1fr); }
 }
 
-/* ---------- 13. 花名册：序号 / 拖拽手柄 / 小按钮（Phase 1） ---------- */
+/* ---------- 13. 花名册：序号 / 拖拽手柄 / 小按钮 ---------- */
 td.seq{ width:38px; text-align:center; color:var(--muted); }
 .drag-handle{ cursor:grab; color:var(--muted); margin-right:4px; user-select:none; font-size:16px; }
 .drag-handle:active{ cursor:grabbing; }
@@ -272,7 +272,7 @@ tr.dragging{ opacity:.45; }                 /* 拖拽中整行半透明 */
 td.ops{ white-space:nowrap; }
 .btn-sm{ min-height:32px; padding:4px 12px; font-size:13px; border-radius:8px; }
 
-/* ---------- 14. 薪资表：双层表头分组 + 缴纳明细（Phase 3） ---------- */
+/* ---------- 14. 薪资表：双层表头分组 + 缴纳明细 ---------- */
 #payTable{ min-width:1760px; }
 #payTable thead th{ white-space:nowrap; }
 #payTable thead th.grp{ text-align:center; border-bottom:1px solid var(--border); }
@@ -303,7 +303,7 @@ td.ops{ white-space:nowrap; }
 .ratio-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
 .ratio-grid .field{ min-width:0; }
 
-/* ---------- 15. 帮助弹窗 / 空状态优化（Phase 5） ---------- */
+/* ---------- 15. 帮助弹窗 / 空状态 ---------- */
 .help-list{ margin:0 0 8px; padding-left:18px; font-size:13px; color:var(--text); line-height:1.9; }
 .help-list li b{ color:var(--blue); }
 /* 帮助按钮：圆形，与旁边 .btn（min-height:44px）同高，"?" 水平垂直居中 */

@@ -15,7 +15,10 @@
 | dept | string | 否 | 部门 |
 | hireDate | string(YYYY-MM-DD) | 否 | 入职日期 |
 | baseSalary | number | 否 | 基本月薪（元） |
-| restMinutes | number | 否 | 可调休余额（分钟，默认 0） |
+| restSeedMinutes | number | 否 | 初始可调休余额（分钟，默认 0）；可用余额由考勤动态计算 |
+| employmentStatus | string | 否 | `probation / active / suspended / departed` |
+| leaveDate | string | 否 | 离职日期，`YYYY-MM-DD` |
+| deletedAt | string\|null | 否 | 回收时间；非空时默认列表隐藏 |
 | insuranceBase | number\|null | 否 | 社保基数，null=用 baseSalary |
 
 ### 1.2 行为规格
@@ -30,7 +33,7 @@
 - [ ] 新增后序号自动递增。
 - [ ] 编辑后刷新页面数据保留。
 - [ ] 拖拽后顺序持久化。
-- [ ] 旧数据（无 restMinutes）显示为 0 小时，不报错。
+- [ ] 旧数据的 `restMinutes` 自动迁移为 `restSeedMinutes`，不丢失余额。
 
 ---
 
@@ -60,9 +63,9 @@ settings: { overtimeToRest:true, overtimeToRestRatio:1.0, halfDayMinutes:240 }
 - **可调**："节假日设置"弹窗可一键"重置为 2026 国家法定节假日"，也可手动增/删/改某天。
 
 ### 2.4 调休联动
-- 选 `调` 且 `restMinutes >= halfDayMinutes` → 扣减半天；不足则提示剩余不足。
+- 选 `调` 时按记录分钟数动态扣减可用余额；开启强制校验后，余额不足会跳过该状态并提示。
 - 上午或下午各计 `halfDayMinutes`；全天计 `2*halfDayMinutes`。
-- 选 `加` 且 `settings.overtimeToRest=true` → 按 `overtimeToRestRatio` 增加 `restMinutes`（加班时段计 `halfDayMinutes * ratio`）。
+- 选 `加` 且 `settings.overtimeToRest=true` → 按实际加班分钟 × `overtimeToRestRatio` 动态增加可用余额。
 
 ### 2.5 表头与视觉
 - 表头两行：第 1 行日期(1–31)，第 2 行星期（一/二/.../日）。
@@ -141,9 +144,10 @@ payroll: [{
 - 兼容：导入后由 `store.js` 迁移函数补全新字段。
 
 ### 5.2 导出（JSON）
-- 完整备份当前组织数据，含 `version` 字段（Phase 8）。
+- 完整备份当前组织数据，数据体包含 `schemaVersion`；导入前执行结构校验与自动快照。
+- 清空、导入覆盖、员工回收前自动保留快照，设置中心可创建和恢复最近 10 份快照。
 
-### 5.3 导出（Excel，Phase 4）
+### 5.3 Excel 导出
 - 花名册 `.xlsx`：序号、姓名、部门、入职日期、基本月薪、可调休、社保基数。
 - 考勤 `.xlsx`：表头含日期+星期，每人每天三行（上/下/加），右侧汇总。
 - 薪资 `.xlsx`：姓名、入职日期、薪资起止、考勤(出勤/缺勤/实出)、出差补贴、奖金、基本月薪、节假日加班费、本月应发、公司缴纳(6项)、个人应缴(5项)、应补退税额、实发。

@@ -1,5 +1,5 @@
 // ============================================================
-// payroll.js — 薪资核算模块（Phase 3：缴纳明细 + 比例设置）
+// payroll.js — 月度薪资核算
 // ------------------------------------------------------------
 // 负责：按「月份」为每位员工生成薪资，自动算五险一金/个税/实发，
 //        支持手动修改、展示公司/个人缴纳分项、设置组织比例，并可导出 CSV。
@@ -8,11 +8,10 @@
 // ============================================================
 
 import { state, persist } from "./store.js";
-import { fmtMoney, downloadFile } from "./ui.js";
-import { buildPayroll } from "./sample.js";
+import { fmtMoney, downloadFile, requestRefresh, showToast } from "./ui.js";
 import { INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 import { openSettings } from "./settings.js";
-import { estimateTax, escapeHtml, PAYROLL_STATUS } from "./domain.js";
+import { estimateTax, escapeHtml, PAYROLL_STATUS, isEmployeeActiveInMonth, buildPayrollRecord } from "./domain.js";
 
 // 公司缴纳 / 个人缴纳的项目顺序（与表头一致）
 const COMP_KEYS = ["养老", "医疗", "工伤", "失业", "生育", "公积金"];
@@ -23,7 +22,7 @@ function getOrCreatePay(month, empId) {
   let p = state.data.payroll.find(x => x.month === month && x.empId === empId);
   if (!p) {
     const e = state.data.employees.find(x => x.id === empId);
-    p = buildPayroll(month, empId, e ? e.baseSalary : 0, 0, 0, 0);
+    p = buildPayrollRecord(month, empId, e ? e.baseSalary : 0);
     state.data.payroll.push(p);
   }
   return p;
@@ -64,20 +63,33 @@ function recompute(p) {
   p.net = p.gross - p.persTotal - p.tax;                       // 实发
 }
 function round2(n) { return Math.round(n * 100) / 100; }
+function employeesForMonth(month) {
+  return state.data.employees.filter(e => !e.deletedAt && isEmployeeActiveInMonth(e, month));
+}
+function recomputeDraft(p) {
+  if ((p.status || "draft") === "draft") { recompute(p); return; }
+  p.comp ||= {};
+  p.pers ||= {};
+  p.compTotal = COMP_KEYS.reduce((sum, key) => sum + Number(p.comp[key] || 0), 0);
+  p.persTotal = PERS_KEYS.reduce((sum, key) => sum + Number(p.pers[key] || 0), 0);
+  p.gross ??= Number(p.baseSalary || 0) + Number(p.travel || 0) + Number(p.bonus || 0) + Number(p.overtime || 0);
+  p.tax ??= 0;
+  p.net ??= p.gross - p.persTotal - p.tax;
+}
 
 export function initPayroll() {
   // "生成/刷新薪资"：对当前月份每位员工确保有一条薪资记录
   document.getElementById("genPayBtn").addEventListener("click", () => {
     const month = document.getElementById("payMonth").value || "2026-08";
-    const employees = state.data.employees.filter(e => !e.deletedAt && e.employmentStatus !== "departed");
+    const employees = employeesForMonth(month);
     employees.forEach(e => {
       let p = state.data.payroll.find(x => x.month === month && x.empId === e.id);
-      if (!p) { p = buildPayroll(month, e.id, e.baseSalary, 0, 0, 0); state.data.payroll.push(p); }
-      else { p.baseSalary = e.baseSalary; recompute(p); }
+      if (!p) { p = buildPayrollRecord(month, e.id, e.baseSalary); state.data.payroll.push(p); }
+      else if ((p.status || "draft") === "draft") { p.baseSalary = e.baseSalary; recompute(p); }
     });
     persist();
-    window.__renderAll();
-    alert("已生成 " + month + " 薪资（" + employees.length + " 人）");
+    requestRefresh("payroll", "dashboard", "today");
+    showToast(`已生成 ${month} 薪资（${employees.length} 人）`);
   });
 
   document.getElementById("csvBtn").addEventListener("click", exportCSV);
@@ -91,7 +103,7 @@ export function renderPayroll() {
   const tf = document.querySelector("#payTable tfoot");
   tb.innerHTML = ""; tf.innerHTML = "";
 
-  const employees = state.data.employees.filter(e => !e.deletedAt && e.employmentStatus !== "departed");
+  const employees = employeesForMonth(month);
   if (!employees.length) {
     tb.innerHTML = '<tr><td colspan="21" class="empty">请先在花名册添加员工。</td></tr>';
     return;
@@ -104,8 +116,8 @@ export function renderPayroll() {
 
   employees.forEach(e => {
     let p = state.data.payroll.find(x => x.month === month && x.empId === e.id);
-    if (!p) p = buildPayroll(month, e.id, e.baseSalary, 0, 0, 0);
-    recompute(p); // 渲染时重算，保证与最新比例/基数一致
+    if (!p) p = buildPayrollRecord(month, e.id, e.baseSalary);
+    recomputeDraft(p); // 已确认/已发放记录保持核算时的金额快照
     tot.gross += p.gross; tot.compTotal += p.compTotal; tot.persTotal += p.persTotal;
     tot.tax += p.tax; tot.net += p.net;
     COMP_KEYS.forEach(k => tot.comp[k] += p.comp[k]);
@@ -144,7 +156,7 @@ export function renderPayroll() {
       else if (inp.classList.contains("p-tax")) { p.tax = +inp.value || 0; p.taxManual = true; }
       recompute(p);
       persist();
-      window.__renderAll();
+      requestRefresh("payroll", "dashboard", "today");
     });
   });
   tb.querySelectorAll(".p-status").forEach(sel => sel.addEventListener("change", () => {
@@ -152,7 +164,7 @@ export function renderPayroll() {
     if (p.status !== "draft" && sel.value === "draft" && !confirm("解锁会允许重新编辑薪资，确认改回草稿？")) { sel.value = p.status; return; }
     p.status = sel.value;
     persist();
-    window.__refresh?.("payroll", "dashboard", "today");
+    requestRefresh("payroll", "dashboard", "today");
   }));
 }
 
@@ -163,10 +175,10 @@ function exportCSV() {
     "公司养老", "公司医疗", "公司工伤", "公司失业", "公司生育", "公司公积金",
     "个人养老", "个人医疗", "个人失业", "个人公积金", "大病医疗", "个税", "实发薪资", "核算状态"];
   const rows = [head];
-  state.data.employees.forEach(e => {
+  employeesForMonth(month).forEach(e => {
     let p = state.data.payroll.find(x => x.month === month && x.empId === e.id);
-    if (!p) p = buildPayroll(month, e.id, e.baseSalary, 0, 0, 0);
-    recompute(p);
+    if (!p) p = buildPayrollRecord(month, e.id, e.baseSalary);
+    recomputeDraft(p);
     rows.push([e.name, e.dept, p.baseSalary, p.travel, p.bonus, p.overtime, round2(p.gross),
       ...COMP_KEYS.map(k => round2(p.comp[k])),
       ...PERS_KEYS.map(k => round2(p.pers[k])),

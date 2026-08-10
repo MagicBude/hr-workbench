@@ -42,7 +42,7 @@ hr-workbench/
     └── main.js          # 入口：组装所有模块、绑定事件、首次渲染
 ```
 
-> 每个文件都配有**教材级中文注释**，初学者可直接顺着 `main.js → 各模块 → store.js` 的顺序阅读。
+> 关键业务口径和边界配有简洁中文注释；建议按 `main.js → 各页面模块 → domain.js → store.js` 的顺序阅读。
 
 ---
 
@@ -92,14 +92,22 @@ python -m http.server 8000
 
 ---
 
-## 给开发者：如何接入后端（未来扩展）
+## 给开发者：持久化演进
 
-本项目已为接后端预留好接口。**只需修改 `js/store.js` 一个文件**，业务页面（roster / attendance / payroll / dashboard）一行都不用动：
+当前所有本地存储键、迁移、偏好和快照都集中在 `js/store.js`，业务页面不直接操作 `localStorage`。接入异步后端时建议在该边界新增 repository/service 层，并同步处理加载态、网络错误、并发版本和身份权限；不能简单理解为只替换一个函数体。
 
 - 现在：`store.js` 用 `localStorage` 读写（见 `readJSON` / `writeJSON` / `persist`）。
-- 将来：把 `ensureSeed`、`persist`、`reloadCurrent`、`getOrgs`、`addOrg` 等函数体改为 `fetch('https://你的api/...')` 即可。模块通过 `import { state, persist, ... } from "./store.js"` 使用，调用方式不变。
+- 将来：先保持领域函数和页面渲染接口稳定，再逐步把同步存储 API 升级为可等待的 repository 操作。
 
 这种「业务逻辑不直接碰存储细节」的分层，是长期维护和可演进的关键。
+
+本地质量检查：
+
+```powershell
+npm run verify
+```
+
+`verify` 会对 `js/*.js` 逐文件执行语法检查并运行领域测试；提交前还应在 `localhost:8090` 回归花名册、考勤、薪资、看板和设置中心。
 
 ---
 

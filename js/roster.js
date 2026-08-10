@@ -1,20 +1,14 @@
 // ============================================================
-// roster.js — 员工花名册模块
+// roster.js — 员工档案与生命周期
 // ------------------------------------------------------------
-// 负责：员工列表的展示、新增、编辑、删除、拖拽排序。
+// 负责员工档案的展示、筛选、新增、编辑、离职归档、回收和排序。
 // 数据都来自 store.js 的 state.data.employees，改动后调用 persist() 保存。
-// 任何一个模块改了数据，都通过 window.__renderAll() 让所有模块一起刷新。
-//
-// Phase 1 新增能力：
-//   - 行号（一眼看总人数）
-//   - “编辑”按钮（修改姓名/部门/入职日期/月薪/可调休余额/社保基数）
-//   - 拖拽排序（HTML5 Drag & Drop）
-//   - 可调休余额字段（精确到分钟，在考勤选调修时联动扣减）
+// 可调休余额以分钟为存储单位，由初始余额与考勤中的加班/调休动态计算。
 // ============================================================
 
 import { state, persist, getDepartments, addDepartment, computeRestMinutes, loadPreference, savePreference, removePreference, createSnapshot } from "./store.js";
 import { HALF_DAY_MINUTES } from "./config.js";
-import { fmtMoney, openModal, closeModal, enableColResize } from "./ui.js";
+import { fmtMoney, openModal, closeModal, enableColResize, requestRefresh } from "./ui.js";
 import { escapeHtml, EMPLOYMENT_STATUS } from "./domain.js";
 
 // 列宽持久化（按组织）：存在 localStorage 的 wb_hr_{org}_colw_{tag}
@@ -46,23 +40,20 @@ function formatRestMinutes(minutes, mode = (state.data.settings && state.data.se
 // 恢复默认列宽：清除记忆并刷新
 export function resetEmpColWidths() {
   removePreference("colw_emp");
-  window.__renderAll();
+  requestRefresh("roster");
 }
 
 // 花名册筛选项（仅内存，不持久化）：按姓名模糊匹配 + 按部门精确匹配
 let rosterFilter = { name: "", dept: "", status: "current" };
 
 // —— 小工具：转义，避免部门名里的引号/尖括号破坏 HTML ——
-function escAttr(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 // 生成部门下拉的 <option>（含「无部门」和「➕ 新增部门」）
 function deptOptionsHtml(selected, withNew) {
   const depts = getDepartments();
   let html = '<option value="">（无部门）</option>';
   depts.forEach(d => {
     const sel = d === selected ? " selected" : "";
-    html += `<option value="${escAttr(d)}"${sel}>${escAttr(d)}</option>`;
+    html += `<option value="${escapeHtml(d)}"${sel}>${escapeHtml(d)}</option>`;
   });
   if (withNew !== false) html += '<option value="__new__">➕ 新增部门…</option>';
   return html;
@@ -90,7 +81,7 @@ function refreshDeptSelects() {
     if (!sel) return;
     const cur = sel.value;
     sel.innerHTML = '<option value="">全部部门</option>'
-      + getDepartments().map(d => `<option value="${escAttr(d)}">${escAttr(d)}</option>`).join("");
+      + getDepartments().map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
     sel.value = cur;
   });
 }
@@ -124,7 +115,7 @@ export function initRoster() {
   const fn = document.getElementById("empFilterName");
   const fd = document.getElementById("empFilterDept");
   fd.innerHTML = '<option value="">全部部门</option>'
-    + getDepartments().map(d => `<option value="${escAttr(d)}">${escAttr(d)}</option>`).join("");
+    + getDepartments().map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
   fn.addEventListener("input", () => { rosterFilter.name = fn.value; renderRoster(); });
   fd.addEventListener("change", () => { rosterFilter.dept = fd.value; renderRoster(); });
   document.getElementById("empFilterStatus").addEventListener("change", ev => { rosterFilter.status = ev.target.value; renderRoster(); });
@@ -152,7 +143,7 @@ export function initRoster() {
     document.getElementById("empSalary").value = "";
 
     persist();              // 保存到存储
-    window.__renderAll();   // 刷新所有模块（含考勤/薪资/看板/今天要处理）
+    requestRefresh("roster", "attendance", "payroll", "dashboard", "today");
   });
 }
 
@@ -178,7 +169,7 @@ export function renderRoster() {
   );
   // 更新筛选计数提示
   const cnt = document.getElementById("empFilterCount");
-  if (cnt) cnt.textContent = `共 ${list.length} / ${state.data.employees.length} 人`;
+  if (cnt) cnt.textContent = `共 ${list.length} / ${state.data.employees.filter(e => !e.deletedAt).length} 人`;
 
   if (!list.length) {
     tb.innerHTML = '<tr><td colspan="8" class="empty">没有匹配的员工</td></tr>';
@@ -216,7 +207,7 @@ export function renderRoster() {
       const emp = state.data.employees.find(x => x.id === b.dataset.del);
       if (emp) emp.deletedAt = new Date().toISOString();
       persist();
-      window.__renderAll();
+      requestRefresh("roster", "attendance", "payroll", "dashboard", "today");
     });
   });
   tb.querySelectorAll("[data-depart]").forEach(b => b.addEventListener("click", () => {
@@ -225,7 +216,7 @@ export function renderRoster() {
     if (!emp) return;
     emp.employmentStatus = "departed";
     emp.leaveDate ||= new Date().toISOString().slice(0, 10);
-    persist(); window.__refresh?.("roster", "attendance", "dashboard", "today");
+    persist(); requestRefresh("roster", "attendance", "payroll", "dashboard", "today");
   }));
   // 给每行“编辑”按钮绑定事件
   tb.querySelectorAll("[data-edit]").forEach(b => {
@@ -265,7 +256,7 @@ function bindDnD(tb) {
           const [moved] = arr.splice(from, 1);  // 取出被拖的行
           arr.splice(to, 0, moved);             // 插入到目标位置
           persist();
-          window.__renderAll();                  // 重绘（序号会重新排）
+          requestRefresh("roster");
         }
       }
       dragId = null;
@@ -335,7 +326,7 @@ function openEditModal(id) {
     e.insuranceBase = ins === "" ? null : (+ins || 0);
     persist();
     closeModal();
-    window.__renderAll();
+    requestRefresh("roster", "attendance", "payroll", "dashboard", "today");
   });
   // 编辑弹窗里的部门下拉同样支持「➕ 新增部门」
   wireNewDept(document.getElementById("emDept"));

@@ -6,7 +6,7 @@
 
 import { state, persist, getCurrentOrg, removePreference, createSnapshot, listSnapshots, restoreSnapshot, getStorageUsage } from "./store.js";
 import { DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
-import { openModal, closeModal, curMonth, showToast } from "./ui.js";
+import { openModal, closeModal, curMonth, showToast, requestRefresh } from "./ui.js";
 import { escapeHtml } from "./domain.js";
 
 const COMP_KEYS = ["养老", "医疗", "工伤", "失业", "生育", "公积金"];
@@ -102,24 +102,24 @@ export function openSettings(section = "attendance") {
   document.getElementById("settingsResetCols").addEventListener("click", () => {
     removePreference("colw_emp");
     removePreference("colw_att");
-    window.__renderAll();
+    requestRefresh("roster", "attendance");
     showToast("已清除当前组织的列宽记忆");
   });
   document.getElementById("settingsReset").addEventListener("click", () => {
     if (!confirm("确认将当前组织的全部设置恢复默认？员工和业务数据不会受影响。")) return;
     const departments = state.data.settings.departments || [];
     state.data.settings = { ...clone(DEFAULT_SETTINGS), departments, insuranceRatio: clone(INSURANCE_RATIO), bigSickness: BIG_SICKNESS };
-    persist(); closeModal(); applyOrgSettings(true); window.__renderAll(); showToast("组织设置已恢复默认");
+    persist(); closeModal(); applyOrgSettings(true); requestRefresh("today", "roster", "attendance", "payroll", "dashboard"); showToast("组织设置已恢复默认");
   });
   document.getElementById("settingsSave").addEventListener("click", saveSettings);
   document.getElementById("createSnapshotBtn").addEventListener("click", () => { createSnapshot("手动快照"); closeModal(); openSettings("safety"); showToast("数据快照已创建"); });
   document.querySelectorAll("[data-restore-snapshot]").forEach(b => b.addEventListener("click", () => {
     if (!confirm("恢复后当前数据会先自动备份。确认继续？")) return;
-    restoreSnapshot(b.dataset.restoreSnapshot); closeModal(); window.__renderAll(); showToast("快照已恢复");
+    restoreSnapshot(b.dataset.restoreSnapshot); closeModal(); requestRefresh("today", "roster", "attendance", "payroll", "dashboard"); showToast("快照已恢复");
   }));
   document.querySelectorAll("[data-restore-emp]").forEach(b => b.addEventListener("click", () => {
     const emp = state.data.employees.find(e => e.id === b.dataset.restoreEmp); if (!emp) return;
-    emp.deletedAt = null; persist(); closeModal(); window.__renderAll(); showToast("员工已恢复");
+    emp.deletedAt = null; persist(); closeModal(); requestRefresh("today", "roster", "attendance", "payroll", "dashboard"); showToast("员工已恢复");
   }));
 }
 
@@ -143,5 +143,5 @@ function saveSettings() {
   document.querySelectorAll(".srp").forEach(i => nr.personal[i.dataset.k] = Math.max(0, Number(i.value) || 0));
   st.insuranceRatio = nr;
   st.bigSickness = Math.max(0, Number(document.getElementById("setBigSickness").value) || 0);
-  persist(); closeModal(); applyOrgSettings(true); window.__renderAll(); showToast("组织设置已保存");
+  persist(); closeModal(); applyOrgSettings(true); requestRefresh("today", "roster", "attendance", "payroll", "dashboard"); showToast("组织设置已保存");
 }

@@ -1,17 +1,17 @@
 // ============================================================
-// main.js — 程序入口（把所有模块组装起来）
+// main.js — 应用入口与视图调度
 // ------------------------------------------------------------
 // 这里只做“初始化与调度”，不含具体业务逻辑：
 //   1) 启动数据层（必要时注入示例）
 //   2) 注册各模块的事件绑定（initXxx，只跑一次）
 //   3) 绑定顶部栏（组织切换/导出/导入/清空）和 Tab 导航
 //   4) 首次全量渲染
-// 模块之间需要互相刷新时，统一调用 window.__renderAll()（见底部 renderAll）。
+// 业务模块通过 ui.requestRefresh 声明受影响视图；全量刷新仅用于组织切换和整包数据替换。
 // ============================================================
 
-import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg, createSnapshot, prepareImportedData, selectImportedOrg } from "./store.js";
+import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg, createSnapshot, createSnapshotForOrg, prepareImportedData, selectImportedOrg } from "./store.js";
 import { buildSample } from "./sample.js";
-import { openModal, closeModal, downloadFile, curMonth, curDay, showHelp } from "./ui.js";
+import { openModal, closeModal, downloadFile, curMonth, curDay, showHelp, showToast } from "./ui.js";
 import { initRoster, renderRoster, resetEmpColWidths } from "./roster.js";
 import { initAttendance, renderAttendance, resetAttColWidths, isWorkday } from "./attendance.js";
 import { initPayroll, renderPayroll } from "./payroll.js";
@@ -59,9 +59,13 @@ function renderToday() {
   });
 
   // 薪资待核算检查：本月一条薪资记录都没有
-  const hasPay = state.data.payroll.some(p => p.month === month);
-  if (!hasPay && state.data.employees.length) {
-    items.push({ danger: false, text: `${month} 薪资待核算（${state.data.employees.length} 人）`, tab: "payroll" });
+  const activeEmployees = state.data.employees.filter(e => isEmployeeActiveOn(e, `${month}-${String(today).padStart(2, "0")}`));
+  const pendingPay = activeEmployees.filter(e => {
+    const pay = state.data.payroll.find(p => p.month === month && p.empId === e.id);
+    return !pay || (pay.status || "draft") === "draft";
+  }).length;
+  if (pendingPay) {
+    items.push({ danger: false, text: `${month} 薪资待核算或确认（${pendingPay} 人）`, tab: "payroll" });
   }
 
   if (!items.length) { box.innerHTML = '<div class="empty">暂无待处理事项，一切正常。</div>'; return; }
@@ -91,7 +95,7 @@ function renderAll() {
   renderPayroll();
   renderDashboard();
 }
-// 挂到 window 上，让其它模块（roster/attendance/payroll）能直接调用，避免循环 import
+// 暴露轻量调度入口，供 ui.requestRefresh 在不产生循环 import 的前提下调用。
 window.__renderAll = renderAll;
 window.__refresh = (...modules) => {
   const refreshers = { orgs: renderOrgs, today: renderToday, roster: renderRoster, attendance: renderAttendance, payroll: renderPayroll, dashboard: renderDashboard };
@@ -153,7 +157,7 @@ function bindTopbar() {
           targetName = org.name;
         }
         if (!confirm("导入将覆盖组织「" + (targetName || getCurrentOrgId()) + "」的全部数据，确认继续？")) return;
-        createSnapshot("导入数据前自动备份");
+        createSnapshotForOrg(org?.id || state.current, "导入数据前自动备份");
         if (org) {
           selectImportedOrg(org);
         }
@@ -161,7 +165,7 @@ function bindTopbar() {
         persist();          // 校验、迁移后写入目标组织的数据键
         applyOrgSettings(true);
         renderAll();        // 含刷新组织下拉
-        alert("导入成功" + (targetName ? "（已切换/创建组织：" + targetName + "）" : ""));
+        showToast("导入成功" + (targetName ? "，当前组织：" + targetName : ""));
       } catch (err) { alert("导入失败：" + err.message); }
     };
     reader.readAsText(f);
@@ -176,7 +180,7 @@ function bindTopbar() {
     persist();
     applyOrgSettings(true);
     renderAll();
-    alert("已清空示例数据，可重新录入。");
+    showToast("已清空当前组织，可从数据安全页恢复快照");
   });
 }
 
@@ -237,7 +241,6 @@ function bindHelp() {
 // 启动！
 // ============================================================
 ensureSeed(buildSample);   // 1) 数据层启动（首次注入示例）
-window.__renderAll = renderAll; // 2) 注册全局刷新函数（必须在各 init 之前）
 initRoster();              // 3) 各模块事件绑定（一次）
 initAttendance();
 initPayroll();

@@ -1,4 +1,4 @@
-import { HALF_DAY_MINUTES, TAX_RATE, TAX_THRESHOLD } from "./config.js";
+import { HALF_DAY_MINUTES, TAX_RATE, TAX_THRESHOLD, STATUS_LABEL, INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 
 export const EMPLOYMENT_STATUS = {
   probation: "试用",
@@ -21,6 +21,15 @@ export function isEmployeeActiveOn(emp, date) {
   if (emp.leaveDate && date > emp.leaveDate) return false;
   if (status === "departed" && !emp.leaveDate) return false;
   return status === "active" || status === "probation" || status === "departed";
+}
+
+export function isEmployeeActiveInMonth(emp, month) {
+  const [year, mon] = month.split("-").map(Number);
+  const monthStart = `${month}-01`;
+  const monthEnd = `${month}-${String(new Date(year, mon, 0).getDate()).padStart(2, "0")}`;
+  if (!emp || emp.deletedAt || emp.employmentStatus === "suspended") return false;
+  if (emp.employmentStatus === "departed" && !emp.leaveDate) return false;
+  return (!emp.hireDate || emp.hireDate <= monthEnd) && (!emp.leaveDate || emp.leaveDate >= monthStart);
 }
 
 export function isWorkdayDate(date, holidays = {}) {
@@ -70,6 +79,42 @@ export function estimateTax(gross, personalTotal, threshold = TAX_THRESHOLD, rat
   return Math.max(0, Number(gross || 0) - Number(personalTotal || 0) - threshold) * rate;
 }
 
+export function summarizeAttendance(rec = {}) {
+  const summary = { 出勤: 0, 事假: 0, 病假: 0, 缺勤: 0, 调休: 0, 年假: 0, 加班: 0, 迟到: 0, 早退: 0 };
+  for (const day of Object.values(rec)) {
+    if (day && typeof day === "object") {
+      for (const shift of ["am", "pm"]) {
+        const status = statusOf(day[shift]);
+        if (status === "√") summary.出勤 += 0.5;
+        else if (STATUS_LABEL[status]) summary[STATUS_LABEL[status]] += 0.5;
+      }
+      if (statusOf(day.ot) === "加") summary.加班 += 1;
+    } else if (day === "√") summary.出勤 += 1;
+    else if (STATUS_LABEL[day]) summary[STATUS_LABEL[day]] += 1;
+  }
+  return summary;
+}
+
+export function buildPayrollRecord(month, empId, baseSalary, travel = 0, bonus = 0, overtime = 0) {
+  const company = INSURANCE_RATIO.company;
+  const personal = INSURANCE_RATIO.personal;
+  const comp = {
+    养老: baseSalary * company.养老, 医疗: baseSalary * company.医疗, 工伤: baseSalary * company.工伤,
+    失业: baseSalary * company.失业, 生育: baseSalary * company.生育, 公积金: baseSalary * company.公积金
+  };
+  const pers = {
+    养老: baseSalary * personal.养老, 医疗: baseSalary * personal.医疗, 失业: baseSalary * personal.失业,
+    公积金: baseSalary * personal.公积金, 大病医疗: BIG_SICKNESS
+  };
+  const gross = baseSalary + travel + bonus + overtime;
+  const persTotal = Object.values(pers).reduce((sum, value) => sum + value, 0);
+  const tax = estimateTax(gross, persTotal);
+  return {
+    id: `p_${month}_${empId}`, month, empId, baseSalary, travel, bonus, overtime,
+    comp, pers, gross, persTotal, tax, taxManual: false, status: "draft", net: gross - persTotal - tax
+  };
+}
+
 export function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[ch]));
 }
@@ -86,6 +131,16 @@ export function validateImportPayload(input) {
       if (emp[key] != null && typeof emp[key] !== "string") throw new Error(`employees[${index}].${key} 必须是文本`);
       if (String(emp[key] || "").length > 100) throw new Error(`employees[${index}].${key} 过长`);
     }
+    if (emp.employmentStatus != null && !Object.hasOwn(EMPLOYMENT_STATUS, emp.employmentStatus)) throw new Error(`employees[${index}].employmentStatus 无效`);
   });
+  for (const key of ["attendance", "payroll"]) {
+    (data[key] || []).forEach((item, index) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error(`${key}[${index}] 格式无效`);
+      if (item.id != null && (typeof item.id !== "string" || item.id.length > 120)) throw new Error(`${key}[${index}].id 无效`);
+      if (item.empId != null && (typeof item.empId !== "string" || item.empId.length > 120)) throw new Error(`${key}[${index}].empId 无效`);
+    });
+  }
+  const employeeIds = (data.employees || []).map(emp => emp.id).filter(Boolean);
+  if (new Set(employeeIds).size !== employeeIds.length) throw new Error("employees 存在重复 id");
   return data;
 }

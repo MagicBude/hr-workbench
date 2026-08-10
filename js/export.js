@@ -1,8 +1,7 @@
 // ============================================================
-// export.js — Excel 导出模块（Phase 4）
+// export.js — Excel 导出
 // ------------------------------------------------------------
-// 把花名册 / 考勤表 / 薪资表导出为 .xlsx，格式贴近原始 Excel 表格，
-// 老板不打开网站也能直接查看。
+// 把花名册、考勤表和薪资表导出为可直接流转的 .xlsx 文件。
 // 依赖：vendor/xlsx.mini.min.js（本地 SheetJS，通过 <script> 加载为全局 XLSX）。
 // 说明：本项目"零 CDN 依赖"，故 SheetJS 文件下载到本地 vendor/ 目录，
 //       离线或部署 GitHub Pages 都能正常导出。
@@ -10,6 +9,7 @@
 
 import { state, computeRestMinutes } from "./store.js";
 import { WEEK_LABEL, SUM_KEYS } from "./config.js";
+import { EMPLOYMENT_STATUS, PAYROLL_STATUS, isEmployeeActiveInMonth } from "./domain.js";
 
 // 该月实际天数
 function daysInMonth(month) {
@@ -24,9 +24,9 @@ function weekdayOf(month, day) {
 
 // ---------- 导出花名册 ----------
 export function exportRosterXlsx() {
-  const rows = [["序号", "姓名", "部门", "入职日期", "基本月薪", "可调休(小时)", "社保基数"]];
-  state.data.employees.forEach((e, i) => {
-    rows.push([i + 1, e.name, e.dept, e.hireDate || "", e.baseSalary,
+  const rows = [["序号", "姓名", "部门", "状态", "入职日期", "离职日期", "基本月薪", "可调休(小时)", "社保基数"]];
+  state.data.employees.filter(e => !e.deletedAt).forEach((e, i) => {
+    rows.push([i + 1, e.name, e.dept, EMPLOYMENT_STATUS[e.employmentStatus || "active"], e.hireDate || "", e.leaveDate || "", e.baseSalary,
       round1(computeRestMinutes(e.id) / 60), e.insuranceBase ?? ""]);
   });
   writeBook(rows, "花名册", "花名册.xlsx");
@@ -47,7 +47,7 @@ export function exportAttendanceXlsx(month) {
   head2.push(...SUM_KEYS.map(() => ""));
 
   const rows = [head1, head2];
-  state.data.employees.forEach((e, i) => {
+  state.data.employees.filter(e => !e.deletedAt && isEmployeeActiveInMonth(e, month)).forEach((e, i) => {
     const a = state.data.attendance.find(x => x.month === month && x.empId === e.id);
     const rec = a ? a.rec : {};
     const s = a ? a.summary : { 出勤: 0, 事假: 0, 病假: 0, 缺勤: 0, 调休: 0, 年假: 0, 加班: 0 };
@@ -57,7 +57,8 @@ export function exportAttendanceXlsx(month) {
       for (let d = 1; d <= N; d++) {
         const cell = rec[d];
         // 新结构取对应时段；旧结构单值只放到"上午"行
-        row.push(cell && typeof cell === "object" ? (cell[sh] || "") : (sh === "am" ? (cell || "") : ""));
+        const value = cell && typeof cell === "object" ? (cell[sh] || "") : (sh === "am" ? (cell || "") : "");
+        row.push(value && typeof value === "object" ? `${value.s || ""}${value.min != null ? `(${value.min}分钟)` : ""}` : value);
       }
       row.push(...(si === 0 ? SUM_KEYS.map(k => s[k]) : SUM_KEYS.map(() => "")));
       rows.push(row);
@@ -73,7 +74,7 @@ export function exportPayrollXlsx(month) {
   const rows = [["姓名", "部门", "入职日期", "出勤", "缺勤", "实出勤", "出差补贴", "奖金", "基本月薪", "加班费", "本月应发",
     "公司养老", "公司医疗", "公司工伤", "公司失业", "公司生育", "公司公积金",
     "个人养老", "个人医疗", "个人失业", "个人公积金", "大病医疗", "个税", "实发薪资", "核算状态"]];
-  state.data.employees.filter(e => !e.deletedAt).forEach(e => {
+  state.data.employees.filter(e => !e.deletedAt && isEmployeeActiveInMonth(e, month)).forEach(e => {
     const p = state.data.payroll.find(x => x.month === month && x.empId === e.id);
     const a = state.data.attendance.find(x => x.month === month && x.empId === e.id);
     const s = a ? a.summary : { 出勤: 0, 缺勤: 0 };
@@ -88,7 +89,7 @@ export function exportPayrollXlsx(month) {
       p.travel, p.bonus, p.baseSalary, p.overtime, round2(p.gross),
       ...COMP_KEYS.map(k => round2(comp[k] || 0)),
       ...PERS_KEYS.map(k => round2(pers[k] || 0)),
-      round2(p.tax), round2(p.net), ({ draft: "草稿", confirmed: "已确认", paid: "已发放" })[p.status || "draft"]]);
+      round2(p.tax), round2(p.net), PAYROLL_STATUS[p.status || "draft"]]);
   });
   writeBook(rows, "薪资表_" + month, "薪资表_" + month + ".xlsx");
 }

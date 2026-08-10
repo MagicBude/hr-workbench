@@ -1,5 +1,5 @@
 // ============================================================
-// attendance.js — 考勤记录模块（分时段 + 节假日 + 星期 + 标准表格布局）
+// attendance.js — 月度分时段考勤
 // ------------------------------------------------------------
 // 页面结构（参照传统考勤表，与"导出 Excel"列一致）：
 //   序号 | 姓名 | 部门 | 时段 | 1 2 3 … N(日期) | 出勤 事假 病假 缺勤 调休 年假 加班
@@ -14,9 +14,8 @@
 
 import { state, persist, getDepartments, computeRestMinutes, loadPreference, savePreference, removePreference } from "./store.js";
 import { STATUSES, STATUS_LABEL, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026, SUM_KEYS, HALF_DAY_MINUTES } from "./config.js";
-import { sumRec } from "./sample.js";
-import { openModal, closeModal, showToast, enableColResize } from "./ui.js";
-import { escapeHtml } from "./domain.js";
+import { openModal, closeModal, showToast, enableColResize, requestRefresh } from "./ui.js";
+import { escapeHtml, isEmployeeActiveInMonth, summarizeAttendance } from "./domain.js";
 
 // ---------- 时长相关：可带时长的状态 ----------
 // 除出勤√外，其它状态都支持填分钟：
@@ -57,7 +56,7 @@ function getAtt(month, empId) {
 
 // 保存某员工某月考勤：存在则更新，不存在则新建；同时重算汇总
 function saveAtt(month, empId, rec) {
-  const summary = sumRec(rec);
+  const summary = summarizeAttendance(rec);
   const exist = state.data.attendance.find(x => x.month === month && x.empId === empId);
   if (exist) { exist.rec = rec; exist.summary = summary; }
   else state.data.attendance.push({ id: "a_" + month + "_" + empId, month, empId, rec, summary });
@@ -96,7 +95,7 @@ export function initAttendance() {
   const fn = document.getElementById("attFilterName");
   const fd = document.getElementById("attFilterDept");
   fd.innerHTML = '<option value="">全部部门</option>'
-    + getDepartments().map(d => `<option value="${escAttr(d)}">${escAttr(d)}</option>`).join("");
+    + getDepartments().map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
   fn.addEventListener("input", () => { attFilter.name = fn.value; renderAttendance(); });
   fd.addEventListener("change", () => { attFilter.dept = fd.value; renderAttendance(); });
   document.getElementById("toggleAttSummaryBtn").addEventListener("click", () => {
@@ -120,18 +119,13 @@ export function initAttendance() {
   });
 }
 
-// 小工具：转义（与 roster.js 同款，避免部门名破坏 HTML）
-function escAttr(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
 export function renderAttendance() {
   const month = document.getElementById("attMonth").value || "2026-08";
   const wrap = document.getElementById("attGrid");
   const N = daysInMonth(month);
 
   // 应用筛选：姓名模糊匹配 + 部门精确匹配
-  const all = state.data.employees.filter(e => !e.deletedAt);
+  const all = state.data.employees.filter(e => !e.deletedAt && isEmployeeActiveInMonth(e, month));
   const q = attFilter.name.trim().toLowerCase();
   const emps = all.filter(e =>
     (!q || e.name.toLowerCase().includes(q)) &&
@@ -180,7 +174,7 @@ export function renderAttendance() {
   let body = "";
   emps.forEach((e, i) => {
     const rec = getAtt(month, e.id);
-    const s = (state.data.attendance.find(x => x.month === month && x.empId === e.id) || {}).summary || sumRec({});
+    const s = (state.data.attendance.find(x => x.month === month && x.empId === e.id) || {}).summary || summarizeAttendance();
     SHIFTS.forEach((sh, si) => {
       body += "<tr>";
       if (si === 0) {  // 仅"上午"行输出合并的 序号/姓名/部门 与 汇总
@@ -313,7 +307,7 @@ function onCellClick(td, ev) {
 
   rec[day] = cell;
   saveAtt(month, empId, rec);
-  window.__renderAll();
+  requestRefresh("attendance", "roster", "dashboard", "today");
 }
 
 // ---------- 拖拽框选 + 批量应用 ----------
@@ -426,7 +420,7 @@ function applyBulk(cells, status) {
     saveAtt(month, empId, rec);
   }
   closeBulkBar();
-  window.__renderAll();
+  requestRefresh("attendance", "roster", "dashboard", "today");
   if (skipped) showToast(`已应用 ${applied} 格，跳过 ${skipped} 格（所选状态不适用于这些单元格）`);
   else if (applied) showToast(`已批量应用 ${applied} 格`);
 }
@@ -560,7 +554,7 @@ function openDurationEditor(empId, day, shift) {
     r[day] = c;
     saveAtt(month, empId, r);
     closeModal();
-    window.__renderAll();
+    requestRefresh("attendance", "roster", "dashboard", "today");
   };
 }
 
@@ -587,7 +581,7 @@ function openHolidayModal() {
     <div class="row">
       <button class="btn btn-primary" id="resetHol">重置为 2026 国家法定节假日</button>
     </div>
-    <div class="hint" style="margin-bottom:10px;">「放假」不计出勤（列标红）；「上班」为调休上班日（列标蓝）；「清除」恢复普通日。老板临时多放的假可直接点「放假」。</div>
+    <div class="hint" style="margin-bottom:10px;">「放假」不计出勤（列标红）；「上班」为调休上班日（列标蓝）；「清除」恢复普通日。组织额外安排的假期可直接标记为「放假」。</div>
     <div style="overflow:auto; max-height:52vh;"><table>
       <thead><tr><th>日期</th><th>名称</th><th>类型</th><th>操作</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -596,7 +590,7 @@ function openHolidayModal() {
   document.getElementById("holClose").addEventListener("click", closeModal);
   document.getElementById("resetHol").addEventListener("click", () => {
     state.data.holidays = { ...HOLIDAYS_2026 };
-    persist(); closeModal(); window.__renderAll();
+    persist(); closeModal(); requestRefresh("attendance", "dashboard", "today");
   });
   document.querySelectorAll("[data-hol]").forEach(b => b.addEventListener("click", () => setHoliday(b.dataset.hol, "holiday")));
   document.querySelectorAll("[data-work]").forEach(b => b.addEventListener("click", () => setHoliday(b.dataset.work, "workday")));
@@ -606,9 +600,9 @@ function setHoliday(date, type) {
   const name = prompt("节假日名称（可留空）", "") || (type === "holiday" ? "放假" : "调休上班");
   state.data.holidays = state.data.holidays || {};
   state.data.holidays[date] = { name, type };
-  persist(); closeModal(); window.__renderAll();
+  persist(); closeModal(); requestRefresh("attendance", "dashboard", "today");
 }
 function clearHoliday(date) {
   delete state.data.holidays[date];
-  persist(); closeModal(); window.__renderAll();
+  persist(); closeModal(); requestRefresh("attendance", "dashboard", "today");
 }

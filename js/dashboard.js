@@ -10,7 +10,7 @@
 
 import { state } from "./store.js";
 import { fmtMoney } from "./ui.js";
-import { attendanceMetrics, isEmployeeActiveOn } from "./domain.js";
+import { attendanceMetrics, isEmployeeActiveInMonth } from "./domain.js";
 
 export function initDashboard() {
   document.getElementById("dashMonth").addEventListener("change", renderDashboard);
@@ -19,8 +19,7 @@ export function initDashboard() {
 export function renderDashboard() {
   const month = document.getElementById("dashMonth").value || "2026-08";
   const asOf = new Date().toLocaleDateString("sv-SE");
-  const monthEnd = `${month}-${String(new Date(+month.slice(0, 4), +month.slice(5, 7), 0).getDate()).padStart(2, "0")}`;
-  const emps = state.data.employees.filter(e => isEmployeeActiveOn(e, `${month}-01`) || isEmployeeActiveOn(e, monthEnd));
+  const emps = state.data.employees.filter(e => isEmployeeActiveInMonth(e, month));
 
   // —— 出勤统计：累加当月所有员工的出勤天数与事病缺天数 ——
   let actual = 0, expected = 0, leave = 0, absent = 0, missing = 0;

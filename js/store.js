@@ -1,24 +1,13 @@
 // ============================================================
-// store.js — 数据层（负责“数据从哪来、存到哪去”）
+// store.js — 本地数据仓库
 // ------------------------------------------------------------
-// 这是整个项目最关键的设计：所有读写都经过本文件。
-//
-// 现在：用浏览器自带的 localStorage（纯前端、离线可用，无需服务器）。
-// 未来接后端：只需要把下面每个函数体改成 fetch('https://你的api/...')，
-//             页面部分（roster/attendance/...）一行都不用改。
-//             —— 这就是“利于长期维护、方便接后端”的核心：业务逻辑不直接碰存储细节。
-//
-// 对外暴露：
-//   state           运行时状态（内存里的一份数据，大家共享）
-//   ensureSeed()    首次启动注入示例
-//   persist()       保存当前组织数据
-//   reloadCurrent() 切换组织后重新加载
-//   getOrgs/addOrg/setCurrentOrg/...  组织相关
+// 集中管理组织数据、迁移、偏好、快照与 localStorage 键名。
+// 业务模块只读写 state 并调用本模块 API；未来若改为异步后端，需要在本边界上增加
+// repository/service 层，而不是让页面直接接触传输与持久化细节。
 // ============================================================
 
 import { STORAGE_PREFIX, SCHEMA_VERSION, HOLIDAYS_2026, DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS, HALF_DAY_MINUTES } from "./config.js";
-import { validateImportPayload } from "./domain.js";
-import { sumRec } from "./sample.js";
+import { summarizeAttendance, validateImportPayload } from "./domain.js";
 
 // ---------- 内存中的运行时状态（整个应用共享这一份） ----------
 export const state = {
@@ -78,13 +67,13 @@ function migrate(data) {
       const v = a.rec[day];
       rec[day] = (v && typeof v === "object") ? v : { am: v || "", pm: v || "", ot: "" };
     }
-    return { ...a, rec, summary: sumRec(rec) };
+    return { ...a, rec, summary: summarizeAttendance(rec) };
   });
   // 3) 节假日：缺省用 2026 国家法定节假日
   if (!data.holidays) data.holidays = { ...HOLIDAYS_2026 };
   // 4) 组织设置：缺省用默认值（加班转调休开关、半天分钟数等）
   data.settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
-  // 5) 社保比例 / 大病医疗：缺省用全局默认（Phase 3 可在"比例设置"里改）
+  // 5) 社保比例 / 大病医疗：缺省用全局默认，可在组织设置中覆盖
   if (!data.settings.insuranceRatio) data.settings.insuranceRatio = JSON.parse(JSON.stringify(INSURANCE_RATIO));
   if (data.settings.bigSickness == null) data.settings.bigSickness = BIG_SICKNESS;
   // 6) 部门列表：缺省从现有员工的部门汇总（去重），避免手输拼出幽灵部门
@@ -140,9 +129,14 @@ export function savePreference(name, value) { writeJSON(preferenceKey(name), val
 export function removePreference(name) { localStorage.removeItem(preferenceKey(name)); }
 
 export function createSnapshot(reason = "手动快照") {
-  const snapshots = readJSON(snapshotKey(state.current), []);
-  snapshots.unshift({ id: `snap_${Date.now()}`, createdAt: new Date().toISOString(), reason, data: structuredClone(state.data) });
-  writeJSON(snapshotKey(state.current), snapshots.slice(0, 10));
+  return createSnapshotForOrg(state.current, reason, state.data);
+}
+export function createSnapshotForOrg(orgId, reason, sourceData = null) {
+  const data = sourceData || readJSON(dataKey(orgId), null);
+  if (!data) return null;
+  const snapshots = readJSON(snapshotKey(orgId), []);
+  snapshots.unshift({ id: `snap_${Date.now()}`, createdAt: new Date().toISOString(), reason, data: structuredClone(data) });
+  writeJSON(snapshotKey(orgId), snapshots.slice(0, 10));
   return snapshots[0];
 }
 export function listSnapshots() { return readJSON(snapshotKey(state.current), []); }

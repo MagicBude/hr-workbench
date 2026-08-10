@@ -7,7 +7,7 @@
 
 ## 1. 总览
 
-hr-workbench 是一个 **零运行时依赖、纯前端、可离线** 的通用人事考勤薪资工作台。当前以浏览器 `localStorage` 为存储，但通过严格的数据层抽象，未来可以无缝切换到后端 API，而不需要修改任何业务模块。
+hr-workbench 是一个 **零运行时依赖、纯前端、可离线** 的通用人事考勤薪资工作台。当前以浏览器 `localStorage` 为存储，并把存储细节集中在 `store.js`。未来迁移到异步后端时，应在这一边界引入 repository/service 层；页面模块可保留大部分业务交互，但初始化、错误处理和异步状态仍需相应调整。
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -17,7 +17,7 @@ hr-workbench 是一个 **零运行时依赖、纯前端、可离线** 的通用�
                 │ <script type="module" src="js/main.js">
 ┌───────────────▼──────────────────────────────────────────┐
 │                          js/main.js                        │
-│  入口：组装所有模块、绑定全局事件、window.__renderAll()        │
+│  入口：组装模块、绑定全局事件、提供全量与模块级视图调度       │
 └───┬───────┬───────┬───────┬───────┬───────┬──────────────┘
     │       │       │       │       │       │
 ┌───▼───┐ ┌─▼───┐ ┌─▼────┐ ┌▼─────┐ ┌▼────┐ ┌▼──────────┐
@@ -54,8 +54,8 @@ hr-workbench 是一个 **零运行时依赖、纯前端、可离线** 的通用�
 
 **铁律**
 1. 业务模块绝不直接读写 `localStorage`，一律经过 `store.js`。
-2. 任何模块改完数据后调用 `persist()`，再调用 `window.__renderAll()` 触发全局重绘。
-3. 新代码必须带教材级中文注释。
+2. 业务模块修改数据后调用 `persist()`，再通过 `requestRefresh(...modules)` 刷新受影响视图。
+3. 高风险业务口径和非显然取舍必须有简洁、不过期的中文注释。
 4. 引入第三方库必须下载到 `vendor/` 本地目录，禁止引用 CDN。
 
 ---
@@ -65,16 +65,16 @@ hr-workbench 是一个 **零运行时依赖、纯前端、可离线** 的通用�
 | 文件 | 职责 | 对外暴露的关键 API |
 |---|---|---|
 | `config.js` | 全局常量：状态种类、颜色、社保比例 | `STATUSES` `STATUS_COLOR` `INSURANCE_RATIO` |
-| `domain.js` | 纯业务口径与输入校验，可脱离 DOM 测试 | `attendanceMetrics` `estimateTax` `validateImportPayload` |
+| `domain.js` | 纯业务口径与输入校验，可脱离 DOM 测试 | `attendanceMetrics` `summarizeAttendance` `buildPayrollRecord` `validateImportPayload` |
 | `store.js` | **数据层**：读写存储、组织管理、数据迁移、偏好与快照 | `state` `persist` `createSnapshot` `restoreSnapshot` |
-| `sample.js` | 示例数据生成、薪资计算 | `buildSample` `buildPayroll` `sumRec` |
+| `sample.js` | 仅生成首次启动所需的虚构示例数据 | `buildSample` |
 | `ui.js` | 通用 UI：弹窗、下载、金额格式 | `openModal` `downloadFile` `fmtMoney` |
 | `roster.js` | 花名册：增、删、改、排序 | `initRoster` `renderRoster` |
 | `attendance.js` | 考勤：分时段网格、节假日、调休联动 | `initAttendance` `renderAttendance` |
-| `payroll.js` | 薪资：计算、编辑、比例、导出 | `initPayroll` `renderPayroll` `recompute` |
+| `payroll.js` | 薪资：组织参数核算、编辑、状态锁定与 CSV 导出 | `initPayroll` `renderPayroll` |
 | `dashboard.js` | 看板：KPI、出勤率环图、工资趋势 | `initDashboard` `renderDashboard` |
-| `export.js` | Excel 导出（Phase 4 新增） | `exportRosterXlsx` `exportAttendanceXlsx` |
-| `main.js` | 入口：组装与全局事件 | `renderAll`（挂到 `window.__renderAll`） |
+| `export.js` | 花名册、考勤和薪资 Excel 导出 | `exportRosterXlsx` `exportAttendanceXlsx` `exportPayrollXlsx` |
+| `main.js` | 入口：组装、全局事件与视图调度 | `renderAll` `window.__refresh` |
 
 ---
 
@@ -89,11 +89,11 @@ hr-workbench 是一个 **零运行时依赖、纯前端、可离线** 的通用�
                                                     ├─ renderDashboard()
                                                     └─ renderToday()  // 顶部"今天要处理"
 ```
-组织切换、导入和快照恢复仍使用 `window.__renderAll()`；普通业务操作通过模块级刷新避免无关大表重绘。
+组织切换和整包数据替换使用全量刷新；普通业务操作由 `ui.requestRefresh` 转发到模块级调度，避免业务模块直接依赖入口模块。
 
 ### 4.2 组织切换
 ```
-select 改变 → setCurrentOrg(id) → reloadCurrent() → window.__renderAll()
+select 改变 → setCurrentOrg(id) → reloadCurrent() → renderAll()
 ```
 
 ---
@@ -109,8 +109,8 @@ wb_hr_{orgId}_data → {                            某组织全部数据
   employees: [],   // 花名册
   attendance: [],  // 考勤
   payroll: [],     // 薪资
-  holidays: {},    // 节假日（Phase 2）
-  settings: {}     // 组织设置（Phase 2/3）
+  holidays: {},    // 节假日与调休上班日
+  settings: {}     // 组织级业务规则与界面偏好
 }
 wb_hr_{orgId}_snapshots → []                       最近 10 份恢复快照
 wb_hr_{orgId}_pref_* → ...                         列宽等界面偏好
