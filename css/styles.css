@@ -101,18 +101,19 @@ tbody tr:hover{ background:#fafbfc; }
 td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }   /* 数字右对齐更整齐 */
 .mono{ font-variant-numeric:tabular-nums; }
 
-/* 列宽拖拽手柄（Excel 式）：手柄跨在相邻两列的边界上，竖线正好落在分隔处 */
+/* 列宽拖拽手柄（Excel 式）：手柄跨在相邻两列的边界上，不额外画竖线，直接用表格线当边界 */
 thead th{ position:relative; padding-right:8px; }
 .col-resize{
   position:absolute; top:0; right:-5px; width:10px; height:100%;
   cursor:col-resize; z-index:6;
 }
-/* 在手柄中央画一条 2px 竖线作为视觉标识，正好覆盖列边界；hover 变蓝 */
+/* 默认不显示任何标识线；仅当鼠标悬停或拖拽时，在手柄中央显示一条很淡的竖线作为辅助 */
 .col-resize::after{
-  content:""; position:absolute; top:15%; right:4px; width:2px; height:70%;
-  background:rgba(0,0,0,.12); border-radius:1px; pointer-events:none;
+  content:""; position:absolute; top:20%; left:50%; width:2px; height:60%;
+  transform:translateX(-50%); background:transparent; border-radius:1px; pointer-events:none;
 }
-.col-resize:hover::after{ background:var(--blue); }
+.col-resize:hover::after{ background:rgba(33,118,199,.35); }
+body.col-resizing .col-resize::after{ background:rgba(33,118,199,.35); }
 body.col-resizing, body.col-resizing *{ cursor:col-resize !important; user-select:none !important; }
 
 /* 花名册：固定布局便于列宽拖拽；操作列是末列，天然在最右侧 */
@@ -120,6 +121,16 @@ body.col-resizing, body.col-resizing *{ cursor:col-resize !important; user-selec
 #empTable th.ops,
 #empTable td.ops{ text-align:right; white-space:nowrap; }
 #empTable td.ops .btn{ margin-left:6px; }   /* 按钮之间留点间距 */
+
+/* 花名册表头按功能分组着色，像薪资表一样清晰区分列边界 */
+#empTable thead th{ border-right:1px solid var(--border); }
+#empTable thead th:nth-child(1){ background:var(--bg); }             /* 序号 */
+#empTable thead th:nth-child(2),
+#empTable thead th:nth-child(3){ background:var(--blue-50); color:var(--blue); }  /* 姓名/部门：员工信息 */
+#empTable thead th:nth-child(4){ background:#f0fdf4; color:#047857; }            /* 入职日期：档案信息 */
+#empTable thead th:nth-child(5),
+#empTable thead th:nth-child(6){ background:#fffbeb; color:#b45309; }              /* 基本月薪/可调休：数值 */
+#empTable thead th:nth-child(7){ background:#f8fafc; color:var(--muted); }         /* 操作 */
 
 /* ---------- 8. 考勤表（真 <table>，标准布局：序号|姓名|部门|时段|日期|汇总） ---------- */
 /* 用 border-collapse:separate + border-spacing:0，配合 sticky 固定列时线条也能对齐 */
