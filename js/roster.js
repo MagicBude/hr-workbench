@@ -13,7 +13,7 @@
 // ============================================================
 
 import { state, persist, getDepartments, addDepartment, computeRestMinutes } from "./store.js";
-import { STORAGE_PREFIX } from "./config.js";
+import { STORAGE_PREFIX, HALF_DAY_MINUTES } from "./config.js";
 import { fmtMoney, openModal, closeModal, enableColResize } from "./ui.js";
 
 // 列宽持久化（按组织）：存在 localStorage 的 wb_hr_{org}_colw_{tag}
@@ -22,6 +22,28 @@ function loadColW(tag) { try { return JSON.parse(localStorage.getItem(colwKey(ta
 function saveColW(tag, w) { localStorage.setItem(colwKey(tag), JSON.stringify(w)); }
 // 花名册默认列宽（序号/姓名/部门/入职/月薪/可调休/操作）
 const EMP_DEF_W = [44, 110, 120, 120, 110, 90, 120];
+
+function workdayMinutes() {
+  const half = (state.data.settings && state.data.settings.halfDayMinutes) || HALF_DAY_MINUTES;
+  return half * 2;
+}
+function shortDecimal(n, digits = 2) {
+  return String(Math.round(n * (10 ** digits)) / (10 ** digits));
+}
+function formatRestMinutes(minutes, mode = (state.data.settings && state.data.settings.restBalanceDisplay) || "smart") {
+  const value = Math.round(minutes || 0);
+  const sign = value < 0 ? "−" : "";
+  const abs = Math.abs(value);
+  const dayMin = workdayMinutes();
+  if (mode === "hours") return sign + shortDecimal(abs / 60) + "小时";
+  if (mode === "days") return sign + shortDecimal(abs / dayMin) + "天";
+  if (abs === 0) return "0分钟";
+  const days = Math.floor(abs / dayMin);
+  const rest = abs - days * dayMin;
+  const hours = Math.floor(rest / 60);
+  const mins = rest % 60;
+  return sign + (days ? days + "天" : "") + (hours ? hours + "小时" : "") + (mins ? mins + "分钟" : "");
+}
 
 // 恢复默认列宽：清除记忆并刷新
 export function resetEmpColWidths() {
@@ -159,14 +181,14 @@ export function renderRoster() {
     const tr = document.createElement("tr");
     tr.draggable = true;                 // 允许整行被拖拽
     tr.dataset.id = e.id;                // 记员工 id（拖拽时按 id 定位，兼容筛选后的顺序）
-    const restHours = computeRestMinutes(e.id) / 60;  // 动态可用余额（分钟 → 小时）
+    const restMinutes = computeRestMinutes(e.id);
     tr.innerHTML = `
       <td class="seq">${i + 1}</td>
       <td><span class="drag-handle" title="拖拽排序">≡</span>${e.name}</td>
       <td>${e.dept || ""}</td>
       <td>${e.hireDate || "-"}</td>
       <td class="num">${fmtMoney(e.baseSalary)}</td>
-      <td class="num">${restHours.toFixed(1)}</td>
+      <td class="num mono" title="${shortDecimal(restMinutes / 60)} 小时">${formatRestMinutes(restMinutes)}</td>
       <td class="ops">
         <button class="btn btn-sm" data-edit="${e.id}">编辑</button>
         <button class="btn btn-sm btn-danger" data-del="${e.id}">删除</button>
@@ -237,28 +259,53 @@ function bindDnD(tb) {
 function openEditModal(id) {
   const e = state.data.employees.find(x => x.id === id);
   if (!e) return;
-  const restHours = (e.restSeedMinutes || 0) / 60;   // 初始余额：分钟 → 小时回填
+  const seedMinutes = Math.max(0, e.restSeedMinutes || 0);
+  const dayMinutes = workdayMinutes();
+  const restDays = Math.floor(seedMinutes / dayMinutes);
+  const seedRemainder = seedMinutes - restDays * dayMinutes;
+  const restHours = Math.floor(seedRemainder / 60);
+  const restMins = seedRemainder % 60;
+  const earnedUsedMinutes = computeRestMinutes(e.id) - seedMinutes;
   openModal(`
     <h3>编辑员工</h3>
     <div class="field"><label>姓名</label><input id="emName" value="${e.name}"></div>
     <div class="field"><label>部门</label><select id="emDept">${deptOptionsHtml(e.dept)}</select></div>
     <div class="field"><label>入职日期</label><input id="emHire" type="date" value="${e.hireDate || ""}"></div>
     <div class="field"><label>基本月薪 (¥)</label><input id="emSalary" type="number" min="0" value="${e.baseSalary || 0}"></div>
-    <div class="field"><label>初始可调休余额 (小时)</label><input id="emRest" type="number" min="0" step="0.5" value="${restHours}"></div>
-    <div class="hint">当前可用 = 初始 + 加班累计 − 调休累计 = <b>${computeRestMinutes(e.id) / 60}</b> 小时（按考勤自动算，无需手填）</div>
+    <div class="field"><label>初始可调休余额</label>
+      <div class="rest-duration-grid">
+        <label><input id="emRestDays" type="number" min="0" step="1" value="${restDays}"><span>天</span></label>
+        <label><input id="emRestHours" type="number" min="0" step="1" value="${restHours}"><span>小时</span></label>
+        <label><input id="emRestMins" type="number" min="0" max="59" step="1" value="${restMins}"><span>分钟</span></label>
+      </div>
+    </div>
+    <div class="hint" id="emRestHint"></div>
     <div class="field"><label>社保基数 (¥，留空=用基本月薪)</label><input id="emIns" type="number" min="0" value="${e.insuranceBase ?? ""}"></div>
     <div class="modal-actions">
       <button class="btn" id="emCancel">取消</button>
       <button class="btn btn-primary" id="emSave">保存</button>
     </div>`);
   document.getElementById("emCancel").addEventListener("click", closeModal);
+  const readRestMinutes = () => {
+    const days = Math.max(0, Math.floor(+document.getElementById("emRestDays").value || 0));
+    const hours = Math.max(0, Math.floor(+document.getElementById("emRestHours").value || 0));
+    const mins = Math.max(0, Math.min(59, Math.floor(+document.getElementById("emRestMins").value || 0)));
+    return days * dayMinutes + hours * 60 + mins;
+  };
+  const updateRestHint = () => {
+    const inputMinutes = readRestMinutes();
+    const available = inputMinutes + earnedUsedMinutes;
+    document.getElementById("emRestHint").innerHTML = `录入：<b>${formatRestMinutes(inputMinutes, "smart")}</b> = ${shortDecimal(inputMinutes / 60)} 小时；保存后可用：<b>${formatRestMinutes(available, "smart")}</b>`;
+  };
+  ["emRestDays", "emRestHours", "emRestMins"].forEach(id => document.getElementById(id).addEventListener("input", updateRestHint));
+  updateRestHint();
   document.getElementById("emSave").addEventListener("click", () => {
     e.name = document.getElementById("emName").value.trim() || e.name;
     e.dept = document.getElementById("emDept").value.trim();
     e.hireDate = document.getElementById("emHire").value;
     e.baseSalary = +document.getElementById("emSalary").value || 0;
-    // 可调休初始余额：小时 → 分钟（精确到分钟存储）；可用余额由考勤动态计算
-    e.restSeedMinutes = Math.round((+document.getElementById("emRest").value || 0) * 60);
+    // 可调休初始余额：天 / 小时 / 分钟 → 分钟；可用余额仍由考勤动态计算
+    e.restSeedMinutes = readRestMinutes();
     // 社保基数：空 → null（用基本月薪）；否则取数字
     const ins = document.getElementById("emIns").value.trim();
     e.insuranceBase = ins === "" ? null : (+ins || 0);

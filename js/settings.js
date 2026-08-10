@@ -68,6 +68,11 @@ export function openSettings(section = "attendance") {
     <div class="settings-page" data-settings-page="appearance">
       <div class="settings-row"><div><b>默认月份</b><div class="hint">留空时使用当前月份，切换组织时生效</div></div><input id="setDefaultMonth" type="month" value="${st.defaultMonth || ""}"></div>
       <label class="settings-row switch-row"><div><b>紧凑表格</b><div class="hint">减少单元格留白，在一屏显示更多数据</div></div><input id="setCompact" type="checkbox"${checked(st.compactTables)}></label>
+      <div class="settings-row"><div><b>调休余额显示</b><div class="hint">控制花名册中可调休余额的展示方式</div></div><select id="setRestDisplay" class="setting-select">
+        <option value="smart"${st.restBalanceDisplay === "smart" ? " selected" : ""}>智能格式（2天3小时30分钟）</option>
+        <option value="hours"${st.restBalanceDisplay === "hours" ? " selected" : ""}>总小时（19.5小时）</option>
+        <option value="days"${st.restBalanceDisplay === "days" ? " selected" : ""}>天数小数（2.44天）</option>
+      </select></div>
       <div class="settings-row"><div><b>列宽记忆</b><div class="hint">清除当前组织的花名册和考勤列宽</div></div><button class="btn" id="settingsResetCols">恢复默认列宽</button></div>
     </div>
     <div class="modal-actions settings-actions">
@@ -113,6 +118,7 @@ function saveSettings() {
   st.showTodayTodos = document.getElementById("setToday").checked;
   st.compactTables = document.getElementById("setCompact").checked;
   st.defaultMonth = document.getElementById("setDefaultMonth").value;
+  st.restBalanceDisplay = document.getElementById("setRestDisplay").value;
   const nr = { company: {}, personal: {} };
   document.querySelectorAll(".src").forEach(i => nr.company[i.dataset.k] = Math.max(0, Number(i.value) || 0));
   document.querySelectorAll(".srp").forEach(i => nr.personal[i.dataset.k] = Math.max(0, Number(i.value) || 0));

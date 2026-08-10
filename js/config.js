@@ -97,6 +97,7 @@ export const DEFAULT_SETTINGS = {
   showTodayTodos: true,                 // 是否显示首页“今天要处理”
   compactTables: false,                 // 是否使用紧凑表格密度
   defaultMonth: "",                     // 默认月份；空字符串表示当前月份
+  restBalanceDisplay: "smart",          // 调休余额显示：smart / hours / days
   departments: []                       // 部门列表（组织级选项，避免手输拼出幽灵部门）
 };
 

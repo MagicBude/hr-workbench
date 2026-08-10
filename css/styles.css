@@ -237,11 +237,15 @@ nav.tabs button svg{ width:22px; height:22px; }
 .setting-input{ display:flex; align-items:center; justify-content:flex-end; gap:6px; flex:0 0 auto !important; }
 .setting-input input{ width:92px; text-align:right; }
 .setting-input span{ min-width:28px; color:var(--muted); font-size:12px; }
+.setting-select{ width:min(310px, 48%); font-size:14px; }
 .switch-row{ cursor:pointer; }
 .switch-row input[type="checkbox"]{ width:42px; height:23px; accent-color:var(--blue); cursor:pointer; }
 .settings-actions{ position:sticky; bottom:-20px; background:#fff; padding:12px 0 2px; border-top:1px solid var(--border); }
 body.compact-tables th, body.compact-tables td{ padding-top:5px; padding-bottom:5px; }
 body.compact-tables table{ font-size:12px; }
+.rest-duration-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.rest-duration-grid label{ display:flex; align-items:center; gap:5px; color:var(--muted); font-size:12px; }
+.rest-duration-grid input{ min-width:0; text-align:right; }
 
 /* ---------- 12. 移动端适配（窄屏单列） ---------- */
 @media (max-width:768px){
@@ -253,6 +257,7 @@ body.compact-tables table{ font-size:12px; }
   .charts{ grid-template-columns:1fr; }
   .row .field{ flex:1; min-width:120px; }
   .settings-row{ gap:12px; }
+  .setting-select{ width:52%; }
   .ratio-grid{ grid-template-columns:repeat(2,1fr); }
 }
 
