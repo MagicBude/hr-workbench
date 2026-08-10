@@ -78,6 +78,15 @@ function weekdayOf(month, day) {
   const [y, m] = month.split("-").map(Number);
   return new Date(y, m - 1, day).getDay();
 }
+// 某天是否为“工作日”（需要考勤）。
+//   - 节假日设置里 type:"workday"（调休上班）→ 工作日；type:"holiday"（放假）→ 非工作日
+//   - 普通日：周一~周五=工作日，周六日=非工作日
+export function isWorkday(month, day) {
+  const hol = holidayOf(month, day);
+  if (hol) return hol.type === "workday";
+  const wd = weekdayOf(month, day);
+  return wd !== 0 && wd !== 6;
+}
 
 export function initAttendance() {
   document.getElementById("attMonth").addEventListener("change", renderAttendance);
@@ -89,11 +98,11 @@ export function initAttendance() {
     + getDepartments().map(d => `<option value="${escAttr(d)}">${escAttr(d)}</option>`).join("");
   fn.addEventListener("input", () => { attFilter.name = fn.value; renderAttendance(); });
   fd.addEventListener("change", () => { attFilter.dept = fd.value; renderAttendance(); });
-  // 事件委托：整个 tbody 只绑一个点击监听，靠单元格 data-* 定位，性能好、代码简洁
-  document.getElementById("attGrid").addEventListener("click", (ev) => {
-    const td = ev.target.closest("td.cell");
-    if (td) onCellClick(td, ev);
-  });
+  // 事件委托：单击循环切换 + 拖拽框选批量应用
+  const grid = document.getElementById("attGrid");
+  grid.addEventListener("mousedown", onGridMouseDown);
+  document.addEventListener("mousemove", onGridMouseMove);
+  document.addEventListener("mouseup", onGridMouseUp);
 }
 
 // 小工具：转义（与 roster.js 同款，避免部门名破坏 HTML）
@@ -170,10 +179,15 @@ export function renderAttendance() {
         const v = rec[d] ? (rec[d][sh] || "") : "";
         const { s, min, color } = cellView(v);
         const bg = color ? ` style="background:${color.bg};color:${color.fg}"` : "";
-        // 时长角标：可带时长的状态都显示（整段请假显示 4h，加班默认 1h，迟到默认 30m）
-        const showMin = min != null ? min : (isDurationStatus(s) ? defaultMinFor(s) : null);
+        // 休息日（周末/节假日放假）且为空 → 显示灰色“休”占位，提示“这格不用填”；点击仍可改为出勤/加班等
+        const isRest = !isWorkday(month, d);
+        const isEmptyRest = !s && isRest && sh !== "ot";   // 加班行不加“休”（加班可选，空即无加班）
+        // 时长角标：可带时长的状态都显示（整段请假 4h，加班 1h，迟到 30m）；休息占位格不显示
+        const showMin = (!isEmptyRest && min != null) ? min : ((!isEmptyRest && isDurationStatus(s)) ? defaultMinFor(s) : null);
         const badge = showMin != null ? `<span class="dur" title="点此设置时长">${fmtMin(showMin)}</span>` : "";
-        body += `<td class="cell${hol ? " cell-holiday" : ""}" data-emp="${e.id}" data-day="${d}" data-shift="${sh}"${bg}>${s}${badge}</td>`;
+        const cls = "cell" + (hol ? " cell-holiday" : "") + (isEmptyRest ? " cell-rest" : "");
+        const content = isEmptyRest ? `<span class="rest-tag" title="休息日（无需填写，点击可改）">休</span>` : s + badge;
+        body += `<td class="${cls}" data-emp="${e.id}" data-day="${d}" data-shift="${sh}" data-ei="${i}" data-di="${d}" data-si="${si}"${bg}>${content}</td>`;
       }
       if (si === 0) SUM_KEYS.forEach(k => { body += `<td class="sumcol" rowspan="3">${fmt1(s[k])}</td>`; });
       body += "</tr>";
@@ -285,6 +299,162 @@ function onCellClick(td, ev) {
   rec[day] = cell;
   saveAtt(month, empId, rec);
   window.__renderAll();
+}
+
+// ---------- 拖拽框选 + 批量应用 ----------
+// 设计：在单元格上按下并拖动 → 高亮一个矩形区域；松手弹出工具条，点某状态即应用给区域内所有格。
+//       加班行只接受“加/清除”；若只是单击（未拖动），保持原“循环切换”手感。
+let selStart = null, selMoved = false, dragging = false;
+function cellCoord(td) {
+  return { ei: +td.dataset.ei, di: +td.dataset.di, si: +td.dataset.si, empId: td.dataset.emp, day: td.dataset.day, shift: td.dataset.shift };
+}
+function onGridMouseDown(ev) {
+  const td = ev.target.closest("td.cell");
+  if (!td) return;
+  closeBulkBar();                 // 任何新的按下先关掉上一次工具条
+  selStart = cellCoord(td);
+  dragging = true; selMoved = false;
+  ev.preventDefault();             // 避免拖拽时选中页面文字
+}
+function onGridMouseMove(ev) {
+  if (!dragging || !selStart) return;
+  const td = ev.target.closest("td.cell");
+  if (!td) return;
+  const c = cellCoord(td);
+  if (c.ei === selStart.ei && c.di === selStart.di && c.si === selStart.si) return; // 还在起始格
+  selMoved = true;
+  highlightRange(c);
+}
+function onGridMouseUp(ev) {
+  if (!dragging) return;
+  dragging = false;
+  const td = ev.target.closest("td.cell");
+  if (selMoved && td) {
+    showBulkBar(ev);              // 框选完成 → 弹工具条
+  } else if (selStart && td) {
+    const cell = ev.target.closest("td.cell");   // 未拖动：等同单击 → 循环切换（或点时长角标）
+    if (cell) onCellClick(cell, ev);
+  } else {
+    document.querySelectorAll("#attGrid td.cell.sel").forEach(x => x.classList.remove("sel")); // 表格外松开：清高亮
+  }
+  selStart = null; selMoved = false;
+}
+function highlightRange(cur) {
+  const minEi = Math.min(selStart.ei, cur.ei), maxEi = Math.max(selStart.ei, cur.ei);
+  const minDi = Math.min(selStart.di, cur.di), maxDi = Math.max(selStart.di, cur.di);
+  const minSi = Math.min(selStart.si, cur.si), maxSi = Math.max(selStart.si, cur.si);
+  document.querySelectorAll("#attGrid td.cell").forEach(td => {
+    const te = +td.dataset.ei, td_ = +td.dataset.di, ts = +td.dataset.si;
+    const inRange = te >= minEi && te <= maxEi && td_ >= minDi && td_ <= maxDi && ts >= minSi && ts <= maxSi;
+    td.classList.toggle("sel", inRange);
+  });
+}
+function showBulkBar(ev) {
+  const cells = [...document.querySelectorAll("#attGrid td.cell.sel")];
+  if (!cells.length) return;
+  closeBulkBar();
+  const bar = document.createElement("div");
+  bar.id = "bulkBar";
+  bar.className = "att-bulk-bar";
+  const items = [["√", "出勤"], ["事", "事假"], ["病", "病假"], ["缺", "缺勤"], ["调", "调休"], ["年", "年假"], ["加", "加班"], ["迟", "迟到"], ["退", "早退"], ["清除", "清除/重置"]];
+  bar.innerHTML = `<span class="ttl">批量（${cells.length} 格）</span>`
+    + items.map(([s, t]) => `<button class="bk" data-s="${s}" title="${t}">${s === "清除" ? "✕" : s}</button>`).join("")
+    + `<button class="bk close" data-close="1" title="关闭">×</button>`;
+  document.body.appendChild(bar);
+  const bw = 420, bh = 50;
+  let x = ev.clientX, y = ev.clientY + 14;
+  x = Math.max(8, Math.min(x, window.innerWidth - bw - 8));
+  y = Math.max(8, Math.min(y, window.innerHeight - bh - 8));
+  bar.style.left = x + "px"; bar.style.top = y + "px";
+  bar.querySelectorAll(".bk[data-s]").forEach(b => b.onclick = () => applyBulk(cells, b.dataset.s));
+  bar.querySelector("[data-close]").onclick = closeBulkBar;
+  setTimeout(() => document.addEventListener("mousedown", outsideClose, true), 0);
+}
+function outsideClose(e) {
+  const bar = document.getElementById("bulkBar");
+  if (bar && !bar.contains(e.target)) closeBulkBar();
+}
+function closeBulkBar() {
+  const bar = document.getElementById("bulkBar");
+  if (bar) bar.remove();
+  document.querySelectorAll("#attGrid td.cell.sel").forEach(td => td.classList.remove("sel"));
+  document.removeEventListener("mousedown", outsideClose, true);
+}
+// 批量应用：按员工分组，每人一次 saveAtt；调休做余额校验（批量内不超额）
+function applyBulk(cells, status) {
+  const month = document.getElementById("attMonth").value || "2026-08";
+  const byEmp = {};
+  cells.forEach(td => {
+    const c = cellCoord(td);
+    (byEmp[c.empId] = byEmp[c.empId] || {})[c.day + "|" + c.shift] = { day: c.day, shift: c.shift };
+  });
+  let applied = 0, skipped = 0;
+  for (const empId in byEmp) {
+    const emp = state.data.employees.find(x => x.id === empId);
+    if (!emp) continue;
+    const rec = { ...getAtt(month, empId) };
+    let avail = computeRestMinutes(empId);   // 当前可用余额（用于调休校验，批量内递减/递增）
+    for (const key in byEmp[empId]) {
+      const { day, shift } = byEmp[empId][key];
+      const ok = setCellStatus(emp, rec, day, shift, status, avail);
+      if (ok.applied) applied++; else skipped++;
+      avail = ok.avail;
+    }
+    saveAtt(month, empId, rec);
+  }
+  closeBulkBar();
+  window.__renderAll();
+  if (skipped) showToast(`已应用 ${applied} 格，跳过 ${skipped} 格（工作日不可加班 / 可调休余额不足）`);
+  else if (applied) showToast(`已批量应用 ${applied} 格`);
+}
+// 设置单个格状态；avail 为“进入本格前的可用余额”，返回更新后的可用余额（批量内联动）
+function setCellStatus(emp, rec, day, shift, status, avail) {
+  const st = state.data.settings || {};
+  const half = st.halfDayMinutes || HALF_DAY_MINUTES;
+  const ratio = st.overtimeToRestRatio || 1;
+  const month = document.getElementById("attMonth").value || "2026-08";
+  const d = Number(day);
+  const isRestDay = !isWorkday(month, d);
+  const isOt = shift === "ot";
+  const blank = { am: "", pm: "", ot: "" };
+  if (status === "清除") {
+    const c = { ...(rec[day] || blank) };
+    c[shift] = "";
+    rec[day] = c;
+    return { applied: true, avail };
+  }
+  if (isOt) {                                   // 加班行：只能 加 / 清除
+    if (status !== "加") return { applied: false, avail };
+    const min = defaultMinFor("加");
+    if (st.overtimeToRest) avail += min * ratio;
+    const c = { ...(rec[day] || blank) }; c[shift] = { s: "加", min }; rec[day] = c;
+    return { applied: true, avail };
+  }
+  if (status === "加") {                         // 上午/下午加班：仅休息日允许
+    if (!isRestDay) return { applied: false, avail };
+    const min = defaultMinFor("加");
+    if (st.overtimeToRest) avail += min * ratio;
+    const c = { ...(rec[day] || blank) }; c[shift] = { s: "加", min }; rec[day] = c;
+    return { applied: true, avail };
+  }
+  if (status === "调") {                         // 调休：做余额校验
+    const cur = (rec[day] && rec[day][shift]) || "";
+    const curMin = (typeof cur === "object" && cur.s === "调" && cur.min != null) ? cur.min : (cur === "调" ? half : 0);
+    const newMin = (typeof cur === "object" && cur.s === "调" && cur.min != null) ? cur.min : half;
+    const canUse = avail + curMin;              // 先把本格已占的调休释放
+    if (canUse < newMin) return { applied: false, avail };
+    avail = canUse - newMin;
+    const c = { ...(rec[day] || blank) };
+    c[shift] = (typeof cur === "object" && cur.s === "调") ? cur : "调";
+    rec[day] = c;
+    return { applied: true, avail };
+  }
+  // 其余状态（√ 事 病 缺 年 迟 退）：纯字符串或带时长对象
+  const c = { ...(rec[day] || blank) };
+  if (status === "迟" || status === "退") c[shift] = { s: status, min: defaultMinFor(status) };
+  else c[shift] = status;
+  rec[day] = c;
+  return { applied: true, avail };
 }
 
 // 时长编辑弹窗（点单元格里的「时长」角标触发）：步进器设小时/分钟 + 快捷档

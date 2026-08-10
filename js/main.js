@@ -14,7 +14,7 @@ import { STORAGE_PREFIX } from "./config.js";
 import { buildSample } from "./sample.js";
 import { openModal, closeModal, downloadFile, curMonth, curDay, showHelp } from "./ui.js";
 import { initRoster, renderRoster, resetEmpColWidths } from "./roster.js";
-import { initAttendance, renderAttendance, resetAttColWidths } from "./attendance.js";
+import { initAttendance, renderAttendance, resetAttColWidths, isWorkday } from "./attendance.js";
 import { initPayroll, renderPayroll } from "./payroll.js";
 import { initDashboard, renderDashboard } from "./dashboard.js";
 import { exportRosterXlsx, exportAttendanceXlsx, exportPayrollXlsx } from "./export.js";
@@ -46,8 +46,9 @@ function renderToday() {
     const rec = a ? a.rec : {};
     let missing = 0;
     for (let d = 1; d < today; d++) {
+      if (!isWorkday(month, d)) continue;   // 周末 / 节假日放假 不算逾期（已在考勤表标“休”）
       const c = rec[d];
-      // 兼容新旧结构：新结构某天只要有任一时段非空即算"已填"
+      // 兼容新旧结构：新结构某天只要有任一时段非空即算“已填”
       const filled = c && typeof c === "object" ? !!(c.am || c.pm || c.ot) : !!c;
       if (!filled) missing++;
     }
