@@ -103,6 +103,15 @@ export function initAttendance() {
   grid.addEventListener("mousedown", onGridMouseDown);
   document.addEventListener("mousemove", onGridMouseMove);
   document.addEventListener("mouseup", onGridMouseUp);
+  // 时长角标单独绑定 click：避免被框选的 preventDefault 拦截，确保「点此设置时长」能弹出编辑器
+  grid.addEventListener("click", (ev) => {
+    const dur = ev.target.closest(".dur");
+    if (!dur) return;
+    const td = dur.closest("td.cell");
+    if (!td) return;
+    openDurationEditor(td.dataset.emp, td.dataset.day, td.dataset.shift);
+    ev.stopPropagation();
+  });
 }
 
 // 小工具：转义（与 roster.js 同款，避免部门名破坏 HTML）
@@ -309,6 +318,8 @@ function cellCoord(td) {
   return { ei: +td.dataset.ei, di: +td.dataset.di, si: +td.dataset.si, empId: td.dataset.emp, day: td.dataset.day, shift: td.dataset.shift };
 }
 function onGridMouseDown(ev) {
+  // 点击「时长」角标：不参与框选，让 click 事件自然触发 openDurationEditor
+  if (ev.target.closest(".dur")) return;
   const td = ev.target.closest("td.cell");
   if (!td) return;
   closeBulkBar();                 // 任何新的按下先关掉上一次工具条
