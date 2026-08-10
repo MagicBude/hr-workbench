@@ -104,13 +104,14 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }   /* 数�
 /* ---------- 8. 考勤表（真 <table>，标准布局：序号|姓名|部门|时段|日期|汇总） ---------- */
 /* 用 border-collapse:separate + border-spacing:0，配合 sticky 固定列时线条也能对齐 */
 .att-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:#fff; }
-.att-table{ border-collapse:separate; border-spacing:0; width:max-content; font-size:12px; }
+/* 宽度自适应：容器够宽时表格占满 100%，日期列均分剩余空间；内容超出容器时 .att-wrap 出现水平滚动条 */
+.att-table{ border-collapse:separate; border-spacing:0; width:100%; font-size:13px; }
 .att-table th,.att-table td{
   border-right:1px solid var(--border); border-bottom:1px solid var(--border);
   text-align:center; padding:0; white-space:nowrap;
 }
-.att-table thead th{ background:var(--bg); color:var(--muted); font-weight:500; height:28px; padding:0 4px; }
-.att-table thead th.date{ color:var(--text); font-weight:500; min-width:34px; }
+.att-table thead th{ background:var(--bg); color:var(--muted); font-weight:500; height:30px; padding:0 4px; }
+.att-table thead th.date{ color:var(--text); font-weight:500; min-width:34px; width:1%; }
 .att-table thead th.wk{ font-weight:400; }
 /* 表头日期/星期的节假日配色（用 !important 压住 sticky 列的背景） */
 .hd-weekend{ background:#f0f2f5 !important; color:#94a3b8 !important; }   /* 周末：灰 */
@@ -125,13 +126,13 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }   /* 数�
 .st-dept{ left:118px; min-width:76px; width:76px; color:var(--muted); }
 .st-shift{ left:194px; min-width:50px; width:50px; color:var(--muted); }
 
-/* 日期单元格（可点击循环切换状态） */
-.att-table td.cell{ min-width:34px; height:30px; cursor:pointer; user-select:none; font-size:12px; }
+/* 日期单元格（可点击循环切换状态）：width:1% 让所有日期列均分剩余宽度 */
+.att-table td.cell{ min-width:34px; width:1%; height:32px; cursor:pointer; user-select:none; font-size:13px; }
 .att-table td.cell:hover{ outline:1px solid var(--blue); outline-offset:-1px; }
 .att-table td.cell-holiday{ background:#fafbfc; }          /* 节假日当天底纹 */
 
 /* 汇总列（右侧：出勤/事假/病假/缺勤/调休/年假/加班） */
-.att-table .sumcol{ min-width:52px; padding:0 6px; font-variant-numeric:tabular-nums; }
+.att-table .sumcol{ min-width:56px; padding:0 6px; font-variant-numeric:tabular-nums; }
 .att-table td.sumcol{ color:var(--text); font-weight:500; }
 .att-table thead th.sumcol{ background:var(--bg); }
 

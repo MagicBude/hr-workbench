@@ -6,7 +6,7 @@
 //   每个员工占 3 行：上午 / 下午 / 加班；序号/姓名/部门/汇总用 rowspan 合并 3 行。
 //   表头两行：第 1 行是日期，第 2 行是星期（节假日显示 休/班）。
 // 数据结构：rec = { 1: { am:"√", pm:"√", ot:"" }, ... }（每天上午/下午/加班三时段）
-// 交互：点击某时段格，在 √→事→病→缺→调→年→加→空 循环切换。
+// 交互：点击某时段格循环切换。上午/下午行：√→事→病→缺→调→年→空；加班行：加↔空。
 // 联动：选「调」扣可调休余额（余额不足则【跳过】该状态，不卡死循环，并 toast 提示）；
 //       选「加」且开启"加班转调休"时自动增加余额。节假日列自动标色（放假红/调休上班蓝）。
 // 布局：用真 <table> + border-collapse，保证横竖线对齐；左侧员工信息列 sticky 固定。
@@ -131,16 +131,19 @@ function onCellClick(ds) {
   const cell = { ...(rec[day] || { am: "", pm: "", ot: "" }) }; // 复制该日三时段
   const cur = cell[shift] || "";
 
-  // 状态循环：√ → 事 → 病 → 缺 → 调 → 年 → 加 → (空) → √
-  const cycle = [...STATUSES, ""];
+  // 根据时段决定可循环状态：
+  //   - 加班行（ot）只能「加 / 空」切换，不会出现 √/事/病/缺/调/年；
+  //   - 上午/下午行（am/pm）是正常出勤，不能选「加」，循环 √→事→病→缺→调→年→空。
+  const isOt = shift === "ot";
+  const cycle = isOt ? ["加", ""] : ["√", "事", "病", "缺", "调", "年", ""];
   let idx = (cycle.indexOf(cur) + 1) % cycle.length;
   let next = cycle[idx];
 
-  // —— 关键修复：调休余额不足时【跳过】"调"，继续循环到下一个状态 ——
+  // —— 关键修复：普通行调休余额不足时【跳过】"调"，继续循环到下一个状态 ——
   //    之前的写法是弹窗阻断，导致永远停在"缺"无法继续往后切。现在跳过并 toast 提示。
   const st = state.data.settings || {};
   const half = st.halfDayMinutes || 240;
-  if (next === "调" && (emp.restMinutes || 0) < half) {
+  if (!isOt && next === "调" && (emp.restMinutes || 0) < half) {
     showToast(emp.name + " 可调休余额不足（需 " + (half / 60) + " 小时，当前 " + ((emp.restMinutes || 0) / 60).toFixed(1) + " 小时），已跳过「调休」");
     idx = (idx + 1) % cycle.length;
     next = cycle[idx];
