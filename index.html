@@ -126,20 +126,32 @@
         <div class="row">
           <div class="field"><label>薪资月份</label><input id="payMonth" type="month" value="2026-08"></div>
           <button class="btn btn-primary" id="genPayBtn">生成 / 刷新薪资</button>
+          <button class="btn" id="ratioBtn">社保公积金比例设置</button>
           <button class="btn" id="csvBtn">导出 CSV</button>
         </div>
         <div style="overflow-x:auto;">
           <table id="payTable">
-            <thead><tr>
-              <th>姓名</th><th>部门</th><th class="num">基本月薪</th><th class="num">出差补贴</th>
-              <th class="num">奖金</th><th class="num">加班费</th><th class="num">本月应发</th>
-              <th class="num">个人五险一金</th><th class="num">个税</th><th class="num">实发薪资</th>
-            </tr></thead>
+            <thead>
+              <tr>
+                <th rowspan="2">姓名</th><th rowspan="2">部门</th>
+                <th colspan="4" class="grp grp-inc">收入项</th>
+                <th rowspan="2" class="num">本月应发</th>
+                <th colspan="6" class="grp grp-comp">公司缴纳</th>
+                <th colspan="5" class="grp grp-pers">个人缴纳</th>
+                <th rowspan="2" class="num">个税</th>
+                <th rowspan="2" class="num">实发薪资</th>
+              </tr>
+              <tr>
+                <th class="num">基本月薪</th><th class="num">出差补贴</th><th class="num">奖金</th><th class="num">加班费</th>
+                <th class="num">养老</th><th class="num">医疗</th><th class="num">工伤</th><th class="num">失业</th><th class="num">生育</th><th class="num">公积金</th>
+                <th class="num">养老</th><th class="num">医疗</th><th class="num">失业</th><th class="num">公积金</th><th class="num">大病医疗</th>
+              </tr>
+            </thead>
             <tbody></tbody>
             <tfoot></tfoot>
           </table>
         </div>
-        <div class="hint">五险一金按基本月薪默认比例自动计算（公司+个人），个税按 (应发−个人缴纳−5000) 的 10% 简化估算，均可手动修改。</div>
+        <div class="hint">五险一金按「社保基数」（默认=基本月薪，可在员工编辑里单独设置）× 组织比例计算；点「社保公积金比例设置」可改比例。个税为简化估算，均可手动修改。</div>
       </div>
     </section>
 

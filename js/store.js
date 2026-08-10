@@ -16,7 +16,7 @@
 //   getOrgs/addOrg/setCurrentOrg/...  组织相关
 // ============================================================
 
-import { STORAGE_PREFIX, HOLIDAYS_2026, DEFAULT_SETTINGS } from "./config.js";
+import { STORAGE_PREFIX, HOLIDAYS_2026, DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 import { sumRec } from "./sample.js";
 
 // ---------- 内存中的运行时状态（整个应用共享这一份） ----------
@@ -71,6 +71,9 @@ function migrate(data) {
   if (!data.holidays) data.holidays = { ...HOLIDAYS_2026 };
   // 4) 组织设置：缺省用默认值（加班转调休开关、半天分钟数等）
   if (!data.settings) data.settings = { ...DEFAULT_SETTINGS };
+  // 5) 社保比例 / 大病医疗：缺省用全局默认（Phase 3 可在"比例设置"里改）
+  if (!data.settings.insuranceRatio) data.settings.insuranceRatio = JSON.parse(JSON.stringify(INSURANCE_RATIO));
+  if (data.settings.bigSickness == null) data.settings.bigSickness = BIG_SICKNESS;
   return data;
 }
 // 对"当前内存中的数据"执行迁移（导入新 JSON 后也可调用）

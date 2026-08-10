@@ -185,3 +185,15 @@ td.seq{ width:38px; text-align:center; color:var(--muted); }
 tr.dragging{ opacity:.45; }                 /* 拖拽中整行半透明 */
 td.ops{ white-space:nowrap; }
 .btn-sm{ min-height:32px; padding:4px 12px; font-size:13px; border-radius:8px; }
+
+/* ---------- 14. 薪资表：双层表头分组 + 缴纳明细（Phase 3） ---------- */
+#payTable{ min-width:1760px; }
+#payTable thead th{ white-space:nowrap; }
+#payTable thead th.grp{ text-align:center; border-bottom:1px solid var(--border); }
+#payTable thead th.grp-inc{ background:var(--blue-50); color:var(--blue); }   /* 收入项：蓝 */
+#payTable thead th.grp-comp{ background:#eef2ff; color:#3730a3; }             /* 公司缴纳：靛 */
+#payTable thead th.grp-pers{ background:#ecfdf5; color:#047857; }             /* 个人缴纳：绿 */
+#payTable td input{ width:64px; padding:4px 6px; font-size:13px; }
+.grp-title{ font-size:13px; font-weight:500; color:var(--muted); margin:12px 0 6px; }
+.ratio-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.ratio-grid .field{ min-width:0; }
