@@ -74,6 +74,12 @@ function migrate(data) {
   // 5) 社保比例 / 大病医疗：缺省用全局默认（Phase 3 可在"比例设置"里改）
   if (!data.settings.insuranceRatio) data.settings.insuranceRatio = JSON.parse(JSON.stringify(INSURANCE_RATIO));
   if (data.settings.bigSickness == null) data.settings.bigSickness = BIG_SICKNESS;
+  // 6) 部门列表：缺省从现有员工的部门汇总（去重），避免手输拼出幽灵部门
+  if (!Array.isArray(data.settings.departments)) {
+    const set = new Set();
+    (data.employees || []).forEach(e => { if (e.dept) set.add(e.dept); });
+    data.settings.departments = [...set];
+  }
   return data;
 }
 // 对"当前内存中的数据"执行迁移（导入新 JSON 后也可调用）
@@ -137,4 +143,15 @@ export function addOrg(name) {
   localStorage.setItem(KEY_CURRENT, id);
   writeJSON(dataKey(id), emptyData());
   state.data = emptyData();
+}
+
+// ---------- 部门（组织级选项） ----------
+// 返回当前组织的部门列表（数组），新增/编辑员工时作为下拉选项
+export function getDepartments() { return state.data.settings.departments || []; }
+// 新增一个部门（已存在则忽略），立即保存
+export function addDepartment(name) {
+  const n = (name || "").trim();
+  if (!n) return;
+  const list = state.data.settings.departments || (state.data.settings.departments = []);
+  if (!list.includes(n)) { list.push(n); persist(); }
 }

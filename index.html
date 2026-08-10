@@ -92,15 +92,20 @@
         <h3>员工花名册</h3>
         <div class="row">
           <div class="field"><label>姓名</label><input id="empName" placeholder="如 张三"></div>
-          <div class="field"><label>部门</label><input id="empDept" placeholder="如 销售部"></div>
+          <div class="field"><label>部门</label><select id="empDept"></select></div>
           <div class="field"><label>入职日期</label><input id="empHire" type="date"></div>
           <div class="field"><label>基本月薪 (¥)</label><input id="empSalary" type="number" min="0" placeholder="8000"></div>
           <button class="btn btn-primary" id="addEmpBtn">添加员工</button>
           <button class="btn" id="expRosterBtn">导出 Excel</button>
         </div>
+        <div class="row" style="margin-bottom:10px;align-items:center;">
+          <input id="empFilterName" placeholder="搜索姓名…" style="min-width:180px;">
+          <select id="empFilterDept"><option value="">全部部门</option></select>
+          <span class="hint" id="empFilterCount"></span>
+        </div>
         <div style="overflow-x:auto;">
           <table id="empTable">
-            <thead><tr><th class="seq">#</th><th>姓名</th><th>部门</th><th>入职日期</th><th class="num">基本月薪</th><th class="num">可调休(小时)</th><th class="ops">操作</th></tr></thead>
+            <thead><tr><th class="seq" data-col="0">#</th><th data-col="1">姓名</th><th data-col="2">部门</th><th data-col="3">入职日期</th><th class="num" data-col="4">基本月薪</th><th class="num" data-col="5">可调休(小时)</th><th class="ops" data-col="6">操作</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -118,6 +123,11 @@
           <button class="btn btn-sm help-btn" id="helpAttBtn" title="考勤规则说明">?</button>
         </div>
         <div class="hint" style="margin-bottom:10px;">每天分「上午 / 下午 / 加班」三个时段：普通工作日上午/下午在 √→事→病→缺→调→年→空 循环（不含「加」），周末/节假日上午/下午及加班行可记「加」；选「调」扣可调休余额，选「加」可自动转调休。节假日自动标色，点「节假日设置」可调整。</div>
+        <div class="row" style="margin-bottom:10px;align-items:center;">
+          <input id="attFilterName" placeholder="搜索姓名…" style="min-width:180px;">
+          <select id="attFilterDept"><option value="">全部部门</option></select>
+          <span class="hint" id="attFilterCount"></span>
+        </div>
         <div class="att-wrap"><div class="att-grid" id="attGrid"></div></div>
       </div>
     </section>

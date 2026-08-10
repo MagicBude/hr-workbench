@@ -12,13 +12,16 @@
 // 布局：用真 <table> + border-collapse，保证横竖线对齐；左侧员工信息列 sticky 固定。
 // ============================================================
 
-import { state, persist } from "./store.js";
-import { STATUSES, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026 } from "./config.js";
+import { state, persist, getDepartments } from "./store.js";
+import { STORAGE_PREFIX, STATUSES, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026 } from "./config.js";
 import { sumRec } from "./sample.js";
-import { openModal, closeModal, showToast } from "./ui.js";
+import { openModal, closeModal, showToast, enableColResize } from "./ui.js";
 
 // 汇总列顺序（与表头一致）：出勤 事假 病假 缺勤 调休 年假 加班
 const SUM_KEYS = ["出勤", "事假", "病假", "缺勤", "调休", "年假", "加班"];
+
+// 考勤筛选（仅内存）：按姓名模糊匹配 + 按部门精确匹配
+let attFilter = { name: "", dept: "" };
 
 // 取某员工某月考勤 rec（{day:{am,pm,ot}}），没有则返回空对象
 function getAtt(month, empId) {
@@ -54,6 +57,13 @@ function weekdayOf(month, day) {
 export function initAttendance() {
   document.getElementById("attMonth").addEventListener("change", renderAttendance);
   document.getElementById("holidayBtn").addEventListener("click", openHolidayModal);
+  // 筛选：姓名 + 部门（与花名册共享组织级部门列表）
+  const fn = document.getElementById("attFilterName");
+  const fd = document.getElementById("attFilterDept");
+  fd.innerHTML = '<option value="">全部部门</option>'
+    + getDepartments().map(d => `<option value="${escAttr(d)}">${escAttr(d)}</option>`).join("");
+  fn.addEventListener("input", () => { attFilter.name = fn.value; renderAttendance(); });
+  fd.addEventListener("change", () => { attFilter.dept = fd.value; renderAttendance(); });
   // 事件委托：整个 tbody 只绑一个点击监听，靠单元格 data-* 定位，性能好、代码简洁
   document.getElementById("attGrid").addEventListener("click", (ev) => {
     const td = ev.target.closest("td.cell");
@@ -61,22 +71,47 @@ export function initAttendance() {
   });
 }
 
+// 小工具：转义（与 roster.js 同款，避免部门名破坏 HTML）
+function escAttr(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 export function renderAttendance() {
   const month = document.getElementById("attMonth").value || "2026-08";
   const wrap = document.getElementById("attGrid");
   const N = daysInMonth(month);
-  const emps = state.data.employees;
 
-  if (!emps.length) {
+  // 应用筛选：姓名模糊匹配 + 部门精确匹配
+  const all = state.data.employees;
+  const q = attFilter.name.trim().toLowerCase();
+  const emps = all.filter(e =>
+    (!q || e.name.toLowerCase().includes(q)) &&
+    (!attFilter.dept || e.dept === attFilter.dept)
+  );
+  const cnt = document.getElementById("attFilterCount");
+  if (cnt) cnt.textContent = `共 ${emps.length} / ${all.length} 人`;
+
+  // 切换组织后，原筛选的部门可能已不存在 → 自动清空，避免整表空白
+  if (attFilter.dept && !getDepartments().includes(attFilter.dept)) {
+    attFilter.dept = "";
+    const fd = document.getElementById("attFilterDept");
+    if (fd) fd.value = "";
+  }
+
+  if (!all.length) {
     wrap.innerHTML = '<div class="empty" style="padding:12px;">请先在花名册添加员工</div>';
+    return;
+  }
+  if (!emps.length) {
+    wrap.innerHTML = '<div class="empty" style="padding:12px;">没有匹配的员工</div>';
     return;
   }
 
   // ---------- 表头第 1 行：日期 ----------
-  let h1 = '<th class="st st-seq" rowspan="2">序号</th>'
-    + '<th class="st st-name" rowspan="2">姓名</th>'
-    + '<th class="st st-dept" rowspan="2">部门</th>'
-    + '<th class="st st-shift" rowspan="2">时段</th>';
+  let h1 = '<th class="st st-seq" rowspan="2" data-col="0">序号</th>'
+    + '<th class="st st-name" rowspan="2" data-col="1">姓名</th>'
+    + '<th class="st st-dept" rowspan="2" data-col="2">部门</th>'
+    + '<th class="st st-shift" rowspan="2" data-col="3">时段</th>';
   // ---------- 表头第 2 行：星期 ----------
   let h2 = "";
   for (let d = 1; d <= N; d++) {
@@ -85,11 +120,12 @@ export function renderAttendance() {
     const isWk = (wd === 0 || wd === 6);
     const cls = hol ? (hol.type === "holiday" ? "hd-holiday" : "hd-workday") : (isWk ? "hd-weekend" : "");
     const title = hol ? ` title="${hol.name}"` : "";
-    h1 += `<th class="date ${cls}"${title}>${d}</th>`;                 // 日期数字
-    h2 += `<th class="wk ${cls}"${title}>${hol ? (hol.type === "holiday" ? "休" : "班") : WEEK_LABEL[wd]}</th>`; // 星期/休/班
+    const dc = 3 + d;   // 日期列序号：4..(4+N-1)
+    h1 += `<th class="date ${cls}" data-col="${dc}"${title}>${d}</th>`;                 // 日期数字
+    h2 += `<th class="wk ${cls}" data-col="${dc}"${title}>${hol ? (hol.type === "holiday" ? "休" : "班") : WEEK_LABEL[wd]}</th>`; // 星期/休/班
   }
   // 汇总列表头（跨两行）
-  SUM_KEYS.forEach(k => { h1 += `<th class="sumcol" rowspan="2">${k}</th>`; });
+  SUM_KEYS.forEach((k, j) => { h1 += `<th class="sumcol" rowspan="2" data-col="${4 + N + j}">${k}</th>`; });
 
   // ---------- 表体：每员工 3 行 ----------
   let body = "";
@@ -116,6 +152,49 @@ export function renderAttendance() {
   });
 
   wrap.innerHTML = `<table class="att-table"><thead><tr>${h1}</tr><tr>${h2}</tr></thead><tbody>${body}</tbody></table>`;
+
+  // 启用列宽拖拽：固定列逐列、日期列与汇总列分别"整组统一"调；同步 sticky 偏移
+  const table = wrap.querySelector("table");
+  enableColResize({
+    table,
+    widths: attWidths(N),
+    group: (i) => i < 4 ? "f" + i : (i < 4 + N ? "date" : "sum"),
+    onCommit: (w) => saveAttWidths(w, N),
+    onResized: () => syncAttSticky(table),
+    min: 26
+  });
+  syncAttSticky(table);   // 初次渲染也要按实际列宽定位 sticky 列
+}
+
+// 列宽持久化（按组织）：花名册用一维数组；考勤用 {fixed,date,sum}（日期/汇总整组同宽）
+function colwKey(tag) { return STORAGE_PREFIX + state.current + "_colw_" + tag; }
+function loadColW(tag) { try { return JSON.parse(localStorage.getItem(colwKey(tag))); } catch { return null; } }
+function saveColW(tag, w) { localStorage.setItem(colwKey(tag), JSON.stringify(w)); }
+// 由存储的 {fixed,date,sum} 展开成每列宽度数组（长度 = 4 + N + 7）
+function attWidths(N) {
+  const s = loadColW("att") || {};
+  const fixed = (s.fixed && s.fixed.length === 4) ? s.fixed : [36, 70, 70, 44];
+  const date = s.date || 32;
+  const sum = s.sum || 34;
+  const arr = [];
+  for (let i = 0; i < 4; i++) arr.push(fixed[i]);
+  for (let i = 0; i < N; i++) arr.push(date);
+  for (let i = 0; i < 7; i++) arr.push(sum);
+  return arr;
+}
+function saveAttWidths(w, N) {
+  saveColW("att", { fixed: [w[0], w[1], w[2], w[3]], date: w[4], sum: w[4 + N] });
+}
+// 重算左侧 sticky 固定列的 left 偏移（按"实际渲染宽度"累加，兼容表格整体 100% 拉伸）
+function syncAttSticky(table) {
+  const classes = ["st-seq", "st-name", "st-dept", "st-shift"];
+  let left = 0;
+  classes.forEach(cls => {
+    const cell = table.querySelector("thead ." + cls);
+    const w = cell ? cell.getBoundingClientRect().width : 0;
+    table.querySelectorAll("." + cls).forEach(el => { el.style.left = left + "px"; });
+    left += w;
+  });
 }
 
 // 半天数显示：整数不带小数点，0.5 显示为 0.5

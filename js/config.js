@@ -84,7 +84,8 @@ export const HOLIDAYS_2026 = {
 export const DEFAULT_SETTINGS = {
   overtimeToRest: true,                 // 加班是否自动转为可调休
   overtimeToRestRatio: 1.0,             // 加班分钟 × 比例 = 增加的可调休分钟
-  halfDayMinutes: HALF_DAY_MINUTES      // 半天分钟数（调休扣减 / 加班增加的单位）
+  halfDayMinutes: HALF_DAY_MINUTES,     // 半天分钟数（调休扣减 / 加班增加的单位）
+  departments: []                       // 部门列表（组织级选项，避免手输拼出幽灵部门）
 };
 
 // 五险一金计算比例（以“基本月薪”为基数）

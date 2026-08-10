@@ -12,11 +12,90 @@
 //   - 可调休余额字段（精确到分钟，在考勤选调修时联动扣减）
 // ============================================================
 
-import { state, persist } from "./store.js";
-import { fmtMoney, openModal, closeModal } from "./ui.js";
+import { state, persist, getDepartments, addDepartment } from "./store.js";
+import { STORAGE_PREFIX } from "./config.js";
+import { fmtMoney, openModal, closeModal, enableColResize } from "./ui.js";
+
+// 列宽持久化（按组织）：存在 localStorage 的 wb_hr_{org}_colw_{tag}
+function colwKey(tag) { return STORAGE_PREFIX + state.current + "_colw_" + tag; }
+function loadColW(tag) { try { return JSON.parse(localStorage.getItem(colwKey(tag))); } catch { return null; } }
+function saveColW(tag, w) { localStorage.setItem(colwKey(tag), JSON.stringify(w)); }
+// 花名册默认列宽（序号/姓名/部门/入职/月薪/可调休/操作）
+const EMP_DEF_W = [44, 110, 120, 120, 110, 90, 120];
+
+// 花名册筛选项（仅内存，不持久化）：按姓名模糊匹配 + 按部门精确匹配
+let rosterFilter = { name: "", dept: "" };
+
+// —— 小工具：转义，避免部门名里的引号/尖括号破坏 HTML ——
+function escAttr(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+// 生成部门下拉的 <option>（含「无部门」和「➕ 新增部门」）
+function deptOptionsHtml(selected, withNew) {
+  const depts = getDepartments();
+  let html = '<option value="">（无部门）</option>';
+  depts.forEach(d => {
+    const sel = d === selected ? " selected" : "";
+    html += `<option value="${escAttr(d)}"${sel}>${escAttr(d)}</option>`;
+  });
+  if (withNew !== false) html += '<option value="__new__">➕ 新增部门…</option>';
+  return html;
+}
+// 给某个部门下拉绑定「新增部门」逻辑：选到「➕ 新增部门」时弹窗输入并写入组织级部门列表
+function wireNewDept(selEl) {
+  selEl.addEventListener("change", () => {
+    if (selEl.value !== "__new__") return;
+    const name = prompt("输入新部门名称：");
+    if (name && name.trim()) {
+      addDepartment(name);                       // 写入 settings.departments 并保存
+      selEl.innerHTML = deptOptionsHtml(name.trim());
+      selEl.value = name.trim();
+    } else {
+      selEl.innerHTML = deptOptionsHtml("");
+      selEl.value = "";
+    }
+    refreshDeptSelects();                         // 同步刷新筛选下拉
+  });
+}
+// 重新填充所有「筛选用」部门下拉（新增部门后调用，保留当前选择）
+function refreshDeptSelects() {
+  ["empFilterDept", "attFilterDept"].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">全部部门</option>'
+      + getDepartments().map(d => `<option value="${escAttr(d)}">${escAttr(d)}</option>`).join("");
+    sel.value = cur;
+  });
+}
+// 同步「新增表单」的部门下拉（切换组织后部门列表变了，需要重建并保留当前选择）
+function syncAddDeptSelect() {
+  const sel = document.getElementById("empDept");
+  if (!sel) return;
+  const depts = getDepartments();
+  const want = depts.length + 2;   // （无部门） + 各部门 + ➕新增部门
+  if (sel.options.length !== want) {
+    const cur = sel.value;
+    sel.innerHTML = deptOptionsHtml(cur === "__new__" ? "" : cur);
+    if (cur === "" || depts.includes(cur)) sel.value = cur;
+  }
+}
 
 // 初始化：只绑定一次“添加员工”按钮（它在页面上是固定存在的元素）
 export function initRoster() {
+  // 部门下拉：用组织级部门列表填充（新增表单）
+  const deptSel = document.getElementById("empDept");
+  deptSel.innerHTML = deptOptionsHtml("");
+  wireNewDept(deptSel);
+
+  // 筛选下拉：姓名 + 部门
+  const fn = document.getElementById("empFilterName");
+  const fd = document.getElementById("empFilterDept");
+  fd.innerHTML = '<option value="">全部部门</option>'
+    + getDepartments().map(d => `<option value="${escAttr(d)}">${escAttr(d)}</option>`).join("");
+  fn.addEventListener("input", () => { rosterFilter.name = fn.value; renderRoster(); });
+  fd.addEventListener("change", () => { rosterFilter.dept = fd.value; renderRoster(); });
+
   document.getElementById("addEmpBtn").addEventListener("click", () => {
     const name = document.getElementById("empName").value.trim();
     if (!name) { alert("请输入姓名"); return; }
@@ -47,21 +126,38 @@ export function initRoster() {
 export function renderRoster() {
   const tb = document.querySelector("#empTable tbody");
   tb.innerHTML = "";
+  syncAddDeptSelect();      // 切换组织后同步部门下拉
+  refreshDeptSelects();    // 同步筛选用部门下拉（保留当前选择）
 
   if (!state.data.employees.length) {
     tb.innerHTML = '<tr><td colspan="7" class="empty">暂无员工，添加一条试试。</td></tr>';
     return;
   }
 
-  state.data.employees.forEach((e, i) => {
+  // 应用筛选：姓名模糊匹配 + 部门精确匹配
+  const q = rosterFilter.name.trim().toLowerCase();
+  const list = state.data.employees.filter(e =>
+    (!q || e.name.toLowerCase().includes(q)) &&
+    (!rosterFilter.dept || e.dept === rosterFilter.dept)
+  );
+  // 更新筛选计数提示
+  const cnt = document.getElementById("empFilterCount");
+  if (cnt) cnt.textContent = `共 ${list.length} / ${state.data.employees.length} 人`;
+
+  if (!list.length) {
+    tb.innerHTML = '<tr><td colspan="7" class="empty">没有匹配的员工</td></tr>';
+    return;
+  }
+
+  list.forEach((e, i) => {
     const tr = document.createElement("tr");
     tr.draggable = true;                 // 允许整行被拖拽
-    tr.dataset.index = i;                // 记下原始顺序，拖拽时用来计算交换
+    tr.dataset.id = e.id;                // 记员工 id（拖拽时按 id 定位，兼容筛选后的顺序）
     const restHours = (e.restMinutes || 0) / 60;  // 分钟 → 小时，便于阅读
     tr.innerHTML = `
       <td class="seq">${i + 1}</td>
       <td><span class="drag-handle" title="拖拽排序">≡</span>${e.name}</td>
-      <td>${e.dept}</td>
+      <td>${e.dept || ""}</td>
       <td>${e.hireDate || "-"}</td>
       <td class="num">${fmtMoney(e.baseSalary)}</td>
       <td class="num">${restHours.toFixed(1)}</td>
@@ -87,15 +183,23 @@ export function renderRoster() {
   tb.querySelectorAll("[data-edit]").forEach(b => {
     b.addEventListener("click", () => openEditModal(b.dataset.edit));
   });
+
+  // 启用列宽拖拽（Excel 式），宽度按组织记忆
+  enableColResize({
+    table: document.getElementById("empTable"),
+    widths: loadColW("emp") || EMP_DEF_W.slice(),
+    onCommit: (w) => saveColW("emp", w),
+    min: 40
+  });
 }
 
 // 拖拽排序：拖起一行 → 放到另一行 → 交换两行在数组里的位置
 function bindDnD(tb) {
-  let dragIdx = null;   // 当前被拖拽的行序号
+  let dragId = null;   // 当前被拖拽的员工 id（用 id 而非行号，兼容筛选后的顺序）
   tb.querySelectorAll("tr").forEach(tr => {
     // 拖拽开始：记住起点 + 加半透明样式
     tr.addEventListener("dragstart", (ev) => {
-      dragIdx = +tr.dataset.index;
+      dragId = tr.dataset.id;
       tr.classList.add("dragging");
       ev.dataTransfer.effectAllowed = "move";
     });
@@ -104,15 +208,19 @@ function bindDnD(tb) {
     // 放下：与目标行交换位置
     tr.addEventListener("drop", (ev) => {
       ev.preventDefault();
-      const overIdx = +tr.dataset.index;
-      if (overIdx !== dragIdx && dragIdx !== null) {
+      const overId = tr.dataset.id;
+      if (overId !== dragId && dragId !== null) {
         const arr = state.data.employees;
-        const [moved] = arr.splice(dragIdx, 1);  // 取出被拖的行
-        arr.splice(overIdx, 0, moved);           // 插入到目标位置
-        persist();
-        window.__renderAll();                     // 重绘（序号会重新排）
+        const from = arr.findIndex(x => x.id === dragId);
+        const to = arr.findIndex(x => x.id === overId);
+        if (from !== -1 && to !== -1) {
+          const [moved] = arr.splice(from, 1);  // 取出被拖的行
+          arr.splice(to, 0, moved);             // 插入到目标位置
+          persist();
+          window.__renderAll();                  // 重绘（序号会重新排）
+        }
       }
-      dragIdx = null;
+      dragId = null;
     });
     // 拖拽结束：去掉样式
     tr.addEventListener("dragend", () => tr.classList.remove("dragging"));
@@ -127,7 +235,7 @@ function openEditModal(id) {
   openModal(`
     <h3>编辑员工</h3>
     <div class="field"><label>姓名</label><input id="emName" value="${e.name}"></div>
-    <div class="field"><label>部门</label><input id="emDept" value="${e.dept || ""}"></div>
+    <div class="field"><label>部门</label><select id="emDept">${deptOptionsHtml(e.dept)}</select></div>
     <div class="field"><label>入职日期</label><input id="emHire" type="date" value="${e.hireDate || ""}"></div>
     <div class="field"><label>基本月薪 (¥)</label><input id="emSalary" type="number" min="0" value="${e.baseSalary || 0}"></div>
     <div class="field"><label>可调休余额 (小时)</label><input id="emRest" type="number" min="0" step="0.5" value="${restHours}"></div>
@@ -151,4 +259,6 @@ function openEditModal(id) {
     closeModal();
     window.__renderAll();
   });
+  // 编辑弹窗里的部门下拉同样支持「➕ 新增部门」
+  wireNewDept(document.getElementById("emDept"));
 }
