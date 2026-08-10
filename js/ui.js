@@ -56,3 +56,19 @@ export function showHelp(title, lines) {
     <div class="modal-actions"><button class="btn btn-primary" id="helpOk">知道了</button></div>`);
   document.getElementById("helpOk").addEventListener("click", closeModal);
 }
+
+// 轻提示（toast）：不打断操作的临时浮条，约 2.2 秒自动消失。
+// 用于"调休余额不足已跳过"这类提醒——如果用 alert 弹窗会卡住点击循环。
+let __toastTimer = null;
+export function showToast(msg) {
+  let t = document.getElementById("toast");
+  if (!t) {                       // 第一次用时才创建这个 DOM 节点
+    t = document.createElement("div");
+    t.id = "toast";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.classList.add("show");        // 触发淡入
+  clearTimeout(__toastTimer);     // 连续提示时重置计时，避免提前消失
+  __toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+}

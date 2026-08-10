@@ -83,7 +83,7 @@ header{
 .empty{ color:var(--muted); font-size:13px; padding:6px 2px; }
 
 /* ---------- 6. 主体与卡片 ---------- */
-main{ max-width:1080px; margin:0 auto; padding:14px 16px 30px; }
+main{ max-width:1600px; margin:0 auto; padding:14px 16px 30px; }
 .card{
   background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
   box-shadow:var(--shadow); padding:16px; margin-bottom:16px;
@@ -101,35 +101,39 @@ tbody tr:hover{ background:#fafbfc; }
 td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }   /* 数字右对齐更整齐 */
 .mono{ font-variant-numeric:tabular-nums; }
 
-/* ---------- 8. 考勤网格（员工 × 日期 × 时段，Phase 2 分时段列式布局） ---------- */
-.att-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:10px; }
-.att-grid{ display:flex; }                                   /* 列式：员工列 + 日期列×N + 汇总列 */
-.att-grid > div{ border-right:1px solid var(--border); }
-/* 员工列（左侧固定） */
-.col-emp{ width:120px; flex:0 0 auto; position:sticky; left:0; background:#fff; z-index:2; }
-.head-emp{ height:56px; display:flex; align-items:center; padding:0 10px; background:var(--bg); font-weight:500; color:var(--muted); border-bottom:1px solid var(--border); }
-.emp-row{ height:90px; padding:8px 10px; border-bottom:1px solid var(--border); }
-.emp-name{ font-weight:500; }
-.emp-dept{ font-size:11px; color:var(--muted); margin-top:2px; }
-.emp-shifts{ font-size:11px; color:var(--muted); margin-top:4px; letter-spacing:2px; }
-/* 日期列 */
-.col-day{ width:44px; flex:0 0 auto; }
-.head-day,.head-week{ height:28px; display:flex; align-items:center; justify-content:center; font-size:12px; border-bottom:1px solid var(--border); background:var(--bg); color:var(--muted); }
-.head-day{ font-weight:500; color:var(--text); }
-.hd-weekend{ background:#f0f2f5; color:#94a3b8; }   /* 周末：灰 */
-.hd-holiday{ background:#fee2e2; color:#b91c1c; }   /* 放假：红 */
-.hd-workday{ background:#dbeafe; color:#1d4ed8; }   /* 调休上班：蓝 */
-/* 每个日期下该员工的三行时段（上/下/加） */
-.cells{ border-bottom:1px solid var(--border); }
-.cell{ height:30px; display:flex; align-items:center; justify-content:center; font-size:12px; cursor:pointer; user-select:none; border-bottom:1px dashed #f1f3f5; }
-.cell:last-child{ border-bottom:none; }
-.cell:hover{ outline:1px solid var(--blue); }
-.cell-holiday{ background:#fafbfc; }                /* 节假日当天底纹 */
-/* 汇总列（右侧固定） */
-.col-sum{ width:200px; flex:0 0 auto; position:sticky; right:0; background:#fff; z-index:2; }
-.head-sum{ height:56px; display:flex; align-items:center; padding:0 10px; background:var(--bg); font-weight:500; color:var(--muted); border-bottom:1px solid var(--border); }
-.sum-row{ height:90px; padding:8px 10px; border-bottom:1px solid var(--border); font-size:12px; color:var(--muted); line-height:1.7; }
-.sum-line b{ color:var(--text); }
+/* ---------- 8. 考勤表（真 <table>，标准布局：序号|姓名|部门|时段|日期|汇总） ---------- */
+/* 用 border-collapse:separate + border-spacing:0，配合 sticky 固定列时线条也能对齐 */
+.att-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:#fff; }
+.att-table{ border-collapse:separate; border-spacing:0; width:max-content; font-size:12px; }
+.att-table th,.att-table td{
+  border-right:1px solid var(--border); border-bottom:1px solid var(--border);
+  text-align:center; padding:0; white-space:nowrap;
+}
+.att-table thead th{ background:var(--bg); color:var(--muted); font-weight:500; height:28px; padding:0 4px; }
+.att-table thead th.date{ color:var(--text); font-weight:500; min-width:34px; }
+.att-table thead th.wk{ font-weight:400; }
+/* 表头日期/星期的节假日配色（用 !important 压住 sticky 列的背景） */
+.hd-weekend{ background:#f0f2f5 !important; color:#94a3b8 !important; }   /* 周末：灰 */
+.hd-holiday{ background:#fee2e2 !important; color:#b91c1c !important; }   /* 放假：红 */
+.hd-workday{ background:#dbeafe !important; color:#1d4ed8 !important; }   /* 调休上班：蓝 */
+
+/* 左侧员工信息列：sticky 固定（横向滚动时保持可见），left 偏移与列宽严格对应保证对齐 */
+.att-table .st{ position:sticky; background:#fff; z-index:2; }
+.att-table thead .st{ z-index:3; background:var(--bg); }   /* 表头的固定列要盖在表体固定列之上 */
+.st-seq{ left:0;    min-width:42px; width:42px; }
+.st-name{ left:42px;  min-width:76px; width:76px; font-weight:500; }
+.st-dept{ left:118px; min-width:76px; width:76px; color:var(--muted); }
+.st-shift{ left:194px; min-width:50px; width:50px; color:var(--muted); }
+
+/* 日期单元格（可点击循环切换状态） */
+.att-table td.cell{ min-width:34px; height:30px; cursor:pointer; user-select:none; font-size:12px; }
+.att-table td.cell:hover{ outline:1px solid var(--blue); outline-offset:-1px; }
+.att-table td.cell-holiday{ background:#fafbfc; }          /* 节假日当天底纹 */
+
+/* 汇总列（右侧：出勤/事假/病假/缺勤/调休/年假/加班） */
+.att-table .sumcol{ min-width:52px; padding:0 6px; font-variant-numeric:tabular-nums; }
+.att-table td.sumcol{ color:var(--text); font-weight:500; }
+.att-table thead th.sumcol{ background:var(--bg); }
 
 /* ---------- 9. 看板（KPI 卡片 + 图表） ---------- */
 .kpi{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
@@ -201,4 +205,20 @@ td.ops{ white-space:nowrap; }
 /* ---------- 15. 帮助弹窗 / 空状态优化（Phase 5） ---------- */
 .help-list{ margin:0 0 8px; padding-left:18px; font-size:13px; color:var(--text); line-height:1.9; }
 .help-list li b{ color:var(--blue); }
-.help-btn{ min-width:32px; min-height:32px; padding:0; border-radius:50%; font-weight:600; }
+/* 帮助按钮：圆形，与旁边 .btn（min-height:44px）同高，"?" 水平垂直居中 */
+.help-btn{
+  width:44px; min-width:44px; height:44px; min-height:44px; padding:0; flex:0 0 auto;
+  border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
+  font-weight:600; font-size:16px; line-height:1; color:var(--muted);
+}
+.help-btn:hover{ color:var(--blue); }
+
+/* 轻提示（toast）：不打断操作的临时浮条，用于"调休余额不足已跳过"等 */
+#toast{
+  position:fixed; left:50%; bottom:calc(84px + env(safe-area-inset-bottom));
+  transform:translateX(-50%) translateY(8px); background:#323232; color:#fff;
+  padding:9px 16px; border-radius:8px; font-size:13px; z-index:80; max-width:82%;
+  opacity:0; pointer-events:none; transition:opacity .2s, transform .2s;
+  box-shadow:0 4px 14px rgba(0,0,0,.18);
+}
+#toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }

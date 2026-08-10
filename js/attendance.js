@@ -1,18 +1,24 @@
 // ============================================================
-// attendance.js — 考勤记录模块（Phase 2：分时段 + 节假日 + 星期）
+// attendance.js — 考勤记录模块（分时段 + 节假日 + 星期 + 标准表格布局）
 // ------------------------------------------------------------
-// 负责：按「月份 × 员工 × 日期 × 时段（上/下/加）」登记考勤状态。
-// 数据结构与之前不同：
-//   rec = { 1: { am:"√", pm:"√", ot:"" }, ... }   // 每天上午/下午/加班三个时段
-// 交互：点击某个时段格，在 √→事→病→缺→调→年→加→空 之间循环切换。
-// 联动：选「调」扣减可调休余额（不足则阻止并提示）；选「加」且开启
-//       "加班转调休"时自动增加余额。节假日列自动标色（放假红 / 调休上班蓝）。
+// 页面结构（参照传统考勤表，与"导出 Excel"列一致）：
+//   序号 | 姓名 | 部门 | 时段 | 1 2 3 … N(日期) | 出勤 事假 病假 缺勤 调休 年假 加班
+//   每个员工占 3 行：上午 / 下午 / 加班；序号/姓名/部门/汇总用 rowspan 合并 3 行。
+//   表头两行：第 1 行是日期，第 2 行是星期（节假日显示 休/班）。
+// 数据结构：rec = { 1: { am:"√", pm:"√", ot:"" }, ... }（每天上午/下午/加班三时段）
+// 交互：点击某时段格，在 √→事→病→缺→调→年→加→空 循环切换。
+// 联动：选「调」扣可调休余额（余额不足则【跳过】该状态，不卡死循环，并 toast 提示）；
+//       选「加」且开启"加班转调休"时自动增加余额。节假日列自动标色（放假红/调休上班蓝）。
+// 布局：用真 <table> + border-collapse，保证横竖线对齐；左侧员工信息列 sticky 固定。
 // ============================================================
 
 import { state, persist } from "./store.js";
-import { STATUSES, STATUS_COLOR, SHIFTS, WEEK_LABEL, HOLIDAYS_2026 } from "./config.js";
+import { STATUSES, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026 } from "./config.js";
 import { sumRec } from "./sample.js";
-import { openModal, closeModal } from "./ui.js";
+import { openModal, closeModal, showToast } from "./ui.js";
+
+// 汇总列顺序（与表头一致）：出勤 事假 病假 缺勤 调休 年假 加班
+const SUM_KEYS = ["出勤", "事假", "病假", "缺勤", "调休", "年假", "加班"];
 
 // 取某员工某月考勤 rec（{day:{am,pm,ot}}），没有则返回空对象
 function getAtt(month, empId) {
@@ -48,88 +54,76 @@ function weekdayOf(month, day) {
 export function initAttendance() {
   document.getElementById("attMonth").addEventListener("change", renderAttendance);
   document.getElementById("holidayBtn").addEventListener("click", openHolidayModal);
+  // 事件委托：整个 tbody 只绑一个点击监听，靠单元格 data-* 定位，性能好、代码简洁
+  document.getElementById("attGrid").addEventListener("click", (ev) => {
+    const td = ev.target.closest("td.cell");
+    if (td) onCellClick(td.dataset);
+  });
 }
 
 export function renderAttendance() {
   const month = document.getElementById("attMonth").value || "2026-08";
   const wrap = document.getElementById("attGrid");
-  wrap.innerHTML = "";
   const N = daysInMonth(month);
   const emps = state.data.employees;
 
-  // 空提示
   if (!emps.length) {
-    const d = document.createElement("div");
-    d.className = "empty"; d.style.padding = "12px";
-    d.textContent = "请先在花名册添加员工";
-    wrap.appendChild(d);
+    wrap.innerHTML = '<div class="empty" style="padding:12px;">请先在花名册添加员工</div>';
     return;
   }
 
-  // —— 左侧：员工列（固定）——
-  const colEmp = el("div", "col-emp");
-  colEmp.appendChild(el("div", "head-emp", "员工"));
-  emps.forEach(e => {
-    const r = el("div", "emp-row");
-    r.innerHTML = `<div class="emp-name">${e.name}</div><div class="emp-dept">${e.dept || ""}</div><div class="emp-shifts">上 / 下 / 加</div>`;
-    colEmp.appendChild(r);
-  });
-  wrap.appendChild(colEmp);
-
-  // —— 中间：每个日期一列（含日期 + 星期 + 每员工三行时段）——
+  // ---------- 表头第 1 行：日期 ----------
+  let h1 = '<th class="st st-seq" rowspan="2">序号</th>'
+    + '<th class="st st-name" rowspan="2">姓名</th>'
+    + '<th class="st st-dept" rowspan="2">部门</th>'
+    + '<th class="st st-shift" rowspan="2">时段</th>';
+  // ---------- 表头第 2 行：星期 ----------
+  let h2 = "";
   for (let d = 1; d <= N; d++) {
     const hol = holidayOf(month, d);
     const wd = weekdayOf(month, d);
-    const isWeekend = (wd === 0 || wd === 6);
-    const col = el("div", "col-day");
-
-    // 表头第 1 行：日期；第 2 行：星期（节假日显示 休/班）
-    const hd = el("div", "head-day", String(d));
-    const hw = el("div", "head-week", hol ? (hol.type === "holiday" ? "休" : "班") : WEEK_LABEL[wd]);
-    const hdCls = hol ? (hol.type === "holiday" ? "hd-holiday" : "hd-workday") : (isWeekend ? "hd-weekend" : "");
-    if (hdCls) { hd.classList.add(hdCls); hw.classList.add(hdCls); }
-    if (hol) { hd.title = hol.name; hw.title = hol.name; }   // 悬停显示节假日名
-    col.appendChild(hd); col.appendChild(hw);
-
-    // 该日期下，每员工三个时段
-    emps.forEach(e => {
-      const rec = getAtt(month, e.id);
-      const cells = el("div", "cells");
-      SHIFTS.forEach(sh => {
-        const c = el("div", "cell");
-        c.dataset.emp = e.id; c.dataset.day = d; c.dataset.shift = sh;
-        const v = rec[d] ? rec[d][sh] : "";
-        if (v) { c.textContent = v; c.style.background = STATUS_COLOR[v].bg; c.style.color = STATUS_COLOR[v].fg; }
-        if (hol) c.classList.add("cell-holiday");
-        c.addEventListener("click", onCellClick);
-        cells.appendChild(c);
-      });
-      col.appendChild(cells);
-    });
-    wrap.appendChild(col);
+    const isWk = (wd === 0 || wd === 6);
+    const cls = hol ? (hol.type === "holiday" ? "hd-holiday" : "hd-workday") : (isWk ? "hd-weekend" : "");
+    const title = hol ? ` title="${hol.name}"` : "";
+    h1 += `<th class="date ${cls}"${title}>${d}</th>`;                 // 日期数字
+    h2 += `<th class="wk ${cls}"${title}>${hol ? (hol.type === "holiday" ? "休" : "班") : WEEK_LABEL[wd]}</th>`; // 星期/休/班
   }
+  // 汇总列表头（跨两行）
+  SUM_KEYS.forEach(k => { h1 += `<th class="sumcol" rowspan="2">${k}</th>`; });
 
-  // —— 右侧：汇总列（固定）——
-  const colSum = el("div", "col-sum");
-  colSum.appendChild(el("div", "head-sum", "汇总"));
-  emps.forEach(e => {
-    const a = state.data.attendance.find(x => x.month === month && x.empId === e.id);
-    const s = a ? a.summary : sumRec({});
-    const r = el("div", "sum-row");
-    r.innerHTML = `<div class="sum-line">出勤 <b>${fmt1(s.出勤)}</b> 天</div>
-      <div class="sum-line">事 ${fmt1(s.事假)} · 病 ${fmt1(s.病假)} · 缺 ${fmt1(s.缺勤)}</div>
-      <div class="sum-line">调 ${fmt1(s.调休)} · 年 ${fmt1(s.年假)} · 加 ${s.加班}</div>`;
-    colSum.appendChild(r);
+  // ---------- 表体：每员工 3 行 ----------
+  let body = "";
+  emps.forEach((e, i) => {
+    const rec = getAtt(month, e.id);
+    const s = (state.data.attendance.find(x => x.month === month && x.empId === e.id) || {}).summary || sumRec({});
+    SHIFTS.forEach((sh, si) => {
+      body += "<tr>";
+      if (si === 0) {  // 仅"上午"行输出合并的 序号/姓名/部门 与 汇总
+        body += `<td class="st st-seq" rowspan="3">${i + 1}</td>`
+          + `<td class="st st-name" rowspan="3">${e.name}</td>`
+          + `<td class="st st-dept" rowspan="3">${e.dept || ""}</td>`;
+      }
+      body += `<td class="st st-shift">${SHIFT_LABEL[sh]}</td>`;      // 时段列：上午/下午/加班
+      for (let d = 1; d <= N; d++) {                                   // 各日期格
+        const hol = holidayOf(month, d);
+        const v = rec[d] ? (rec[d][sh] || "") : "";
+        const color = v ? ` style="background:${STATUS_COLOR[v].bg};color:${STATUS_COLOR[v].fg}"` : "";
+        body += `<td class="cell${hol ? " cell-holiday" : ""}" data-emp="${e.id}" data-day="${d}" data-shift="${sh}"${color}>${v}</td>`;
+      }
+      if (si === 0) SUM_KEYS.forEach(k => { body += `<td class="sumcol" rowspan="3">${fmt1(s[k])}</td>`; });
+      body += "</tr>";
+    });
   });
-  wrap.appendChild(colSum);
+
+  wrap.innerHTML = `<table class="att-table"><thead><tr>${h1}</tr><tr>${h2}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
 // 半天数显示：整数不带小数点，0.5 显示为 0.5
 function fmt1(n) { return (n % 1 === 0) ? String(n) : n.toFixed(1); }
 
 // 单元格点击：循环切换状态，并处理调休/加班的余额联动
-function onCellClick(ev) {
-  const { emp: empId, day, shift } = ev.currentTarget.dataset;
+function onCellClick(ds) {
+  const { emp: empId, day, shift } = ds;
   const month = document.getElementById("attMonth").value || "2026-08";
   const emp = state.data.employees.find(x => x.id === empId);
   if (!emp) return;
@@ -139,42 +133,33 @@ function onCellClick(ev) {
 
   // 状态循环：√ → 事 → 病 → 缺 → 调 → 年 → 加 → (空) → √
   const cycle = [...STATUSES, ""];
-  const idx = (cycle.indexOf(cur) + 1) % cycle.length;
-  const next = cycle[idx];
+  let idx = (cycle.indexOf(cur) + 1) % cycle.length;
+  let next = cycle[idx];
 
-  // —— 调休 / 加班 余额联动（余额不足则中止本次切换）——
+  // —— 关键修复：调休余额不足时【跳过】"调"，继续循环到下一个状态 ——
+  //    之前的写法是弹窗阻断，导致永远停在"缺"无法继续往后切。现在跳过并 toast 提示。
   const st = state.data.settings || {};
   const half = st.halfDayMinutes || 240;
-  if (!applyRestDelta(emp, cur, next, half, st)) return;
+  if (next === "调" && (emp.restMinutes || 0) < half) {
+    showToast(emp.name + " 可调休余额不足（需 " + (half / 60) + " 小时，当前 " + ((emp.restMinutes || 0) / 60).toFixed(1) + " 小时），已跳过「调休」");
+    idx = (idx + 1) % cycle.length;
+    next = cycle[idx];
+  }
 
+  applyRestDelta(emp, cur, next, half, st);   // 应用余额增减（进入/离开 调、加）
   cell[shift] = next;
   rec[day] = cell;
-  saveAtt(month, empId, rec);   // saveAtt 内部已 persist
-  window.__renderAll();          // 刷新所有模块（考勤/花名册余额/今天要处理）
+  saveAtt(month, empId, rec);                 // saveAtt 内部已 persist
+  window.__renderAll();                        // 刷新所有模块（考勤/花名册余额/今天要处理）
 }
 
-// 调休/加班余额增减；返回 false 表示中止切换
+// 调休/加班余额增减（调用前已保证「调」余额充足，无需阻断）
 function applyRestDelta(emp, from, to, half, st) {
-  if (from === "调") emp.restMinutes = (emp.restMinutes || 0) + half;          // 离开调休：释放半天
-  if (to === "调") {                                                          // 进入调休：占用半天
-    if ((emp.restMinutes || 0) < half) {
-      alert(emp.name + " 可调休余额不足（需 " + (half / 60) + " 小时，当前 " + ((emp.restMinutes || 0) / 60).toFixed(1) + " 小时）");
-      return false;
-    }
-    emp.restMinutes -= half;
-  }
+  if (from === "调") emp.restMinutes = (emp.restMinutes || 0) + half;   // 离开调休：释放半天
+  if (to === "调") emp.restMinutes = (emp.restMinutes || 0) - half;     // 进入调休：占用半天
   const ratio = st.overtimeToRestRatio || 1;
   if (from === "加" && st.overtimeToRest) emp.restMinutes = (emp.restMinutes || 0) - Math.round(half * ratio); // 离开加班：撤销
   if (to === "加" && st.overtimeToRest) emp.restMinutes = (emp.restMinutes || 0) + Math.round(half * ratio);   // 进入加班：转调休
-  return true;
-}
-
-// 工具：建元素
-function el(tag, cls, text) {
-  const d = document.createElement(tag);
-  if (cls) d.className = cls;
-  if (text != null) d.textContent = text;
-  return d;
 }
 
 // ---------- 节假日设置弹窗 ----------
