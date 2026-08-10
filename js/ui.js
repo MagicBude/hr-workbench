@@ -90,6 +90,9 @@ export function enableColResize(opts) {
   const { table, group, onCommit, onResized, min = 28 } = opts;
   let widths = opts.widths ? opts.widths.slice() : null;
 
+  // 强制固定布局：确保 colgroup 的宽度设置生效（CSS 可能因缓存/加载顺序没赶上）
+  table.style.tableLayout = "fixed";
+
   // 收集表头单元格，并用 data-col 确定列序号（考勤双行表头同一列会有两个 th，取其一测量）
   const ths = [...table.querySelectorAll("thead th")];
   const byCol = {};

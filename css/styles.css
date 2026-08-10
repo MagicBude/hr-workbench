@@ -101,22 +101,22 @@ tbody tr:hover{ background:#fafbfc; }
 td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }   /* 数字右对齐更整齐 */
 .mono{ font-variant-numeric:tabular-nums; }
 
-/* 列宽拖拽手柄（Excel 式）：给表头右侧留 8px 空间，手柄紧贴右内边距 */
+/* 列宽拖拽手柄（Excel 式）：手柄跨在相邻两列的边界上，竖线正好落在分隔处 */
 thead th{ position:relative; padding-right:8px; }
 .col-resize{
-  position:absolute; top:0; right:0; width:8px; height:100%;
+  position:absolute; top:0; right:-5px; width:10px; height:100%;
   cursor:col-resize; z-index:6;
 }
-/* 在手柄里画一条居右的 2px 竖线作为视觉标识；hover 变蓝 */
+/* 在手柄中央画一条 2px 竖线作为视觉标识，正好覆盖列边界；hover 变蓝 */
 .col-resize::after{
-  content:""; position:absolute; top:15%; right:3px; width:2px; height:70%;
+  content:""; position:absolute; top:15%; right:4px; width:2px; height:70%;
   background:rgba(0,0,0,.12); border-radius:1px; pointer-events:none;
 }
 .col-resize:hover::after{ background:var(--blue); }
 body.col-resizing, body.col-resizing *{ cursor:col-resize !important; user-select:none !important; }
 
 /* 花名册：固定布局便于列宽拖拽；操作列是末列，天然在最右侧 */
-#empTable{ table-layout:fixed; }
+#empTable{ table-layout:fixed !important; }
 #empTable th.ops,
 #empTable td.ops{ text-align:right; white-space:nowrap; }
 #empTable td.ops .btn{ margin-left:6px; }   /* 按钮之间留点间距 */
