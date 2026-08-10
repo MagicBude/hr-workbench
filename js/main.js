@@ -43,7 +43,12 @@ function renderToday() {
     const a = state.data.attendance.find(x => x.month === month && x.empId === e.id);
     const rec = a ? a.rec : {};
     let missing = 0;
-    for (let d = 1; d < today; d++) { if (!rec[d]) missing++; } // 今天之前的日期没填 → 缺失
+    for (let d = 1; d < today; d++) {
+      const c = rec[d];
+      // 兼容新旧结构：新结构某天只要有任一时段非空即算"已填"
+      const filled = c && typeof c === "object" ? !!(c.am || c.pm || c.ot) : !!c;
+      if (!filled) missing++;
+    }
     if (missing > 0) {
       items.push({ danger: true, text: `<b>${e.name}</b> ${month} 考勤待补录（逾期 ${missing} 天）`, tab: "attendance" });
     }

@@ -112,8 +112,9 @@
         <h3>考勤记录</h3>
         <div class="row">
           <div class="field"><label>考勤月份</label><input id="attMonth" type="month" value="2026-08"></div>
+          <button class="btn" id="holidayBtn">节假日设置</button>
         </div>
-        <div class="hint" style="margin-bottom:10px;">点击日期格循环切换状态：出勤 / 事假 / 病假 / 缺勤 / 调休 / 年假 / 加班</div>
+        <div class="hint" style="margin-bottom:10px;">每天分「上午 / 下午 / 加班」三个时段，点击循环切换（√→事→病→缺→调→年→加→空）；选「调」自动扣可调休余额，选「加」可自动转调休。节假日自动标色（放假红 / 调休上班蓝），点「节假日设置」可调整。</div>
         <div class="att-wrap"><div class="att-grid" id="attGrid"></div></div>
       </div>
     </section>

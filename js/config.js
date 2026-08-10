@@ -30,6 +30,63 @@ export const STATUS_COLOR = {
   "加": { bg: "#fffde7", fg: "#f57f17" }  // 加班：黄
 };
 
+// ---------- 考勤时段（Phase 2：一天分上午 / 下午 / 加班） ----------
+export const SHIFTS = ["am", "pm", "ot"];      // am=上午 pm=下午 ot=加班
+export const SHIFT_LABEL = { am: "上午", pm: "下午", ot: "加班" };
+export const HALF_DAY_MINUTES = 240;           // 半天 = 240 分钟（4 小时），调休/加班换算单位
+
+// 星期中文（数组下标 0=周日），用于考勤表头第二行
+export const WEEK_LABEL = ["日", "一", "二", "三", "四", "五", "六"];
+
+// ---------- 2026 年国家法定节假日（演示用近似值，可在界面"节假日设置"里调整） ----------
+// type: "holiday"=放假（不计出勤）；"workday"=调休上班（计出勤）。
+// 具体安排以国务院当年发布为准；这里内置一份合理近似值，用户可手动增删改，
+// 故即使个别日期不准也不影响使用。
+export const HOLIDAYS_2026 = {
+  "2026-01-01": { name: "元旦", type: "holiday" },
+  "2026-01-02": { name: "元旦", type: "holiday" },
+  "2026-01-03": { name: "元旦", type: "holiday" },
+  "2026-02-14": { name: "春节调休上班", type: "workday" },
+  "2026-02-16": { name: "春节", type: "holiday" },
+  "2026-02-17": { name: "春节", type: "holiday" },
+  "2026-02-18": { name: "春节", type: "holiday" },
+  "2026-02-19": { name: "春节", type: "holiday" },
+  "2026-02-20": { name: "春节", type: "holiday" },
+  "2026-02-21": { name: "春节", type: "holiday" },
+  "2026-02-22": { name: "春节", type: "holiday" },
+  "2026-02-28": { name: "春节调休上班", type: "workday" },
+  "2026-04-04": { name: "清明节", type: "holiday" },
+  "2026-04-05": { name: "清明节", type: "holiday" },
+  "2026-04-06": { name: "清明节", type: "holiday" },
+  "2026-05-01": { name: "劳动节", type: "holiday" },
+  "2026-05-02": { name: "劳动节", type: "holiday" },
+  "2026-05-03": { name: "劳动节", type: "holiday" },
+  "2026-05-04": { name: "劳动节", type: "holiday" },
+  "2026-05-05": { name: "劳动节", type: "holiday" },
+  "2026-05-09": { name: "劳动节调休上班", type: "workday" },
+  "2026-06-19": { name: "端午节", type: "holiday" },
+  "2026-06-20": { name: "端午节", type: "holiday" },
+  "2026-06-21": { name: "端午节", type: "holiday" },
+  "2026-09-25": { name: "中秋节", type: "holiday" },
+  "2026-09-26": { name: "中秋节", type: "holiday" },
+  "2026-09-27": { name: "中秋节", type: "holiday" },
+  "2026-10-01": { name: "国庆节", type: "holiday" },
+  "2026-10-02": { name: "国庆节", type: "holiday" },
+  "2026-10-03": { name: "国庆节", type: "holiday" },
+  "2026-10-04": { name: "国庆节", type: "holiday" },
+  "2026-10-05": { name: "国庆节", type: "holiday" },
+  "2026-10-06": { name: "国庆节", type: "holiday" },
+  "2026-10-07": { name: "国庆节", type: "holiday" },
+  "2026-10-09": { name: "国庆节调休上班", type: "workday" }
+};
+
+// 默认组织设置（新增组织 / 旧数据迁移时注入）
+export const DEFAULT_SETTINGS = {
+  overtimeToRest: true,                 // 加班是否自动转为可调休
+  overtimeToRestRatio: 1.0,             // 加班分钟 × 比例 = 增加的可调休分钟
+  halfDayMinutes: HALF_DAY_MINUTES      // 半天分钟数（调休扣减 / 加班增加的单位）
+};
+
 // 五险一金计算比例（以“基本月薪”为基数）
 // 说明：这里用的是“演示用简化值”，真实比例请以当地最新社保政策为准。
 // company = 公司承担部分，personal = 个人承担部分。

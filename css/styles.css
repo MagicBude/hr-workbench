@@ -101,18 +101,35 @@ tbody tr:hover{ background:#fafbfc; }
 td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }   /* 数字右对齐更整齐 */
 .mono{ font-variant-numeric:tabular-nums; }
 
-/* ---------- 8. 考勤网格（员工 × 日期） ---------- */
+/* ---------- 8. 考勤网格（员工 × 日期 × 时段，Phase 2 分时段列式布局） ---------- */
 .att-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:10px; }
-.att-grid{ display:grid; grid-template-columns:120px repeat(31,34px) 150px; min-width:1320px; }
-.att-grid > div{
-  border-right:1px solid var(--border); border-bottom:1px solid var(--border);
-  padding:6px 4px; text-align:center; font-size:12px;
-}
-.att-head{ background:var(--bg); font-weight:500; color:var(--muted); }
-.att-name{ text-align:left; padding-left:10px; background:#fff; position:sticky; left:0; z-index:2; font-weight:500; }
-.att-sum{ text-align:left; padding-left:8px; background:#fff; position:sticky; right:0; font-size:11px; color:var(--muted); }
-.cell{ cursor:pointer; user-select:none; border-radius:4px; min-height:30px; display:flex; align-items:center; justify-content:center; }
+.att-grid{ display:flex; }                                   /* 列式：员工列 + 日期列×N + 汇总列 */
+.att-grid > div{ border-right:1px solid var(--border); }
+/* 员工列（左侧固定） */
+.col-emp{ width:120px; flex:0 0 auto; position:sticky; left:0; background:#fff; z-index:2; }
+.head-emp{ height:56px; display:flex; align-items:center; padding:0 10px; background:var(--bg); font-weight:500; color:var(--muted); border-bottom:1px solid var(--border); }
+.emp-row{ height:90px; padding:8px 10px; border-bottom:1px solid var(--border); }
+.emp-name{ font-weight:500; }
+.emp-dept{ font-size:11px; color:var(--muted); margin-top:2px; }
+.emp-shifts{ font-size:11px; color:var(--muted); margin-top:4px; letter-spacing:2px; }
+/* 日期列 */
+.col-day{ width:44px; flex:0 0 auto; }
+.head-day,.head-week{ height:28px; display:flex; align-items:center; justify-content:center; font-size:12px; border-bottom:1px solid var(--border); background:var(--bg); color:var(--muted); }
+.head-day{ font-weight:500; color:var(--text); }
+.hd-weekend{ background:#f0f2f5; color:#94a3b8; }   /* 周末：灰 */
+.hd-holiday{ background:#fee2e2; color:#b91c1c; }   /* 放假：红 */
+.hd-workday{ background:#dbeafe; color:#1d4ed8; }   /* 调休上班：蓝 */
+/* 每个日期下该员工的三行时段（上/下/加） */
+.cells{ border-bottom:1px solid var(--border); }
+.cell{ height:30px; display:flex; align-items:center; justify-content:center; font-size:12px; cursor:pointer; user-select:none; border-bottom:1px dashed #f1f3f5; }
+.cell:last-child{ border-bottom:none; }
 .cell:hover{ outline:1px solid var(--blue); }
+.cell-holiday{ background:#fafbfc; }                /* 节假日当天底纹 */
+/* 汇总列（右侧固定） */
+.col-sum{ width:200px; flex:0 0 auto; position:sticky; right:0; background:#fff; z-index:2; }
+.head-sum{ height:56px; display:flex; align-items:center; padding:0 10px; background:var(--bg); font-weight:500; color:var(--muted); border-bottom:1px solid var(--border); }
+.sum-row{ height:90px; padding:8px 10px; border-bottom:1px solid var(--border); font-size:12px; color:var(--muted); line-height:1.7; }
+.sum-line b{ color:var(--text); }
 
 /* ---------- 9. 看板（KPI 卡片 + 图表） ---------- */
 .kpi{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }

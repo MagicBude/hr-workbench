@@ -16,7 +16,8 @@
 //   getOrgs/addOrg/setCurrentOrg/...  组织相关
 // ============================================================
 
-import { STORAGE_PREFIX } from "./config.js";
+import { STORAGE_PREFIX, HOLIDAYS_2026, DEFAULT_SETTINGS } from "./config.js";
+import { sumRec } from "./sample.js";
 
 // ---------- 内存中的运行时状态（整个应用共享这一份） ----------
 export const state = {
@@ -51,11 +52,25 @@ export function emptyData() {
 // 未来新增字段（如 holidays / settings）都加在这里，业务模块无需判断兼容性。
 function migrate(data) {
   if (!data) return data;
+  // 1) 员工补新字段
   data.employees = (data.employees || []).map(e => ({
     restMinutes: 0,      // 可调休余额（分钟），缺省 0
     insuranceBase: null, // 社保基数，null 表示用基本月薪
     ...e                 // 展开原对象，保留已有字段（新字段仅在缺失时生效）
   }));
+  // 2) 考勤旧结构升级：{day:"√"} → {day:{am:"√",pm:"√",ot:""}}（上午/下午沿用旧值，加班留空）
+  data.attendance = (data.attendance || []).map(a => {
+    const rec = {};
+    for (const day in (a.rec || {})) {
+      const v = a.rec[day];
+      rec[day] = (v && typeof v === "object") ? v : { am: v || "", pm: v || "", ot: "" };
+    }
+    return { ...a, rec, summary: sumRec(rec) };
+  });
+  // 3) 节假日：缺省用 2026 国家法定节假日
+  if (!data.holidays) data.holidays = { ...HOLIDAYS_2026 };
+  // 4) 组织设置：缺省用默认值（加班转调休开关、半天分钟数等）
+  if (!data.settings) data.settings = { ...DEFAULT_SETTINGS };
   return data;
 }
 // 对"当前内存中的数据"执行迁移（导入新 JSON 后也可调用）

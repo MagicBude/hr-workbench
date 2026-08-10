@@ -3,12 +3,12 @@
 // ------------------------------------------------------------
 // 重要：所有姓名、部门、金额都是“虚构”的，方便你直接看到效果，
 //       又不会在部署到公网时泄露任何真实隐私（符合数据隐私规范）。
-// 这里还放了两个被多处复用的“计算函数”：
-//   sumRec()     统计某人某月各考勤状态的天数
-//   buildPayroll() 根据工资金额算出五险一金、个税、实发
+// 这里还放了被多处复用的“计算函数”：
+//   sumRec()        统计某人某月各考勤状态（兼容“分时段”新结构）
+//   buildPayroll()  根据工资金额算出五险一金、个税、实发
 // ============================================================
 
-import { STATUS_LABEL, INSURANCE_RATIO, BIG_SICKNESS, TAX_THRESHOLD, TAX_RATE } from "./config.js";
+import { STATUS_LABEL, INSURANCE_RATIO, BIG_SICKNESS, TAX_THRESHOLD, TAX_RATE, HOLIDAYS_2026, DEFAULT_SETTINGS } from "./config.js";
 
 // 生成一份完整的示例数据（data 对象）
 export function buildSample() {
@@ -23,22 +23,24 @@ export function buildSample() {
 
   const attendance = [];
 
-  // 2) 2026-07：全员满勤（用于看板趋势和上月参考）
+  // 2) 2026-07：全员满勤（每天上午/下午出勤，加班留空）——用于看板趋势和上月参考
   employees.forEach(e => {
     const rec = {};
-    for (let d = 1; d <= 31; d++) rec[d] = "√";
+    for (let d = 1; d <= 31; d++) rec[d] = { am: "√", pm: "√", ot: "" };
     attendance.push({ id: "a_07_" + e.id, month: "2026-07", empId: e.id, rec, summary: sumRec(rec) });
   });
 
   // 3) 2026-08（当前月）：大部分填到 8-10，王五(e3)只到 8-05 → 制造一条“逾期”
-  //    李四 6-7 号事假、赵六 3 号病假，演示不同状态。
+  //    李四 6-7 号事假、赵六 3 号病假、孙七 8 号上午调休 + 晚上加班，演示分时段与调休联动。
   employees.forEach(e => {
     const rec = {};
     const upTo = (e.id === "e3") ? 5 : 10;   // 王五只填到 5 号
     for (let d = 1; d <= upTo; d++) {
-      if (e.id === "e2" && (d === 6 || d === 7)) rec[d] = "事";
-      else if (e.id === "e4" && d === 3) rec[d] = "病";
-      else rec[d] = "√";
+      let cell = { am: "√", pm: "√", ot: "" };      // 默认全天出勤
+      if (e.id === "e2" && (d === 6 || d === 7)) cell = { am: "事", pm: "事", ot: "" };
+      else if (e.id === "e4" && d === 3) cell = { am: "病", pm: "病", ot: "" };
+      else if (e.id === "e5" && d === 8) cell = { am: "调", pm: "√", ot: "加" }; // 孙七：上午调休 / 下午出勤 / 晚上加班
+      rec[d] = cell;
     }
     attendance.push({ id: "a_08_" + e.id, month: "2026-08", empId: e.id, rec, summary: sumRec(rec) });
   });
@@ -52,16 +54,33 @@ export function buildSample() {
     });
   });
 
-  return { employees, attendance, payroll };
+  // 5) 节假日 + 组织设置（示例用内置 2026 国家法定节假日与默认设置）
+  return { employees, attendance, payroll, holidays: { ...HOLIDAYS_2026 }, settings: { ...DEFAULT_SETTINGS } };
 }
 
-// 统计某员工某月的考勤：输入 {1:"√",2:"事",...}，输出 {出勤:30,事假:2,...}
+// 统计某员工某月的考勤。
+// 兼容两种结构：
+//   新结构（分时段）：rec = { 1:{am:"√",pm:"√",ot:""}, ... }
+//   旧结构（单格）  ：rec = { 1:"√", ... }
+// 规则：上午/下午各算 0.5 天（按状态累计），加班时段单独计“次”。
 export function sumRec(rec) {
   const s = { 出勤: 0, 事假: 0, 病假: 0, 缺勤: 0, 调休: 0, 年假: 0, 加班: 0 };
   for (const k in rec) {
-    const v = rec[k];
-    if (v === "√") s.出勤++;
-    else if (STATUS_LABEL[v]) s[STATUS_LABEL[v]]++; // 其它状态按中文名累加
+    const cell = rec[k];
+    if (cell && typeof cell === "object") {
+      // 上午/下午两个时段：各 0.5 天，按状态累计（加班不计出勤天数）
+      ["am", "pm"].forEach(sh => {
+        const v = cell[sh];
+        if (!v) return;
+        if (v === "√") s.出勤 += 0.5;
+        else if (STATUS_LABEL[v] && v !== "加") s[STATUS_LABEL[v]] += 0.5;
+      });
+      if (cell.ot) s.加班 += 1;   // 加班时段单独计次
+    } else {
+      // 旧结构：整天一个状态
+      if (cell === "√") s.出勤++;
+      else if (STATUS_LABEL[cell]) s[STATUS_LABEL[cell]]++;
+    }
   }
   return s;
 }
