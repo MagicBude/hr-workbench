@@ -8,7 +8,8 @@
 //   buildPayroll()  根据工资金额算出五险一金、个税、实发
 // ============================================================
 
-import { STATUS_LABEL, INSURANCE_RATIO, BIG_SICKNESS, TAX_THRESHOLD, TAX_RATE, HOLIDAYS_2026, DEFAULT_SETTINGS } from "./config.js";
+import { STATUS_LABEL, INSURANCE_RATIO, BIG_SICKNESS, HOLIDAYS_2026, DEFAULT_SETTINGS, SCHEMA_VERSION } from "./config.js";
+import { estimateTax } from "./domain.js";
 
 // 生成一份完整的示例数据（data 对象）
 export function buildSample() {
@@ -55,7 +56,8 @@ export function buildSample() {
   });
 
   // 5) 节假日 + 组织设置（示例用内置 2026 国家法定节假日与默认设置）
-  return { employees, attendance, payroll, holidays: { ...HOLIDAYS_2026 }, settings: { ...DEFAULT_SETTINGS } };
+  employees.forEach(e => { e.employmentStatus = "active"; e.leaveDate = ""; e.deletedAt = null; });
+  return { schemaVersion: SCHEMA_VERSION, employees, attendance, payroll, holidays: { ...HOLIDAYS_2026 }, settings: { ...DEFAULT_SETTINGS } };
 }
 
 // 统计某员工某月的考勤。
@@ -109,12 +111,12 @@ export function buildPayroll(month, empId, base, travel, bonus, overtime) {
 
   const gross = base + travel + bonus + overtime;                 // 本月应发
   const persTotal = pers.养老 + pers.医疗 + pers.失业 + pers.公积金 + pers.大病医疗; // 个人缴纳合计
-  const tax = Math.max(0, (gross - persTotal - TAX_THRESHOLD)) * TAX_RATE;          // 简化个税
+  const tax = estimateTax(gross, persTotal);                       // 简化个税估算
   const net = gross - persTotal - tax;                           // 实发 = 应发 - 个人缴纳 - 个税
 
   return {
     id: "p_" + month + "_" + empId, month, empId,
     baseSalary: base, travel, bonus, overtime,
-    comp, pers, gross, persTotal, tax, net
+    comp, pers, gross, persTotal, tax, taxManual: false, status: "draft", net
   };
 }

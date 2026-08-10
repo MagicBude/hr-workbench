@@ -16,7 +16,8 @@
 //   getOrgs/addOrg/setCurrentOrg/...  组织相关
 // ============================================================
 
-import { STORAGE_PREFIX, HOLIDAYS_2026, DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS, HALF_DAY_MINUTES } from "./config.js";
+import { STORAGE_PREFIX, SCHEMA_VERSION, HOLIDAYS_2026, DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS, HALF_DAY_MINUTES } from "./config.js";
+import { validateImportPayload } from "./domain.js";
 import { sumRec } from "./sample.js";
 
 // ---------- 内存中的运行时状态（整个应用共享这一份） ----------
@@ -30,6 +31,8 @@ export const state = {
 const KEY_ORGS = STORAGE_PREFIX + "orgs";        // 组织列表
 const KEY_CURRENT = STORAGE_PREFIX + "current";  // 当前组织 id
 const dataKey = (id) => STORAGE_PREFIX + id + "_data"; // 某组织的数据
+const snapshotKey = (id) => STORAGE_PREFIX + id + "_snapshots";
+const preferenceKey = (name) => STORAGE_PREFIX + state.current + "_pref_" + name;
 
 // ---------- 最底层的读写小工具 ----------
 // 读取并解析 JSON；出错或没有时返回 fallback（默认值）
@@ -45,6 +48,7 @@ function writeJSON(key, value) {
 // 返回一个"空数据"模板（新增组织时用）
 export function emptyData() {
   return {
+    schemaVersion: SCHEMA_VERSION,
     employees: [], attendance: [], payroll: [],
     settings: { ...DEFAULT_SETTINGS, departments: [], insuranceRatio: JSON.parse(JSON.stringify(INSURANCE_RATIO)), bigSickness: BIG_SICKNESS }
   };
@@ -57,11 +61,16 @@ function migrate(data) {
   if (!data) return data;
   // 1) 员工补新字段
   data.employees = (data.employees || []).map(e => ({
+    employmentStatus: "active",
+    leaveDate: "",
+    deletedAt: null,
     restMinutes: 0,      // 兼容旧字段（新逻辑改用 restSeedMinutes + 动态计算）
     restSeedMinutes: (e.restSeedMinutes != null) ? e.restSeedMinutes : (e.restMinutes || 0), // 初始可调休余额（分钟）
     insuranceBase: null, // 社保基数，null 表示用基本月薪
     ...e                 // 展开原对象，保留已有字段（新字段仅在缺失时生效）
   }));
+  data.payroll = (data.payroll || []).map(p => ({ status: "draft", taxManual: false, ...p }));
+  data.schemaVersion = SCHEMA_VERSION;
   // 2) 考勤旧结构升级：{day:"√"} → {day:{am:"√",pm:"√",ot:""}}（上午/下午沿用旧值，加班留空）
   data.attendance = (data.attendance || []).map(a => {
     const rec = {};
@@ -126,6 +135,34 @@ export function persist() {
   writeJSON(dataKey(state.current), state.data);
 }
 
+export function loadPreference(name, fallback = null) { return readJSON(preferenceKey(name), fallback); }
+export function savePreference(name, value) { writeJSON(preferenceKey(name), value); }
+export function removePreference(name) { localStorage.removeItem(preferenceKey(name)); }
+
+export function createSnapshot(reason = "手动快照") {
+  const snapshots = readJSON(snapshotKey(state.current), []);
+  snapshots.unshift({ id: `snap_${Date.now()}`, createdAt: new Date().toISOString(), reason, data: structuredClone(state.data) });
+  writeJSON(snapshotKey(state.current), snapshots.slice(0, 10));
+  return snapshots[0];
+}
+export function listSnapshots() { return readJSON(snapshotKey(state.current), []); }
+export function restoreSnapshot(id) {
+  const item = listSnapshots().find(x => x.id === id);
+  if (!item) throw new Error("快照不存在或已被清理");
+  createSnapshot("恢复快照前自动备份");
+  state.data = migrate(structuredClone(item.data));
+  persist();
+}
+export function getStorageUsage() {
+  let bytes = 0;
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(STORAGE_PREFIX)) bytes += (key.length + (localStorage.getItem(key) || "").length) * 2;
+  }
+  return bytes;
+}
+export function prepareImportedData(input) { return migrate(structuredClone(validateImportPayload(input))); }
+
 // ---------- 组织（公司）相关 ----------
 export function getOrgs() { return state.orgs; }
 export function getCurrentOrgId() { return state.current; }
@@ -147,6 +184,14 @@ export function addOrg(name) {
   localStorage.setItem(KEY_CURRENT, id);
   writeJSON(dataKey(id), emptyData());
   state.data = emptyData();
+}
+export function selectImportedOrg(org) {
+  if (!state.orgs.some(o => o.id === org.id)) {
+    state.orgs.push({ id: org.id, name: org.name || org.id });
+    writeJSON(KEY_ORGS, state.orgs);
+  }
+  state.current = org.id;
+  localStorage.setItem(KEY_CURRENT, org.id);
 }
 
 // ---------- 部门（组织级选项） ----------

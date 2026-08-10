@@ -10,6 +10,7 @@
 
 import { state } from "./store.js";
 import { fmtMoney } from "./ui.js";
+import { attendanceMetrics, isEmployeeActiveOn } from "./domain.js";
 
 export function initDashboard() {
   document.getElementById("dashMonth").addEventListener("change", renderDashboard);
@@ -17,13 +18,19 @@ export function initDashboard() {
 
 export function renderDashboard() {
   const month = document.getElementById("dashMonth").value || "2026-08";
-  const emps = state.data.employees;
+  const asOf = new Date().toLocaleDateString("sv-SE");
+  const monthEnd = `${month}-${String(new Date(+month.slice(0, 4), +month.slice(5, 7), 0).getDate()).padStart(2, "0")}`;
+  const emps = state.data.employees.filter(e => isEmployeeActiveOn(e, `${month}-01`) || isEmployeeActiveOn(e, monthEnd));
 
   // —— 出勤统计：累加当月所有员工的出勤天数与事病缺天数 ——
-  const attRecs = state.data.attendance.filter(a => a.month === month);
-  let present = 0, other = 0;
-  attRecs.forEach(a => { present += a.summary.出勤; other += a.summary.事假 + a.summary.病假 + a.summary.缺勤; });
-  const rate = (present + other) > 0 ? Math.round(present / (present + other) * 100) : 0;
+  let actual = 0, expected = 0, leave = 0, absent = 0, missing = 0;
+  emps.forEach(emp => {
+    const att = state.data.attendance.find(a => a.month === month && a.empId === emp.id);
+    const m = attendanceMetrics(emp, month, att, state.data.holidays, state.data.settings.halfDayMinutes, asOf);
+    actual += m.actualMinutes; expected += m.expectedMinutes; leave += m.leaveMinutes;
+    absent += m.absentMinutes; missing += m.missingMinutes;
+  });
+  const rate = expected ? Math.round(actual / expected * 100) : 0;
 
   // —— 工资统计 ——
   const payRecs = state.data.payroll.filter(p => p.month === month);
@@ -37,18 +44,17 @@ export function renderDashboard() {
     <div class="box"><div class="v">${fmtMoney(grossSum)}</div><div class="l">本月应发合计</div></div>
     <div class="box"><div class="v" style="color:var(--ok)">${fmtMoney(netSum)}</div><div class="l">本月实发合计</div></div>`;
 
-  renderDonut(present, other);
+  renderDonut(actual, expected, leave, absent, missing);
   renderTrend();
 }
 
 // 环形图：用一个完整的灰圈 + 一段绿色弧（stroke-dasharray 控制长度）表示占比
-function renderDonut(present, other) {
-  const total = present + other;
+function renderDonut(actual, total, leave, absent, missing) {
   const el = document.getElementById("donut");
   if (total === 0) { el.innerHTML = '<div class="empty">本月暂无考勤数据</div>'; return; }
 
   const r = 70, cx = 150, cy = 80, circumference = 2 * Math.PI * r;
-  const ratio = present / total;
+  const ratio = actual / total;
   const offset = circumference * (1 - ratio);   // 绿色弧的“缺失长度”= 剩余比例
 
   el.innerHTML = `<svg viewBox="0 0 300 160" width="100%">
@@ -59,8 +65,9 @@ function renderDonut(present, other) {
     <text x="${cx}" y="${cy + 18}" text-anchor="middle" font-size="12" fill="#6b7280">出勤占比</text>
   </svg>
   <div class="legend">
-    <span><i style="background:#1d9e75"></i>出勤 ${present} 天</span>
-    <span><i style="background:#e5e7eb"></i>事病缺 ${other} 天</span>
+    <span><i style="background:#1d9e75"></i>实际 ${(actual / 60).toFixed(1)} 小时</span>
+    <span><i style="background:#e5e7eb"></i>应出勤 ${(total / 60).toFixed(1)} 小时</span>
+    <span>请假 ${(leave / 60).toFixed(1)}h · 缺勤 ${(absent / 60).toFixed(1)}h · 未录 ${(missing / 60).toFixed(1)}h</span>
   </div>`;
 }
 

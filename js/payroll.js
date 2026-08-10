@@ -12,6 +12,7 @@ import { fmtMoney, downloadFile } from "./ui.js";
 import { buildPayroll } from "./sample.js";
 import { INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 import { openSettings } from "./settings.js";
+import { estimateTax, escapeHtml, PAYROLL_STATUS } from "./domain.js";
 
 // 公司缴纳 / 个人缴纳的项目顺序（与表头一致）
 const COMP_KEYS = ["养老", "医疗", "工伤", "失业", "生育", "公积金"];
@@ -59,6 +60,7 @@ function recompute(p) {
   p.compTotal = COMP_KEYS.reduce((s, k) => s + p.comp[k], 0);
   p.persTotal = PERS_KEYS.reduce((s, k) => s + p.pers[k], 0);
   p.gross = p.baseSalary + p.travel + p.bonus + p.overtime;   // 本月应发
+  if (!p.taxManual) p.tax = estimateTax(p.gross, p.persTotal);
   p.net = p.gross - p.persTotal - p.tax;                       // 实发
 }
 function round2(n) { return Math.round(n * 100) / 100; }
@@ -67,14 +69,15 @@ export function initPayroll() {
   // "生成/刷新薪资"：对当前月份每位员工确保有一条薪资记录
   document.getElementById("genPayBtn").addEventListener("click", () => {
     const month = document.getElementById("payMonth").value || "2026-08";
-    state.data.employees.forEach(e => {
+    const employees = state.data.employees.filter(e => !e.deletedAt && e.employmentStatus !== "departed");
+    employees.forEach(e => {
       let p = state.data.payroll.find(x => x.month === month && x.empId === e.id);
       if (!p) { p = buildPayroll(month, e.id, e.baseSalary, 0, 0, 0); state.data.payroll.push(p); }
       else { p.baseSalary = e.baseSalary; recompute(p); }
     });
     persist();
     window.__renderAll();
-    alert("已生成 " + month + " 薪资（" + state.data.employees.length + " 人）");
+    alert("已生成 " + month + " 薪资（" + employees.length + " 人）");
   });
 
   document.getElementById("csvBtn").addEventListener("click", exportCSV);
@@ -88,8 +91,9 @@ export function renderPayroll() {
   const tf = document.querySelector("#payTable tfoot");
   tb.innerHTML = ""; tf.innerHTML = "";
 
-  if (!state.data.employees.length) {
-    tb.innerHTML = '<tr><td colspan="20" class="empty">请先在花名册添加员工。</td></tr>';
+  const employees = state.data.employees.filter(e => !e.deletedAt && e.employmentStatus !== "departed");
+  if (!employees.length) {
+    tb.innerHTML = '<tr><td colspan="21" class="empty">请先在花名册添加员工。</td></tr>';
     return;
   }
 
@@ -98,7 +102,7 @@ export function renderPayroll() {
   COMP_KEYS.forEach(k => tot.comp[k] = 0);
   PERS_KEYS.forEach(k => tot.pers[k] = 0);
 
-  state.data.employees.forEach(e => {
+  employees.forEach(e => {
     let p = state.data.payroll.find(x => x.month === month && x.empId === e.id);
     if (!p) p = buildPayroll(month, e.id, e.baseSalary, 0, 0, 0);
     recompute(p); // 渲染时重算，保证与最新比例/基数一致
@@ -111,22 +115,23 @@ export function renderPayroll() {
     const persCells = PERS_KEYS.map(k => `<td class="num mono">${fmtMoney(p.pers[k])}</td>`).join("");
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${e.name}</td><td>${e.dept}</td>
-      <td class="num"><input class="p-base" type="number" min="0" value="${p.baseSalary}" data-id="${e.id}"></td>
-      <td class="num"><input class="p-travel" type="number" min="0" value="${p.travel}" data-id="${e.id}"></td>
-      <td class="num"><input class="p-bonus" type="number" min="0" value="${p.bonus}" data-id="${e.id}"></td>
-      <td class="num"><input class="p-ot" type="number" min="0" value="${p.overtime}" data-id="${e.id}"></td>
+      <td>${escapeHtml(e.name)}</td><td>${escapeHtml(e.dept)}</td>
+      <td class="num"><input class="p-base" type="number" min="0" value="${p.baseSalary}" data-id="${e.id}" ${p.status !== "draft" ? "disabled" : ""}></td>
+      <td class="num"><input class="p-travel" type="number" min="0" value="${p.travel}" data-id="${e.id}" ${p.status !== "draft" ? "disabled" : ""}></td>
+      <td class="num"><input class="p-bonus" type="number" min="0" value="${p.bonus}" data-id="${e.id}" ${p.status !== "draft" ? "disabled" : ""}></td>
+      <td class="num"><input class="p-ot" type="number" min="0" value="${p.overtime}" data-id="${e.id}" ${p.status !== "draft" ? "disabled" : ""}></td>
       <td class="num mono">${fmtMoney(p.gross)}</td>
       ${compCells}${persCells}
-      <td class="num"><input class="p-tax" type="number" min="0" value="${round2(p.tax)}" data-id="${e.id}"></td>
-      <td class="num mono" style="color:var(--ok)">${fmtMoney(p.net)}</td>`;
+      <td class="num"><input class="p-tax" type="number" min="0" value="${round2(p.tax)}" data-id="${e.id}" ${p.status !== "draft" ? "disabled" : ""} title="${p.taxManual ? "人工覆盖" : "演示估算"}"></td>
+      <td class="num mono" style="color:var(--ok)">${fmtMoney(p.net)}</td>
+      <td><select class="p-status" data-id="${e.id}">${Object.entries(PAYROLL_STATUS).map(([v,l]) => `<option value="${v}" ${p.status === v ? "selected" : ""}>${l}</option>`).join("")}</select></td>`;
     tb.appendChild(tr);
   });
 
   // 合计行
   const totCompCells = COMP_KEYS.map(k => `<td class="num mono">${fmtMoney(tot.comp[k])}</td>`).join("");
   const totPersCells = PERS_KEYS.map(k => `<td class="num mono">${fmtMoney(tot.pers[k])}</td>`).join("");
-  tf.innerHTML = `<tr style="font-weight:500;"><td colspan="6">合计</td><td class="num mono">${fmtMoney(tot.gross)}</td>${totCompCells}${totPersCells}<td class="num mono">${fmtMoney(tot.tax)}</td><td class="num mono" style="color:var(--ok)">${fmtMoney(tot.net)}</td></tr>`;
+  tf.innerHTML = `<tr style="font-weight:500;"><td colspan="6">合计</td><td class="num mono">${fmtMoney(tot.gross)}</td>${totCompCells}${totPersCells}<td class="num mono">${fmtMoney(tot.tax)}</td><td class="num mono" style="color:var(--ok)">${fmtMoney(tot.net)}</td><td></td></tr>`;
 
   // 给每个输入框绑定"修改即重算"
   tb.querySelectorAll("input").forEach(inp => {
@@ -136,12 +141,19 @@ export function renderPayroll() {
       else if (inp.classList.contains("p-travel")) p.travel = +inp.value || 0;
       else if (inp.classList.contains("p-bonus")) p.bonus = +inp.value || 0;
       else if (inp.classList.contains("p-ot")) p.overtime = +inp.value || 0;
-      else if (inp.classList.contains("p-tax")) p.tax = +inp.value || 0;
+      else if (inp.classList.contains("p-tax")) { p.tax = +inp.value || 0; p.taxManual = true; }
       recompute(p);
       persist();
       window.__renderAll();
     });
   });
+  tb.querySelectorAll(".p-status").forEach(sel => sel.addEventListener("change", () => {
+    const p = getOrCreatePay(month, sel.dataset.id);
+    if (p.status !== "draft" && sel.value === "draft" && !confirm("解锁会允许重新编辑薪资，确认改回草稿？")) { sel.value = p.status; return; }
+    p.status = sel.value;
+    persist();
+    window.__refresh?.("payroll", "dashboard", "today");
+  }));
 }
 
 // 导出 CSV：带 BOM(﻿) 让 Excel 正确显示中文（含公司/个人缴纳分项）
@@ -149,7 +161,7 @@ function exportCSV() {
   const month = document.getElementById("payMonth").value || "2026-08";
   const head = ["姓名", "部门", "基本月薪", "出差补贴", "奖金", "加班费", "本月应发",
     "公司养老", "公司医疗", "公司工伤", "公司失业", "公司生育", "公司公积金",
-    "个人养老", "个人医疗", "个人失业", "个人公积金", "大病医疗", "个税", "实发薪资"];
+    "个人养老", "个人医疗", "个人失业", "个人公积金", "大病医疗", "个税", "实发薪资", "核算状态"];
   const rows = [head];
   state.data.employees.forEach(e => {
     let p = state.data.payroll.find(x => x.month === month && x.empId === e.id);
@@ -158,7 +170,7 @@ function exportCSV() {
     rows.push([e.name, e.dept, p.baseSalary, p.travel, p.bonus, p.overtime, round2(p.gross),
       ...COMP_KEYS.map(k => round2(p.comp[k])),
       ...PERS_KEYS.map(k => round2(p.pers[k])),
-      round2(p.tax), round2(p.net)]);
+      round2(p.tax), round2(p.net), PAYROLL_STATUS[p.status || "draft"]]);
   });
   const csv = "﻿" + rows.map(r => r.join(",")).join("\n");
   downloadFile(csv, "薪资_" + month + ".csv", "text/csv");

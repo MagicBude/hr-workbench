@@ -12,10 +12,11 @@
 // 布局：用真 <table> + border-collapse，保证横竖线对齐；左侧员工信息列 sticky 固定。
 // ============================================================
 
-import { state, persist, getDepartments, computeRestMinutes } from "./store.js";
-import { STORAGE_PREFIX, STATUSES, STATUS_LABEL, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026, SUM_KEYS, HALF_DAY_MINUTES } from "./config.js";
+import { state, persist, getDepartments, computeRestMinutes, loadPreference, savePreference, removePreference } from "./store.js";
+import { STATUSES, STATUS_LABEL, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026, SUM_KEYS, HALF_DAY_MINUTES } from "./config.js";
 import { sumRec } from "./sample.js";
 import { openModal, closeModal, showToast, enableColResize } from "./ui.js";
+import { escapeHtml } from "./domain.js";
 
 // ---------- 时长相关：可带时长的状态 ----------
 // 除出勤√外，其它状态都支持填分钟：
@@ -46,7 +47,7 @@ function fmtMin(m) {
 }
 
 // 考勤筛选（仅内存）：按姓名模糊匹配 + 按部门精确匹配
-let attFilter = { name: "", dept: "" };
+let attFilter = { name: "", dept: "", summaryCollapsed: false };
 
 // 取某员工某月考勤 rec（{day:{am,pm,ot}}），没有则返回空对象
 function getAtt(month, empId) {
@@ -98,6 +99,11 @@ export function initAttendance() {
     + getDepartments().map(d => `<option value="${escAttr(d)}">${escAttr(d)}</option>`).join("");
   fn.addEventListener("input", () => { attFilter.name = fn.value; renderAttendance(); });
   fd.addEventListener("change", () => { attFilter.dept = fd.value; renderAttendance(); });
+  document.getElementById("toggleAttSummaryBtn").addEventListener("click", () => {
+    attFilter.summaryCollapsed = !attFilter.summaryCollapsed;
+    document.getElementById("toggleAttSummaryBtn").textContent = attFilter.summaryCollapsed ? "展开汇总列" : "收起汇总列";
+    renderAttendance();
+  });
   // 事件委托：单击循环切换 + 拖拽框选批量应用 + 时长角标
   const grid = document.getElementById("attGrid");
   grid.addEventListener("mousedown", onGridMouseDown);
@@ -125,7 +131,7 @@ export function renderAttendance() {
   const N = daysInMonth(month);
 
   // 应用筛选：姓名模糊匹配 + 部门精确匹配
-  const all = state.data.employees;
+  const all = state.data.employees.filter(e => !e.deletedAt);
   const q = attFilter.name.trim().toLowerCase();
   const emps = all.filter(e =>
     (!q || e.name.toLowerCase().includes(q)) &&
@@ -162,13 +168,13 @@ export function renderAttendance() {
     const wd = weekdayOf(month, d);
     const isWk = (wd === 0 || wd === 6);
     const cls = hol ? (hol.type === "holiday" ? "hd-holiday" : "hd-workday") : (isWk ? "hd-weekend" : "");
-    const title = hol ? ` title="${hol.name}"` : "";
+    const title = hol ? ` title="${escapeHtml(hol.name)}"` : "";
     const dc = 3 + d;   // 日期列序号：4..(4+N-1)
     h1 += `<th class="date ${cls}" data-col="${dc}"${title}>${d}</th>`;                 // 日期数字
     h2 += `<th class="wk ${cls}" data-col="${dc}"${title}>${hol ? (hol.type === "holiday" ? "休" : "班") : WEEK_LABEL[wd]}</th>`; // 星期/休/班
   }
   // 汇总列表头（跨两行）
-  SUM_KEYS.forEach((k, j) => { h1 += `<th class="sumcol" rowspan="2" data-col="${4 + N + j}">${k}</th>`; });
+  if (!attFilter.summaryCollapsed) SUM_KEYS.forEach((k, j) => { h1 += `<th class="sumcol" rowspan="2" data-col="${4 + N + j}">${k}</th>`; });
 
   // ---------- 表体：每员工 3 行 ----------
   let body = "";
@@ -179,8 +185,8 @@ export function renderAttendance() {
       body += "<tr>";
       if (si === 0) {  // 仅"上午"行输出合并的 序号/姓名/部门 与 汇总
         body += `<td class="st st-seq" rowspan="3">${i + 1}</td>`
-          + `<td class="st st-name" rowspan="3">${e.name}</td>`
-          + `<td class="st st-dept" rowspan="3">${e.dept || ""}</td>`;
+          + `<td class="st st-name" rowspan="3">${escapeHtml(e.name)}</td>`
+          + `<td class="st st-dept" rowspan="3">${escapeHtml(e.dept || "")}</td>`;
       }
       body += `<td class="st st-shift">${SHIFT_LABEL[sh]}</td>`;      // 时段列：上午/下午/加班
       for (let d = 1; d <= N; d++) {                                   // 各日期格
@@ -198,7 +204,7 @@ export function renderAttendance() {
         const content = isEmptyRest ? `<span class="rest-tag" title="休息日（无需填写，点击可改）">休</span>` : s + badge;
         body += `<td class="${cls}" data-emp="${e.id}" data-day="${d}" data-shift="${sh}" data-ei="${i}" data-di="${d}" data-si="${si}"${bg}>${content}</td>`;
       }
-      if (si === 0) SUM_KEYS.forEach(k => { body += `<td class="sumcol" rowspan="3">${fmt1(s[k])}</td>`; });
+      if (si === 0 && !attFilter.summaryCollapsed) SUM_KEYS.forEach(k => { body += `<td class="sumcol" rowspan="3">${fmt1(s[k])}</td>`; });
       body += "</tr>";
     });
   });
@@ -209,7 +215,7 @@ export function renderAttendance() {
   const table = wrap.querySelector("table");
   enableColResize({
     table,
-    widths: attWidths(N),
+    widths: attWidths(N).slice(0, 4 + N + (attFilter.summaryCollapsed ? 0 : SUM_KEYS.length)),
     group: (i) => i < 4 ? "f" + i : (i < 4 + N ? "date" : "sum"),
     onCommit: (w) => saveAttWidths(w, N),
     onResized: () => syncAttSticky(table),
@@ -219,29 +225,25 @@ export function renderAttendance() {
 }
 
 // 列宽持久化（按组织）：花名册用一维数组；考勤用 {fixed,date,sum}（日期/汇总整组同宽）
-function colwKey(tag) { return STORAGE_PREFIX + state.current + "_colw_" + tag; }
-function loadColW(tag) { try { return JSON.parse(localStorage.getItem(colwKey(tag))); } catch { return null; } }
-function saveColW(tag, w) { localStorage.setItem(colwKey(tag), JSON.stringify(w)); }
-
 // 恢复默认列宽：清除记忆并刷新
 export function resetAttColWidths() {
-  localStorage.removeItem(colwKey("att"));
+  removePreference("colw_att");
   renderAttendance();
 }
 // 由存储的 {fixed,date,sum} 展开成每列宽度数组（长度 = 4 + N + 7）
 function attWidths(N) {
-  const s = loadColW("att") || {};
+  const s = loadPreference("colw_att") || {};
   const fixed = (s.fixed && s.fixed.length === 4) ? s.fixed : [36, 70, 70, 44];
   const date = s.date || 32;
   const sum = s.sum || 34;
   const arr = [];
   for (let i = 0; i < 4; i++) arr.push(fixed[i]);
   for (let i = 0; i < N; i++) arr.push(date);
-  for (let i = 0; i < 7; i++) arr.push(sum);
+  for (let i = 0; i < SUM_KEYS.length; i++) arr.push(sum);
   return arr;
 }
 function saveAttWidths(w, N) {
-  saveColW("att", { fixed: [w[0], w[1], w[2], w[3]], date: w[4], sum: w[4 + N] });
+  savePreference("colw_att", { fixed: [w[0], w[1], w[2], w[3]], date: w[4], sum: w[4 + N] || 50 });
 }
 // 重算左侧 sticky 固定列的 left 偏移（按"实际渲染宽度"累加，兼容表格整体 100% 拉伸）
 function syncAttSticky(table) {
@@ -572,7 +574,7 @@ function openHolidayModal() {
     const date = month + "-" + String(d).padStart(2, "0");
     const h = holidays[date];
     rows += `<tr><td>${date} 周${WEEK_LABEL[weekdayOf(month, d)]}</td>
-      <td>${h ? h.name : "-"}</td>
+      <td>${h ? escapeHtml(h.name) : "-"}</td>
       <td>${h ? (h.type === "holiday" ? "放假" : "调休上班") : "-"}</td>
       <td class="ops">
         <button class="btn btn-sm" data-hol="${date}">放假</button>

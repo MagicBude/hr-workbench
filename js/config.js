@@ -9,6 +9,7 @@
 
 // 存储键前缀：localStorage 里所有键都以 wb_hr_ 开头，避免和其他网站冲突
 export const STORAGE_PREFIX = "wb_hr_";
+export const SCHEMA_VERSION = 2;
 
 // 考勤的 9 种状态（含新增的迟到/早退）。点击日期格时，就在这 9 个里循环切换。
 export const STATUSES = ["√", "事", "病", "缺", "调", "年", "加", "迟", "退"];

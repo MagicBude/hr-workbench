@@ -55,8 +55,11 @@
   "dept": "销售部",
   "hireDate": "2026-03-01",
   "baseSalary": 8000,
-  "restMinutes": 480,
-  "insuranceBase": null
+  "restSeedMinutes": 480,
+  "insuranceBase": null,
+  "employmentStatus": "active",
+  "leaveDate": "",
+  "deletedAt": null
 }
 ```
 
@@ -80,7 +83,7 @@
   "baseSalary": 8000, "travel": 0, "bonus": 500, "overtime": 0,
   "comp": { "养老": 1280, "医疗": 640, "工伤": 16, "失业": 40, "生育": 64, "公积金": 960 },
   "pers": { "养老": 640, "医疗": 160, "失业": 40, "公积金": 960, "大病医疗": 5 },
-  "gross": 8500, "persTotal": 1805, "tax": 169.5, "net": 6525.5,
+  "gross": 8500, "persTotal": 1805, "tax": 169.5, "taxManual": false, "net": 6525.5,
   "status": "draft"
 }
 ```

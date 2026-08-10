@@ -9,8 +9,7 @@
 // 模块之间需要互相刷新时，统一调用 window.__renderAll()（见底部 renderAll）。
 // ============================================================
 
-import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg, migrateCurrent } from "./store.js";
-import { STORAGE_PREFIX } from "./config.js";
+import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg, createSnapshot, prepareImportedData, selectImportedOrg } from "./store.js";
 import { buildSample } from "./sample.js";
 import { openModal, closeModal, downloadFile, curMonth, curDay, showHelp } from "./ui.js";
 import { initRoster, renderRoster, resetEmpColWidths } from "./roster.js";
@@ -19,6 +18,7 @@ import { initPayroll, renderPayroll } from "./payroll.js";
 import { initDashboard, renderDashboard } from "./dashboard.js";
 import { exportRosterXlsx, exportAttendanceXlsx, exportPayrollXlsx } from "./export.js";
 import { initSettings, applyOrgSettings } from "./settings.js";
+import { escapeHtml, isEmployeeActiveOn } from "./domain.js";
 
 // ---------- 顶部：组织下拉框渲染 ----------
 function renderOrgs() {
@@ -42,7 +42,7 @@ function renderToday() {
   const items = [];
 
   // 考勤逾期检查
-  state.data.employees.forEach(e => {
+  state.data.employees.filter(e => isEmployeeActiveOn(e, `${month}-${String(today).padStart(2, "0")}`)).forEach(e => {
     const a = state.data.attendance.find(x => x.month === month && x.empId === e.id);
     const rec = a ? a.rec : {};
     let missing = 0;
@@ -54,7 +54,7 @@ function renderToday() {
       if (!filled) missing++;
     }
     if (missing > 0) {
-      items.push({ danger: true, text: `<b>${e.name}</b> ${month} 考勤待补录（逾期 ${missing} 天）`, tab: "attendance" });
+      items.push({ danger: true, text: `<b>${escapeHtml(e.name)}</b> ${month} 考勤待补录（逾期 ${missing} 天）`, tab: "attendance" });
     }
   });
 
@@ -93,6 +93,10 @@ function renderAll() {
 }
 // 挂到 window 上，让其它模块（roster/attendance/payroll）能直接调用，避免循环 import
 window.__renderAll = renderAll;
+window.__refresh = (...modules) => {
+  const refreshers = { orgs: renderOrgs, today: renderToday, roster: renderRoster, attendance: renderAttendance, payroll: renderPayroll, dashboard: renderDashboard };
+  [...new Set(modules)].forEach(name => refreshers[name]?.());
+};
 
 // ---------- 绑定顶部栏：组织切换 / 新建组织 / 导出 / 导入 / 清空 ----------
 function bindTopbar() {
@@ -149,17 +153,12 @@ function bindTopbar() {
           targetName = org.name;
         }
         if (!confirm("导入将覆盖组织「" + (targetName || getCurrentOrgId()) + "」的全部数据，确认继续？")) return;
+        createSnapshot("导入数据前自动备份");
         if (org) {
-          if (!state.orgs.find(o => o.id === org.id)) {
-            state.orgs.push(org);
-            localStorage.setItem(STORAGE_PREFIX + "orgs", JSON.stringify(state.orgs));
-          }
-          state.current = org.id;
-          localStorage.setItem(STORAGE_PREFIX + "current", org.id);
+          selectImportedOrg(org);
         }
-        state.data = obj.data;
-        persist();          // 写入目标组织的数据键
-        migrateCurrent();   // 升级到新结构（补 restMinutes / rec 形态 / 部门列表等）
+        state.data = prepareImportedData(obj);
+        persist();          // 校验、迁移后写入目标组织的数据键
         applyOrgSettings(true);
         renderAll();        // 含刷新组织下拉
         alert("导入成功" + (targetName ? "（已切换/创建组织：" + targetName + "）" : ""));
@@ -171,7 +170,8 @@ function bindTopbar() {
 
   // 清空示例数据（二次确认，防误删）
   document.getElementById("clearBtn").addEventListener("click", () => {
-    if (!confirm("确认清空当前组织全部数据（员工/考勤/薪资）？此操作不可撤销。")) return;
+    if (!confirm("确认清空当前组织全部数据（员工/考勤/薪资）？清空前会自动创建可恢复快照。")) return;
+    createSnapshot("清空组织数据前自动备份");
     state.data = emptyData();
     persist();
     applyOrgSettings(true);

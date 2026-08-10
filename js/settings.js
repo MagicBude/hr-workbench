@@ -4,9 +4,10 @@
 // 所有设置跟随当前组织保存；界面只负责编辑，业务模块直接读取 state.data.settings。
 // ============================================================
 
-import { state, persist, getCurrentOrg } from "./store.js";
-import { DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS, STORAGE_PREFIX } from "./config.js";
+import { state, persist, getCurrentOrg, removePreference, createSnapshot, listSnapshots, restoreSnapshot, getStorageUsage } from "./store.js";
+import { DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 import { openModal, closeModal, curMonth, showToast } from "./ui.js";
+import { escapeHtml } from "./domain.js";
 
 const COMP_KEYS = ["养老", "医疗", "工伤", "失业", "生育", "公积金"];
 const PERS_KEYS = ["养老", "医疗", "失业", "公积金"];
@@ -40,13 +41,14 @@ export function openSettings(section = "attendance") {
   const ratio = st.insuranceRatio || INSURANCE_RATIO;
   openModal(`
     <div class="settings-head">
-      <div><h3>组织设置</h3><div class="hint">${getCurrentOrg()?.name || "当前组织"} · 设置仅对本组织生效</div></div>
+      <div><h3>组织设置</h3><div class="hint">${escapeHtml(getCurrentOrg()?.name || "当前组织")} · 设置仅对本组织生效</div></div>
     </div>
     <div class="settings-tabs">
       <button class="active" data-settings-tab="attendance">考勤规则</button>
       <button data-settings-tab="features">功能开关</button>
       <button data-settings-tab="payroll">薪资参数</button>
       <button data-settings-tab="appearance">界面设置</button>
+      <button data-settings-tab="safety">数据安全</button>
     </div>
     <div class="settings-page active" data-settings-page="attendance">
       <div class="settings-row"><div><b>半天标准工时</b><div class="hint">用于整段请假默认时长及调休扣减</div></div><div class="setting-input"><input id="setHalfHours" type="number" min="0.5" max="12" step="0.5" value="${st.halfDayMinutes / 60}"><span>小时</span></div></div>
@@ -75,6 +77,14 @@ export function openSettings(section = "attendance") {
       </select></div>
       <div class="settings-row"><div><b>列宽记忆</b><div class="hint">清除当前组织的花名册和考勤列宽</div></div><button class="btn" id="settingsResetCols">恢复默认列宽</button></div>
     </div>
+    <div class="settings-page" data-settings-page="safety">
+      <div class="settings-row"><div><b>本地存储占用</b><div class="hint">当前浏览器内全部组织与快照</div></div><span>${(getStorageUsage() / 1024).toFixed(1)} KB</span></div>
+      <div class="settings-row"><div><b>数据快照</b><div class="hint">最多保留最近 10 份，导入、清空、回收前会自动创建</div></div><button class="btn" id="createSnapshotBtn">立即备份</button></div>
+      <div class="grp-title">最近快照</div>
+      <div class="snapshot-list">${listSnapshots().map(s => `<div class="settings-row"><div><b>${new Date(s.createdAt).toLocaleString()}</b><div class="hint">${escapeHtml(s.reason)}</div></div><button class="btn btn-sm" data-restore-snapshot="${s.id}">恢复</button></div>`).join("") || '<div class="empty">暂无快照</div>'}</div>
+      <div class="grp-title">员工回收站</div>
+      <div class="snapshot-list">${state.data.employees.filter(e => e.deletedAt).map(e => `<div class="settings-row"><div><b>${escapeHtml(e.name)}</b><div class="hint">${escapeHtml(e.dept || "无部门")}</div></div><button class="btn btn-sm" data-restore-emp="${e.id}">恢复</button></div>`).join("") || '<div class="empty">回收站为空</div>'}</div>
+    </div>
     <div class="modal-actions settings-actions">
       <button class="btn" id="settingsCancel">取消</button>
       <button class="btn" id="settingsReset">全部恢复默认</button>
@@ -90,8 +100,8 @@ export function openSettings(section = "attendance") {
   activate(section);
   document.getElementById("settingsCancel").addEventListener("click", closeModal);
   document.getElementById("settingsResetCols").addEventListener("click", () => {
-    localStorage.removeItem(STORAGE_PREFIX + state.current + "_colw_emp");
-    localStorage.removeItem(STORAGE_PREFIX + state.current + "_colw_att");
+    removePreference("colw_emp");
+    removePreference("colw_att");
     window.__renderAll();
     showToast("已清除当前组织的列宽记忆");
   });
@@ -102,6 +112,15 @@ export function openSettings(section = "attendance") {
     persist(); closeModal(); applyOrgSettings(true); window.__renderAll(); showToast("组织设置已恢复默认");
   });
   document.getElementById("settingsSave").addEventListener("click", saveSettings);
+  document.getElementById("createSnapshotBtn").addEventListener("click", () => { createSnapshot("手动快照"); closeModal(); openSettings("safety"); showToast("数据快照已创建"); });
+  document.querySelectorAll("[data-restore-snapshot]").forEach(b => b.addEventListener("click", () => {
+    if (!confirm("恢复后当前数据会先自动备份。确认继续？")) return;
+    restoreSnapshot(b.dataset.restoreSnapshot); closeModal(); window.__renderAll(); showToast("快照已恢复");
+  }));
+  document.querySelectorAll("[data-restore-emp]").forEach(b => b.addEventListener("click", () => {
+    const emp = state.data.employees.find(e => e.id === b.dataset.restoreEmp); if (!emp) return;
+    emp.deletedAt = null; persist(); closeModal(); window.__renderAll(); showToast("员工已恢复");
+  }));
 }
 
 function saveSettings() {

@@ -65,7 +65,8 @@ hr-workbench 是一个 **零运行时依赖、纯前端、可离线** 的通用�
 | 文件 | 职责 | 对外暴露的关键 API |
 |---|---|---|
 | `config.js` | 全局常量：状态种类、颜色、社保比例 | `STATUSES` `STATUS_COLOR` `INSURANCE_RATIO` |
-| `store.js` | **数据层**：读写存储、组织管理、数据迁移 | `state` `ensureSeed` `persist` `reloadCurrent` `addOrg` |
+| `domain.js` | 纯业务口径与输入校验，可脱离 DOM 测试 | `attendanceMetrics` `estimateTax` `validateImportPayload` |
+| `store.js` | **数据层**：读写存储、组织管理、数据迁移、偏好与快照 | `state` `persist` `createSnapshot` `restoreSnapshot` |
 | `sample.js` | 示例数据生成、薪资计算 | `buildSample` `buildPayroll` `sumRec` |
 | `ui.js` | 通用 UI：弹窗、下载、金额格式 | `openModal` `downloadFile` `fmtMoney` |
 | `roster.js` | 花名册：增、删、改、排序 | `initRoster` `renderRoster` |
@@ -81,15 +82,14 @@ hr-workbench 是一个 **零运行时依赖、纯前端、可离线** 的通用�
 
 ### 4.1 渲染循环
 ```
-用户操作 → 业务模块改 state.data → persist() → window.__renderAll()
+用户操作 → 业务模块改 state.data → persist() → window.__refresh(...受影响模块)
                                                     ├─ renderRoster()
                                                     ├─ renderAttendance()
                                                     ├─ renderPayroll()
                                                     ├─ renderDashboard()
                                                     └─ renderToday()  // 顶部"今天要处理"
 ```
-为什么用 `window.__renderAll` 而不是模块间互相 import？  
-→ 避免 ES Modules 的循环依赖（roster/attendance 都会互相触发布局变化）。挂载到 `window` 是一种"事件总线"式的折中。
+组织切换、导入和快照恢复仍使用 `window.__renderAll()`；普通业务操作通过模块级刷新避免无关大表重绘。
 
 ### 4.2 组织切换
 ```
@@ -105,25 +105,28 @@ select 改变 → setCurrentOrg(id) → reloadCurrent() → window.__renderAll()
 wb_hr_orgs        → [{ id, name }, ...]           组织列表
 wb_hr_current     → "org_xxx"                     当前组织 id
 wb_hr_{orgId}_data → {                            某组织全部数据
+  schemaVersion: 2,
   employees: [],   // 花名册
   attendance: [],  // 考勤
   payroll: [],     // 薪资
   holidays: {},    // 节假日（Phase 2）
   settings: {}     // 组织设置（Phase 2/3）
 }
+wb_hr_{orgId}_snapshots → []                       最近 10 份恢复快照
+wb_hr_{orgId}_pref_* → ...                         列宽等界面偏好
 ```
 
 ### 5.2 数据对象 schema（权威定义见 `docs/STANDARD.md`）
-- **员工**：`{ id, name, dept, hireDate, baseSalary, restMinutes, insuranceBase }`
+- **员工**：`{ id, name, dept, hireDate, leaveDate, employmentStatus, deletedAt, baseSalary, restSeedMinutes, insuranceBase }`
 - **考勤**：`{ id, month, empId, rec: { [day]: { am, pm, ot } }, summary }`
-- **薪资**：`{ id, month, empId, baseSalary, travel, bonus, overtime, comp, pers, gross, persTotal, tax, net, status }`
+- **薪资**：`{ id, month, empId, baseSalary, travel, bonus, overtime, comp, pers, gross, persTotal, tax, taxManual, net, status }`
 
 ---
 
 ## 6. 数据迁移策略（向后兼容）
 
 旧数据在 `ensureSeed` / `reloadCurrent` 后由 `store.js` 的迁移函数升级：
-- 员工缺 `restMinutes` → 补 `0`；缺 `insuranceBase` → 补 `null`。
+- 员工旧 `restMinutes` 迁移为 `restSeedMinutes`；补齐在职状态、离职日期和回收标记。
 - 考勤 `rec` 若为 `{1:"√"}` 旧格式 → 自动转为 `{1:{am:"√",pm:"√",ot:""}}`。
 - 缺 `holidays` / `settings` → 注入默认值（内置 2026 国家节假日）。
 - 所有迁移都"只增不减"，绝不删除用户已有字段。

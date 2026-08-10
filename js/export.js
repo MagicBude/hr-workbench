@@ -72,15 +72,15 @@ export function exportPayrollXlsx(month) {
   const PERS_KEYS = ["养老", "医疗", "失业", "公积金", "大病医疗"];
   const rows = [["姓名", "部门", "入职日期", "出勤", "缺勤", "实出勤", "出差补贴", "奖金", "基本月薪", "加班费", "本月应发",
     "公司养老", "公司医疗", "公司工伤", "公司失业", "公司生育", "公司公积金",
-    "个人养老", "个人医疗", "个人失业", "个人公积金", "大病医疗", "个税", "实发薪资"]];
-  state.data.employees.forEach(e => {
+    "个人养老", "个人医疗", "个人失业", "个人公积金", "大病医疗", "个税", "实发薪资", "核算状态"]];
+  state.data.employees.filter(e => !e.deletedAt).forEach(e => {
     const p = state.data.payroll.find(x => x.month === month && x.empId === e.id);
     const a = state.data.attendance.find(x => x.month === month && x.empId === e.id);
     const s = a ? a.summary : { 出勤: 0, 缺勤: 0 };
     if (!p) {
       // 未生成薪资：只导基础信息
       rows.push([e.name, e.dept, e.hireDate || "", s.出勤, s.缺勤, s.出勤,
-        0, 0, e.baseSalary, 0, e.baseSalary, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, e.baseSalary]);
+        0, 0, e.baseSalary, 0, e.baseSalary, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, e.baseSalary, "未生成"]);
       return;
     }
     const comp = p.comp || {}, pers = p.pers || {};
@@ -88,7 +88,7 @@ export function exportPayrollXlsx(month) {
       p.travel, p.bonus, p.baseSalary, p.overtime, round2(p.gross),
       ...COMP_KEYS.map(k => round2(comp[k] || 0)),
       ...PERS_KEYS.map(k => round2(pers[k] || 0)),
-      round2(p.tax), round2(p.net)]);
+      round2(p.tax), round2(p.net), ({ draft: "草稿", confirmed: "已确认", paid: "已发放" })[p.status || "draft"]]);
   });
   writeBook(rows, "薪资表_" + month, "薪资表_" + month + ".xlsx");
 }

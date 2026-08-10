@@ -12,16 +12,14 @@
 //   - 可调休余额字段（精确到分钟，在考勤选调修时联动扣减）
 // ============================================================
 
-import { state, persist, getDepartments, addDepartment, computeRestMinutes } from "./store.js";
-import { STORAGE_PREFIX, HALF_DAY_MINUTES } from "./config.js";
+import { state, persist, getDepartments, addDepartment, computeRestMinutes, loadPreference, savePreference, removePreference, createSnapshot } from "./store.js";
+import { HALF_DAY_MINUTES } from "./config.js";
 import { fmtMoney, openModal, closeModal, enableColResize } from "./ui.js";
+import { escapeHtml, EMPLOYMENT_STATUS } from "./domain.js";
 
 // 列宽持久化（按组织）：存在 localStorage 的 wb_hr_{org}_colw_{tag}
-function colwKey(tag) { return STORAGE_PREFIX + state.current + "_colw_" + tag; }
-function loadColW(tag) { try { return JSON.parse(localStorage.getItem(colwKey(tag))); } catch { return null; } }
-function saveColW(tag, w) { localStorage.setItem(colwKey(tag), JSON.stringify(w)); }
 // 花名册默认列宽（序号/姓名/部门/入职/月薪/可调休/操作）
-const EMP_DEF_W = [44, 110, 120, 120, 110, 90, 120];
+const EMP_DEF_W = [44, 110, 120, 120, 80, 110, 110, 160];
 
 function workdayMinutes() {
   const half = (state.data.settings && state.data.settings.halfDayMinutes) || HALF_DAY_MINUTES;
@@ -37,7 +35,7 @@ function formatRestMinutes(minutes, mode = (state.data.settings && state.data.se
   const dayMin = workdayMinutes();
   if (mode === "hours") return sign + shortDecimal(abs / 60) + "小时";
   if (mode === "days") return sign + shortDecimal(abs / dayMin) + "天";
-  if (abs === 0) return "0分钟";
+  if (abs === 0) return "—";
   const days = Math.floor(abs / dayMin);
   const rest = abs - days * dayMin;
   const hours = Math.floor(rest / 60);
@@ -47,12 +45,12 @@ function formatRestMinutes(minutes, mode = (state.data.settings && state.data.se
 
 // 恢复默认列宽：清除记忆并刷新
 export function resetEmpColWidths() {
-  localStorage.removeItem(colwKey("emp"));
+  removePreference("colw_emp");
   window.__renderAll();
 }
 
 // 花名册筛选项（仅内存，不持久化）：按姓名模糊匹配 + 按部门精确匹配
-let rosterFilter = { name: "", dept: "" };
+let rosterFilter = { name: "", dept: "", status: "current" };
 
 // —— 小工具：转义，避免部门名里的引号/尖括号破坏 HTML ——
 function escAttr(s) {
@@ -111,6 +109,12 @@ function syncAddDeptSelect() {
 
 // 初始化：只绑定一次“添加员工”按钮（它在页面上是固定存在的元素）
 export function initRoster() {
+  document.getElementById("toggleAddEmpBtn").addEventListener("click", () => {
+    const form = document.getElementById("addEmployeeForm");
+    form.hidden = !form.hidden;
+    document.getElementById("toggleAddEmpBtn").textContent = form.hidden ? "＋ 新增员工" : "收起新增表单";
+    if (!form.hidden) document.getElementById("empName").focus();
+  });
   // 部门下拉：用组织级部门列表填充（新增表单）
   const deptSel = document.getElementById("empDept");
   deptSel.innerHTML = deptOptionsHtml("");
@@ -123,6 +127,7 @@ export function initRoster() {
     + getDepartments().map(d => `<option value="${escAttr(d)}">${escAttr(d)}</option>`).join("");
   fn.addEventListener("input", () => { rosterFilter.name = fn.value; renderRoster(); });
   fd.addEventListener("change", () => { rosterFilter.dept = fd.value; renderRoster(); });
+  document.getElementById("empFilterStatus").addEventListener("change", ev => { rosterFilter.status = ev.target.value; renderRoster(); });
 
   document.getElementById("addEmpBtn").addEventListener("click", () => {
     const name = document.getElementById("empName").value.trim();
@@ -137,6 +142,7 @@ export function initRoster() {
       baseSalary: +document.getElementById("empSalary").value || 0,
       restSeedMinutes: 0,     // 初始可调休余额（分钟），新增默认 0；可用=初始+加班−调休 动态算
       insuranceBase: null    // 社保基数，null = 用基本月薪
+      ,employmentStatus: "active", leaveDate: "", deletedAt: null
     });
 
     // 清空输入框，方便继续添加
@@ -157,23 +163,25 @@ export function renderRoster() {
   syncAddDeptSelect();      // 切换组织后同步部门下拉
   refreshDeptSelects();    // 同步筛选用部门下拉（保留当前选择）
 
-  if (!state.data.employees.length) {
-    tb.innerHTML = '<tr><td colspan="7" class="empty">暂无员工，添加一条试试。</td></tr>';
+  if (!state.data.employees.filter(e => !e.deletedAt).length) {
+    tb.innerHTML = '<tr><td colspan="8" class="empty">暂无员工，添加一条试试。</td></tr>';
     return;
   }
 
   // 应用筛选：姓名模糊匹配 + 部门精确匹配
   const q = rosterFilter.name.trim().toLowerCase();
   const list = state.data.employees.filter(e =>
+    !e.deletedAt &&
     (!q || e.name.toLowerCase().includes(q)) &&
-    (!rosterFilter.dept || e.dept === rosterFilter.dept)
+    (!rosterFilter.dept || e.dept === rosterFilter.dept) &&
+    (rosterFilter.status === "all" || (rosterFilter.status === "current" ? ["active", "probation", "suspended"].includes(e.employmentStatus || "active") : (e.employmentStatus || "active") === rosterFilter.status))
   );
   // 更新筛选计数提示
   const cnt = document.getElementById("empFilterCount");
   if (cnt) cnt.textContent = `共 ${list.length} / ${state.data.employees.length} 人`;
 
   if (!list.length) {
-    tb.innerHTML = '<tr><td colspan="7" class="empty">没有匹配的员工</td></tr>';
+    tb.innerHTML = '<tr><td colspan="8" class="empty">没有匹配的员工</td></tr>';
     return;
   }
 
@@ -184,14 +192,16 @@ export function renderRoster() {
     const restMinutes = computeRestMinutes(e.id);
     tr.innerHTML = `
       <td class="seq">${i + 1}</td>
-      <td><span class="drag-handle" title="拖拽排序">≡</span>${e.name}</td>
-      <td>${e.dept || ""}</td>
+      <td><span class="drag-handle" title="拖拽排序">≡</span>${escapeHtml(e.name)}</td>
+      <td>${escapeHtml(e.dept || "")}</td>
       <td>${e.hireDate || "-"}</td>
+      <td><span class="status-badge status-${e.employmentStatus || "active"}">${EMPLOYMENT_STATUS[e.employmentStatus || "active"]}</span></td>
       <td class="num">${fmtMoney(e.baseSalary)}</td>
       <td class="num mono" title="${shortDecimal(restMinutes / 60)} 小时">${formatRestMinutes(restMinutes)}</td>
       <td class="ops">
         <button class="btn btn-sm" data-edit="${e.id}">编辑</button>
-        <button class="btn btn-sm btn-danger" data-del="${e.id}">删除</button>
+        ${e.employmentStatus !== "departed" ? `<button class="btn btn-sm" data-depart="${e.id}">离职归档</button>` : ""}
+        <button class="btn btn-sm btn-danger btn-quiet-danger" data-del="${e.id}">回收</button>
       </td>`;
     tb.appendChild(tr);
   });
@@ -201,12 +211,22 @@ export function renderRoster() {
   // 给每行“删除”按钮绑定事件
   tb.querySelectorAll("[data-del]").forEach(b => {
     b.addEventListener("click", () => {
-      if (!confirm("确认删除该员工？相关考勤/薪资记录将保留但不再关联。")) return;
-      state.data.employees = state.data.employees.filter(x => x.id !== b.dataset.del);
+      if (!confirm("确认将该员工移入回收站？历史考勤和薪资会保留，可在设置中心恢复。")) return;
+      createSnapshot("员工移入回收站前");
+      const emp = state.data.employees.find(x => x.id === b.dataset.del);
+      if (emp) emp.deletedAt = new Date().toISOString();
       persist();
       window.__renderAll();
     });
   });
+  tb.querySelectorAll("[data-depart]").forEach(b => b.addEventListener("click", () => {
+    if (!confirm("确认将该员工标记为离职并保留全部历史记录？")) return;
+    const emp = state.data.employees.find(x => x.id === b.dataset.depart);
+    if (!emp) return;
+    emp.employmentStatus = "departed";
+    emp.leaveDate ||= new Date().toISOString().slice(0, 10);
+    persist(); window.__refresh?.("roster", "attendance", "dashboard", "today");
+  }));
   // 给每行“编辑”按钮绑定事件
   tb.querySelectorAll("[data-edit]").forEach(b => {
     b.addEventListener("click", () => openEditModal(b.dataset.edit));
@@ -215,8 +235,8 @@ export function renderRoster() {
   // 启用列宽拖拽（Excel 式），宽度按组织记忆
   enableColResize({
     table: document.getElementById("empTable"),
-    widths: loadColW("emp") || EMP_DEF_W.slice(),
-    onCommit: (w) => saveColW("emp", w),
+    widths: loadPreference("colw_emp") || EMP_DEF_W.slice(),
+    onCommit: (w) => savePreference("colw_emp", w),
     min: 40
   });
 }
@@ -268,9 +288,11 @@ function openEditModal(id) {
   const earnedUsedMinutes = computeRestMinutes(e.id) - seedMinutes;
   openModal(`
     <h3>编辑员工</h3>
-    <div class="field"><label>姓名</label><input id="emName" value="${e.name}"></div>
+    <div class="field"><label>姓名</label><input id="emName" value="${escapeHtml(e.name)}"></div>
     <div class="field"><label>部门</label><select id="emDept">${deptOptionsHtml(e.dept)}</select></div>
     <div class="field"><label>入职日期</label><input id="emHire" type="date" value="${e.hireDate || ""}"></div>
+    <div class="field"><label>在职状态</label><select id="emStatus">${Object.entries(EMPLOYMENT_STATUS).map(([v,l]) => `<option value="${v}" ${e.employmentStatus === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+    <div class="field"><label>离职日期</label><input id="emLeave" type="date" value="${e.leaveDate || ""}"></div>
     <div class="field"><label>基本月薪 (¥)</label><input id="emSalary" type="number" min="0" value="${e.baseSalary || 0}"></div>
     <div class="field"><label>初始可调休余额</label>
       <div class="rest-duration-grid">
@@ -303,6 +325,8 @@ function openEditModal(id) {
     e.name = document.getElementById("emName").value.trim() || e.name;
     e.dept = document.getElementById("emDept").value.trim();
     e.hireDate = document.getElementById("emHire").value;
+    e.employmentStatus = document.getElementById("emStatus").value;
+    e.leaveDate = document.getElementById("emLeave").value;
     e.baseSalary = +document.getElementById("emSalary").value || 0;
     // 可调休初始余额：天 / 小时 / 分钟 → 分钟；可用余额仍由考勤动态计算
     e.restSeedMinutes = readRestMinutes();
