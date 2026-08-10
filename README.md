@@ -43,6 +43,20 @@ hr-workbench/
 
 ---
 
+## 文档
+
+本项目用 `docs/` 目录统一管理所有说明性文档，方便归档与协作：
+
+| 文档 | 作用 |
+|---|---|
+| [`docs/PLAN.md`](docs/PLAN.md) | 分阶段实施计划（Phase 1–10 与当前进度） |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 系统架构：模块划分、数据流、存储、扩展点 |
+| [`docs/SPEC.md`](docs/SPEC.md) | 功能规格：各模块详细行为规格与验收标准 |
+| [`docs/STANDARD.md`](docs/STANDARD.md) | 开发标准：代码规范、数据格式、命名、计算口径 |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | 产品路线图与愿景：从 MVP 到可上市系统的演进 |
+
+---
+
 ## 快速开始（本地预览）
 
 因为使用了 ES Modules（`type="module"`），浏览器出于安全策略**不允许直接双击打开** `index.html`，需要一个本地静态服务器：
