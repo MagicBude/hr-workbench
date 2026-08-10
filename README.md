@@ -54,6 +54,7 @@ hr-workbench/
 | [`docs/SPEC.md`](docs/SPEC.md) | 功能规格：各模块详细行为规格与验收标准 |
 | [`docs/STANDARD.md`](docs/STANDARD.md) | 开发标准：代码规范、数据格式、命名、计算口径 |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | 产品路线图与愿景：从 MVP 到可上市系统的演进 |
+| [`docs/OPTIMIZATION_BACKLOG.md`](docs/OPTIMIZATION_BACKLOG.md) | 产品审视、优化优先级、验收标准与实施追踪 |
 
 ---
 
