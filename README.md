@@ -63,7 +63,7 @@ hr-workbench/
 
 ```bash
 cd hr-workbench
-python -m http.server 800
+python -m http.server 8000
 # 然后浏览器访问 http://localhost:8000
 ```
 

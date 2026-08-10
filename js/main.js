@@ -9,7 +9,7 @@
 // 模块之间需要互相刷新时，统一调用 window.__renderAll()（见底部 renderAll）。
 // ============================================================
 
-import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg } from "./store.js";
+import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg, migrateCurrent } from "./store.js";
 import { buildSample } from "./sample.js";
 import { openModal, closeModal, downloadFile, curMonth, curDay } from "./ui.js";
 import { initRoster, renderRoster } from "./roster.js";
@@ -131,6 +131,7 @@ function bindTopbar() {
         const obj = JSON.parse(reader.result);
         if (!confirm("导入将覆盖当前组织（" + getCurrentOrgId() + "）的全部数据，确认继续？")) return;
         if (obj.data) { state.data = obj.data; persist(); }
+        migrateCurrent();   // 导入的旧数据也升级到新结构（补 restMinutes 等字段）
         renderAll();
         alert("导入成功");
       } catch (err) { alert("文件解析失败：" + err.message); }

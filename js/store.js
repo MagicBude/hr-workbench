@@ -41,9 +41,26 @@ function writeJSON(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-// 返回一个“空数据”模板（新增组织时用）
+// 返回一个"空数据"模板（新增组织时用）
 export function emptyData() {
   return { employees: [], attendance: [], payroll: [] };
+}
+
+// ---------- 数据迁移：把旧版本数据升级到当前结构（向后兼容） ----------
+// 设计原则："只增不减"——只给缺失的字段补默认值，绝不删除用户已有字段。
+// 未来新增字段（如 holidays / settings）都加在这里，业务模块无需判断兼容性。
+function migrate(data) {
+  if (!data) return data;
+  data.employees = (data.employees || []).map(e => ({
+    restMinutes: 0,      // 可调休余额（分钟），缺省 0
+    insuranceBase: null, // 社保基数，null 表示用基本月薪
+    ...e                 // 展开原对象，保留已有字段（新字段仅在缺失时生效）
+  }));
+  return data;
+}
+// 对"当前内存中的数据"执行迁移（导入新 JSON 后也可调用）
+export function migrateCurrent() {
+  state.data = migrate(state.data);
 }
 
 // ---------- 首次启动：必要时注入示例组织与数据 ----------
@@ -65,13 +82,15 @@ export function ensureSeed(buildSample) {
     state.current = state.orgs[0].id;
     localStorage.setItem(KEY_CURRENT, state.current);
   }
-  // 把当前组织的数据读进内存
+  // 把当前组织的数据读进内存（并升级到最新结构）
   state.data = readJSON(dataKey(state.current), emptyData());
+  migrateCurrent();
 }
 
 // 切换组织后，从存储重新加载该组织的数据到内存
 export function reloadCurrent() {
   state.data = readJSON(dataKey(state.current), emptyData());
+  migrateCurrent(); // 升级旧数据到新结构（向后兼容）
 }
 
 // 把内存里当前组织的数据保存回存储（任何修改后都要调用）

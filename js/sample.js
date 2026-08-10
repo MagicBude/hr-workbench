@@ -12,13 +12,13 @@ import { STATUS_LABEL, INSURANCE_RATIO, BIG_SICKNESS, TAX_THRESHOLD, TAX_RATE } 
 
 // 生成一份完整的示例数据（data 对象）
 export function buildSample() {
-  // 1) 员工花名册：5 个虚构员工
+  // 1) 员工花名册：5 个虚构员工（restMinutes=可调休余额分钟数，insuranceBase=null 用月薪）
   const employees = [
-    { id: "e1", name: "张三", dept: "总经办", hireDate: "2020-03-01", baseSalary: 18000 },
-    { id: "e2", name: "李四", dept: "销售部", hireDate: "2021-06-15", baseSalary: 12000 },
-    { id: "e3", name: "王五", dept: "行政部", hireDate: "2022-09-01", baseSalary: 8000  },
-    { id: "e4", name: "赵六", dept: "财务部", hireDate: "2023-02-10", baseSalary: 9000  },
-    { id: "e5", name: "孙七", dept: "销售部", hireDate: "2024-07-20", baseSalary: 7500  }
+    { id: "e1", name: "张三", dept: "总经办", hireDate: "2020-03-01", baseSalary: 18000, restMinutes: 960, insuranceBase: null },
+    { id: "e2", name: "李四", dept: "销售部", hireDate: "2021-06-15", baseSalary: 12000, restMinutes: 480, insuranceBase: null },
+    { id: "e3", name: "王五", dept: "行政部", hireDate: "2022-09-01", baseSalary: 8000,  restMinutes: 120, insuranceBase: null },
+    { id: "e4", name: "赵六", dept: "财务部", hireDate: "2023-02-10", baseSalary: 9000,  restMinutes: 0,   insuranceBase: null },
+    { id: "e5", name: "孙七", dept: "销售部", hireDate: "2024-07-20", baseSalary: 7500,  restMinutes: 240, insuranceBase: null }
   ];
 
   const attendance = [];

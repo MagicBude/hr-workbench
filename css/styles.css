@@ -160,3 +160,11 @@ nav.tabs button svg{ width:22px; height:22px; }
   .charts{ grid-template-columns:1fr; }
   .row .field{ flex:1; min-width:120px; }
 }
+
+/* ---------- 13. 花名册：序号 / 拖拽手柄 / 小按钮（Phase 1） ---------- */
+td.seq{ width:38px; text-align:center; color:var(--muted); }
+.drag-handle{ cursor:grab; color:var(--muted); margin-right:4px; user-select:none; font-size:16px; }
+.drag-handle:active{ cursor:grabbing; }
+tr.dragging{ opacity:.45; }                 /* 拖拽中整行半透明 */
+td.ops{ white-space:nowrap; }
+.btn-sm{ min-height:32px; padding:4px 12px; font-size:13px; border-radius:8px; }
