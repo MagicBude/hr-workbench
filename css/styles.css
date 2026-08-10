@@ -83,7 +83,7 @@ header{
 .empty{ color:var(--muted); font-size:13px; padding:6px 2px; }
 
 /* ---------- 6. 主体与卡片 ---------- */
-main{ max-width:1600px; margin:0 auto; padding:14px 16px 30px; }
+main{ max-width:100%; margin:0 auto; padding:14px 16px 30px; }
 .card{
   background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
   box-shadow:var(--shadow); padding:16px; margin-bottom:16px;
@@ -111,7 +111,7 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }   /* 数�
   text-align:center; padding:0; white-space:nowrap;
 }
 .att-table thead th{ background:var(--bg); color:var(--muted); font-weight:500; height:30px; padding:0 4px; }
-.att-table thead th.date{ color:var(--text); font-weight:500; min-width:34px; width:1%; }
+.att-table thead th.date{ color:var(--text); font-weight:500; min-width:30px; width:1%; }
 .att-table thead th.wk{ font-weight:400; }
 /* 表头日期/星期的节假日配色（用 !important 压住 sticky 列的背景） */
 .hd-weekend{ background:#f0f2f5 !important; color:#94a3b8 !important; }   /* 周末：灰 */
@@ -121,18 +121,18 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }   /* 数�
 /* 左侧员工信息列：sticky 固定（横向滚动时保持可见），left 偏移与列宽严格对应保证对齐 */
 .att-table .st{ position:sticky; background:#fff; z-index:2; }
 .att-table thead .st{ z-index:3; background:var(--bg); }   /* 表头的固定列要盖在表体固定列之上 */
-.st-seq{ left:0;    min-width:42px; width:42px; }
-.st-name{ left:42px;  min-width:76px; width:76px; font-weight:500; }
-.st-dept{ left:118px; min-width:76px; width:76px; color:var(--muted); }
-.st-shift{ left:194px; min-width:50px; width:50px; color:var(--muted); }
+.st-seq{ left:0;    min-width:36px; width:36px; }
+.st-name{ left:36px;  min-width:70px; width:70px; font-weight:500; }
+.st-dept{ left:106px; min-width:70px; width:70px; color:var(--muted); }
+.st-shift{ left:176px; min-width:44px; width:44px; color:var(--muted); }
 
 /* 日期单元格（可点击循环切换状态）：width:1% 让所有日期列均分剩余宽度 */
-.att-table td.cell{ min-width:34px; width:1%; height:32px; cursor:pointer; user-select:none; font-size:13px; }
+.att-table td.cell{ min-width:30px; width:1%; height:32px; cursor:pointer; user-select:none; font-size:13px; }
 .att-table td.cell:hover{ outline:1px solid var(--blue); outline-offset:-1px; }
 .att-table td.cell-holiday{ background:#fafbfc; }          /* 节假日当天底纹 */
 
 /* 汇总列（右侧：出勤/事假/病假/缺勤/调休/年假/加班） */
-.att-table .sumcol{ min-width:56px; padding:0 6px; font-variant-numeric:tabular-nums; }
+.att-table .sumcol{ min-width:48px; padding:0 6px; font-variant-numeric:tabular-nums; }
 .att-table td.sumcol{ color:var(--text); font-weight:500; }
 .att-table thead th.sumcol{ background:var(--bg); }
 
