@@ -8,7 +8,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readJSON, writeJSON, StorageError } from "../js/storage.js";
-import { state, persist, createSnapshot, listSnapshots, deleteSnapshot, clearSnapshots, computeRestMinutes } from "../js/store.js";
+import { STORAGE_PREFIX } from "../js/config.js";
+import { state, persist, createSnapshot, listSnapshots, deleteSnapshot, clearSnapshots, computeRestMinutes, importPreparedData } from "../js/store.js";
 
 function useStorageMock(methods = {}) {
   const values = new Map();
@@ -89,6 +90,96 @@ test("持久化失败时恢复最近一次成功保存的内存数据", () => {
   rejectWrites = true;
   assert.throws(() => persist(), error => error.kind === "quota");
   assert.equal(state.data.employees[0].name, "保存前");
+});
+
+test("新组织导入任一步失败时回滚组织、指针、数据和内存", () => {
+  let rejectOrganizationWrite = false;
+  const values = useStorageMock({
+    setItem: (key, value) => {
+      if (rejectOrganizationWrite && key === STORAGE_PREFIX + "orgs") {
+        const error = new Error("full");
+        error.name = "QuotaExceededError";
+        throw error;
+      }
+      values.set(key, String(value));
+    }
+  });
+  const originalData = { employees: [{ id: "e1", name: "原员工" }], attendance: [], payroll: [] };
+  const originalOrgs = [{ id: "old", name: "原组织" }];
+  values.set(STORAGE_PREFIX + "orgs", JSON.stringify(originalOrgs));
+  values.set(STORAGE_PREFIX + "current", "old");
+  values.set(STORAGE_PREFIX + "old_data", JSON.stringify(originalData));
+  state.orgs = structuredClone(originalOrgs);
+  state.current = "old";
+  state.data = structuredClone(originalData);
+
+  rejectOrganizationWrite = true;
+  assert.throws(
+    () => importPreparedData(
+      { id: "new", name: "新组织" },
+      { employees: [{ id: "e2", name: "新员工" }], attendance: [], payroll: [] }
+    ),
+    error => error.kind === "quota"
+  );
+
+  assert.deepEqual(state.orgs, originalOrgs);
+  assert.equal(state.current, "old");
+  assert.deepEqual(state.data, originalData);
+  assert.equal(values.has(STORAGE_PREFIX + "new_data"), false);
+  assert.equal(values.get(STORAGE_PREFIX + "current"), "old");
+  assert.deepEqual(JSON.parse(values.get(STORAGE_PREFIX + "orgs")), originalOrgs);
+});
+
+test("新组织导入成功后同时公布组织、指针和数据", () => {
+  const values = useStorageMock();
+  const originalData = { employees: [], attendance: [], payroll: [] };
+  const importedData = { employees: [{ id: "e2", name: "新员工" }], attendance: [], payroll: [] };
+  state.orgs = [{ id: "old", name: "原组织" }];
+  state.current = "old";
+  state.data = structuredClone(originalData);
+
+  importPreparedData({ id: "new", name: "新组织" }, importedData);
+
+  assert.deepEqual(state.orgs, [{ id: "old", name: "原组织" }, { id: "new", name: "新组织" }]);
+  assert.equal(state.current, "new");
+  assert.deepEqual(state.data, importedData);
+  assert.equal(values.get(STORAGE_PREFIX + "current"), "new");
+  assert.deepEqual(JSON.parse(values.get(STORAGE_PREFIX + "new_data")), importedData);
+});
+
+test("新组织导入在当前指针写入失败时撤销已写入的数据和组织", () => {
+  let rejectCurrentOnce = true;
+  const values = useStorageMock({
+    setItem: (key, value) => {
+      if (rejectCurrentOnce && key === STORAGE_PREFIX + "current") {
+        rejectCurrentOnce = false;
+        throw new Error("blocked");
+      }
+      values.set(key, String(value));
+    }
+  });
+  const originalData = { employees: [{ id: "e1", name: "原员工" }], attendance: [], payroll: [] };
+  const originalOrgs = [{ id: "old", name: "原组织" }];
+  values.set(STORAGE_PREFIX + "orgs", JSON.stringify(originalOrgs));
+  values.set(STORAGE_PREFIX + "current", "old");
+  state.orgs = structuredClone(originalOrgs);
+  state.current = "old";
+  state.data = structuredClone(originalData);
+
+  assert.throws(
+    () => importPreparedData(
+      { id: "new", name: "新组织" },
+      { employees: [{ id: "e2", name: "新员工" }], attendance: [], payroll: [] }
+    ),
+    error => error.kind === "unavailable"
+  );
+
+  assert.deepEqual(state.orgs, originalOrgs);
+  assert.equal(state.current, "old");
+  assert.deepEqual(state.data, originalData);
+  assert.equal(values.has(STORAGE_PREFIX + "new_data"), false);
+  assert.equal(values.get(STORAGE_PREFIX + "current"), "old");
+  assert.deepEqual(JSON.parse(values.get(STORAGE_PREFIX + "orgs")), originalOrgs);
 });
 
 test("快照最多保留十份，并支持单份删除和全部清理", () => {

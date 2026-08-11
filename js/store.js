@@ -192,6 +192,54 @@ export function getStorageUsage() {
   return bytes;
 }
 export function prepareImportedData(input) { return migrate(structuredClone(validateImportPayload(input))); }
+
+// 原子地应用已经完成校验和迁移的导入数据。localStorage 本身没有事务，
+// 因此先记录三个相关存储键的旧值；任一步写入失败时，恢复存储和内存状态，
+// 避免新组织只写入列表或当前组织、却没有对应数据的“半导入”状态。
+export function importPreparedData(org, preparedData) {
+  const targetId = org?.id || state.current;
+  const previousMemory = {
+    orgs: structuredClone(state.orgs),
+    current: state.current,
+    data: structuredClone(state.data)
+  };
+  const previousStorage = {
+    orgs: readText(KEY_ORGS, null),
+    current: readText(KEY_CURRENT, null),
+    data: readText(dataKey(targetId), null)
+  };
+  const nextOrgs = structuredClone(state.orgs);
+  if (org && !nextOrgs.some(item => item.id === org.id)) {
+    nextOrgs.push({ id: org.id, name: org.name || org.id });
+  }
+
+  const restoreText = (key, value) => {
+    if (value == null) removeStoredValue(key);
+    else writeText(key, value);
+  };
+
+  try {
+    // 先写目标数据，再公布组织和当前指针，缩短外部可见的不完整状态窗口。
+    writeJSON(dataKey(targetId), preparedData);
+    writeJSON(KEY_ORGS, nextOrgs);
+    writeText(KEY_CURRENT, targetId);
+
+    state.orgs = nextOrgs;
+    state.current = targetId;
+    state.data = structuredClone(preparedData);
+    lastPersistedData = structuredClone(preparedData);
+  } catch (error) {
+    // 回滚采用尽力恢复；内存一定恢复，存储恢复失败仍保留原始写入错误供统一错误边界提示。
+    try { restoreText(dataKey(targetId), previousStorage.data); } catch { /* 保留原始错误 */ }
+    try { restoreText(KEY_ORGS, previousStorage.orgs); } catch { /* 保留原始错误 */ }
+    try { restoreText(KEY_CURRENT, previousStorage.current); } catch { /* 保留原始错误 */ }
+    state.orgs = previousMemory.orgs;
+    state.current = previousMemory.current;
+    state.data = previousMemory.data;
+    lastPersistedData = structuredClone(previousMemory.data);
+    throw error;
+  }
+}
 export function hasAcknowledgedLocalPrivacy() { return readText(KEY_PRIVACY_ACK, "") === "yes"; }
 export function acknowledgeLocalPrivacy() { writeText(KEY_PRIVACY_ACK, "yes"); }
 
@@ -222,15 +270,6 @@ export function addOrg(name) {
   state.data = emptyData();
   lastPersistedData = structuredClone(state.data);
 }
-export function selectImportedOrg(org) {
-  if (!state.orgs.some(o => o.id === org.id)) {
-    state.orgs.push({ id: org.id, name: org.name || org.id });
-    writeJSON(KEY_ORGS, state.orgs);
-  }
-  state.current = org.id;
-  writeText(KEY_CURRENT, org.id);
-}
-
 // ---------- 部门（组织级选项） ----------
 // 返回当前组织的部门列表（数组），新增/编辑员工时作为下拉选项
 export function getDepartments() { return state.data.settings.departments || []; }

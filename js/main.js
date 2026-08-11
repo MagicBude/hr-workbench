@@ -9,7 +9,7 @@
 // 业务模块通过 ui.requestRefresh 声明受影响视图；全量刷新仅用于组织切换和整包数据替换。
 // ============================================================
 
-import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg, createSnapshot, createSnapshotForOrg, prepareImportedData, selectImportedOrg, hasAcknowledgedLocalPrivacy, acknowledgeLocalPrivacy } from "./store.js";
+import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg, createSnapshot, createSnapshotForOrg, prepareImportedData, importPreparedData, hasAcknowledgedLocalPrivacy, acknowledgeLocalPrivacy } from "./store.js";
 import { buildSample } from "./sample.js";
 import { openModal, closeModal, downloadFile, curMonth, curDay, showHelp, showToast, requestConfirm } from "./ui.js";
 import { initRoster, renderRoster, resetEmpColWidths } from "./roster.js";
@@ -252,11 +252,7 @@ function bindTopbar() {
         }
         if (!await requestConfirm({ title: "覆盖组织数据", message: "导入将覆盖组织「" + (targetName || getCurrentOrgId()) + "」的全部数据。", confirmText: "覆盖并导入", danger: true })) return;
         createSnapshotForOrg(org?.id || state.current, "导入数据前自动备份");
-        if (org) {
-          selectImportedOrg(org);
-        }
-        state.data = preparedData;
-        persist();          // 校验、迁移后写入目标组织的数据键
+        importPreparedData(org, preparedData);
         applyOrgSettings(true);
         renderAll();        // 含刷新组织下拉
         showToast("导入成功" + (targetName ? "，当前组织：" + targetName : ""));
