@@ -79,9 +79,56 @@ test("考勤汇总和初始薪资记录使用统一领域函数", () => {
 
 test("导入数据拒绝异形字段", () => {
   assert.throws(() => validateImportPayload({ data: { employees: {}, attendance: [], payroll: [] } }), /employees/);
-  assert.throws(() => validateImportPayload({ data: { employees: [{ name: 123 }], attendance: [], payroll: [] } }), /name/);
-  assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1" }, { id: "e1" }], attendance: [], payroll: [] } }), /重复 id/);
-  assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1", employmentStatus: "unknown" }], attendance: [], payroll: [] } }), /employmentStatus/);
+  assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1", name: 123 }], attendance: [], payroll: [] } }), /name/);
+  assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1", name: "甲" }, { id: "e1", name: "乙" }], attendance: [], payroll: [] } }), /重复 id/);
+  assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1", name: "甲", employmentStatus: "unknown" }], attendance: [], payroll: [] } }), /employmentStatus/);
+});
+
+test("导入数据校验日期、金额、组织 ID 和必填字段", () => {
+  const base = { employees: [{ id: "e1", name: "甲" }], attendance: [], payroll: [] };
+  assert.doesNotThrow(() => validateImportPayload({ org: { id: "org_demo", name: "演示" }, data: base }));
+  assert.throws(() => validateImportPayload({ data: { ...base, employees: [{ id: "", name: "甲" }] } }), /id.*不能为空/);
+  assert.throws(() => validateImportPayload({ data: { ...base, employees: [{ id: "e1", name: "甲", hireDate: "2026-02-30" }] } }), /日期不存在/);
+  assert.throws(() => validateImportPayload({ data: { ...base, employees: [{ id: "e1", name: "甲", insuranceBase: -1 }] } }), /insuranceBase/);
+  assert.throws(() => validateImportPayload({ org: { id: "bad\" onclick=\"x", name: "演示" }, data: base }), /org.id/);
+});
+
+test("导入数据拒绝未知考勤状态、孤立引用和重复业务记录", () => {
+  const employee = { id: "e1", name: "甲" };
+  const attendance = { month: "2026-08", empId: "e1", rec: { 1: { am: "未知", pm: "√", ot: "" } } };
+  assert.throws(
+    () => validateImportPayload({ data: { employees: [employee], attendance: [attendance], payroll: [] } }),
+    /考勤状态无效/
+  );
+  assert.throws(
+    () => validateImportPayload({ data: { employees: [employee], attendance: [{ month: "2026-08", empId: "missing", rec: {} }], payroll: [] } }),
+    /不存在的员工/
+  );
+  const payroll = { month: "2026-08", empId: "e1", baseSalary: 1000 };
+  assert.throws(
+    () => validateImportPayload({ data: { employees: [employee], attendance: [], payroll: [payroll, { ...payroll }] } }),
+    /重复月份和员工记录/
+  );
+});
+
+test("导入设置比例和薪资金额必须处于安全范围", () => {
+  const employee = { id: "e1", name: "甲" };
+  assert.throws(
+    () => validateImportPayload({ data: { employees: [employee], attendance: [], payroll: [{ month: "2026-08", empId: "e1", tax: Infinity }] } }),
+    /tax/
+  );
+  assert.throws(
+    () => validateImportPayload({ data: { employees: [employee], attendance: [], payroll: [], settings: { insuranceRatio: { company: { 养老: 1.5 } } } } }),
+    /养老/
+  );
+  assert.throws(
+    () => validateImportPayload({ data: { employees: [employee], attendance: [], payroll: [], settings: { compactTables: "yes" } } }),
+    /compactTables/
+  );
+  assert.throws(
+    () => validateImportPayload({ data: { employees: [employee], attendance: [], payroll: [], holidays: { "2026-02-30": { name: "假期", type: "holiday" } } } }),
+    /日期不存在/
+  );
 });
 
 // #endregion 考勤、薪资与输入安全

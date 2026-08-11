@@ -9,7 +9,7 @@
  * 才能被看板、导出和页面共同复用，并在 Node 环境中可靠测试。
  */
 
-import { HALF_DAY_MINUTES, TAX_RATE, TAX_THRESHOLD, STATUS_LABEL, INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
+import { HALF_DAY_MINUTES, TAX_RATE, TAX_THRESHOLD, STATUS_LABEL, STATUSES, INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 
 // #region 员工生命周期
 
@@ -181,34 +181,187 @@ export function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, character => entities[character]);
 }
 
-/*
- * 导入数据进入迁移和 localStorage 之前的第一道结构校验。
- * 当前校验仍是渐进式实现，完整字段、范围、引用关系和资源上限见审查计划。
- * 校验失败时调用方不得改变当前组织或现有数据。
- */
-export function validateImportPayload(input) {
-  const data = input?.data || input;
-  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("导入文件不是有效的数据对象");
-  for (const key of ["employees", "attendance", "payroll"]) {
-    if (data[key] != null && !Array.isArray(data[key])) throw new Error(`${key} 必须是数组`);
+export const IMPORT_LIMITS = {
+  fileBytes: 5 * 1024 * 1024,
+  employees: 5000,
+  attendance: 60000,
+  payroll: 60000,
+  text: 100,
+  id: 120
+};
+
+function importError(path, message) {
+  throw new Error(`${path} ${message}`);
+}
+
+function objectAt(value, path) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) importError(path, "必须是对象");
+  return value;
+}
+
+function textAt(value, path, { required = false, max = IMPORT_LIMITS.text } = {}) {
+  if (value == null || value === "") {
+    if (required) importError(path, "不能为空");
+    return;
   }
-  (data.employees || []).forEach((emp, index) => {
-    if (!emp || typeof emp !== "object") throw new Error(`employees[${index}] 格式无效`);
-    for (const key of ["id", "name", "dept"]) {
-      if (emp[key] != null && typeof emp[key] !== "string") throw new Error(`employees[${index}].${key} 必须是文本`);
-      if (String(emp[key] || "").length > 100) throw new Error(`employees[${index}].${key} 过长`);
-    }
-    if (emp.employmentStatus != null && !Object.hasOwn(EMPLOYMENT_STATUS, emp.employmentStatus)) throw new Error(`employees[${index}].employmentStatus 无效`);
-  });
-  for (const key of ["attendance", "payroll"]) {
-    (data[key] || []).forEach((item, index) => {
-      if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error(`${key}[${index}] 格式无效`);
-      if (item.id != null && (typeof item.id !== "string" || item.id.length > 120)) throw new Error(`${key}[${index}].id 无效`);
-      if (item.empId != null && (typeof item.empId !== "string" || item.empId.length > 120)) throw new Error(`${key}[${index}].empId 无效`);
+  if (typeof value !== "string") importError(path, "必须是文本");
+  if (value.length > max || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(value)) {
+    importError(path, "包含非法字符或过长");
+  }
+}
+
+function finiteNumberAt(value, path, { min = 0, max = 1e9 } = {}) {
+  if (value == null) return;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
+    importError(path, `必须是 ${min}～${max} 的有限数字`);
+  }
+}
+
+function dateAt(value, path) {
+  if (value == null || value === "") return;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) importError(path, "日期格式无效");
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    importError(path, "日期不存在");
+  }
+}
+
+function monthAt(value, path) {
+  if (typeof value !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) importError(path, "月份格式无效");
+}
+
+function statusValueAt(value, path) {
+  if (value == null || value === "") return;
+  const status = typeof value === "object" && !Array.isArray(value) ? value.s : value;
+  if (!STATUSES.includes(status)) importError(path, "考勤状态无效");
+  if (typeof value === "object") finiteNumberAt(value.min, `${path}.min`, { min: 0, max: 1440 });
+}
+
+function validateSettings(settings) {
+  if (settings == null) return;
+  objectAt(settings, "settings");
+  finiteNumberAt(settings.halfDayMinutes, "settings.halfDayMinutes", { min: 30, max: 720 });
+  finiteNumberAt(settings.overtimeToRestRatio, "settings.overtimeToRestRatio", { min: 0, max: 5 });
+  finiteNumberAt(settings.bigSickness, "settings.bigSickness");
+  for (const key of ["overtimeToRest", "enableLateEarly", "enforceRestBalance", "showTodayTodos", "compactTables"]) {
+    if (settings[key] != null && typeof settings[key] !== "boolean") importError(`settings.${key}`, "必须是布尔值");
+  }
+  if (settings.defaultMonth) monthAt(settings.defaultMonth, "settings.defaultMonth");
+  if (settings.departments != null) {
+    if (!Array.isArray(settings.departments) || settings.departments.length > 500) importError("settings.departments", "无效");
+    settings.departments.forEach((department, index) => textAt(department, `settings.departments[${index}]`, { required: true }));
+  }
+  for (const group of ["company", "personal"]) {
+    const ratios = settings.insuranceRatio?.[group];
+    if (ratios == null) continue;
+    objectAt(ratios, `settings.insuranceRatio.${group}`);
+    Object.entries(ratios).forEach(([key, value]) => {
+      textAt(key, `settings.insuranceRatio.${group} 键`, { required: true });
+      finiteNumberAt(value, `settings.insuranceRatio.${group}.${key}`, { min: 0, max: 1 });
     });
   }
-  const employeeIds = (data.employees || []).map(emp => emp.id).filter(Boolean);
+}
+
+function validateHolidays(holidays) {
+  if (holidays == null) return;
+  objectAt(holidays, "holidays");
+  const entries = Object.entries(holidays);
+  if (entries.length > 5000) importError("holidays", "超过 5000 条限制");
+  entries.forEach(([date, holiday]) => {
+    dateAt(date, `holidays.${date}`);
+    objectAt(holiday, `holidays.${date}`);
+    textAt(holiday.name, `holidays.${date}.name`, { required: true });
+    if (!["holiday", "workday"].includes(holiday.type)) importError(`holidays.${date}.type`, "无效");
+  });
+}
+
+/* 导入校验必须在创建组织、切换组织和写入存储之前全部完成。 */
+export function validateImportPayload(input) {
+  const data = input?.data || input;
+  objectAt(data, "data");
+
+  if (input?.org != null) {
+    objectAt(input.org, "org");
+    textAt(input.org.id, "org.id", { required: true, max: 80 });
+    if (!/^[A-Za-z0-9_-]+$/.test(input.org.id)) importError("org.id", "只能包含字母、数字、下划线和连字符");
+    textAt(input.org.name, "org.name", { max: 100 });
+  }
+
+  const collections = [["employees", IMPORT_LIMITS.employees], ["attendance", IMPORT_LIMITS.attendance], ["payroll", IMPORT_LIMITS.payroll]];
+  for (const [key, limit] of collections) {
+    if (!Array.isArray(data[key])) importError(key, "必须是数组");
+    if (data[key].length > limit) importError(key, `超过 ${limit} 条限制`);
+  }
+
+  (data.employees || []).forEach((emp, index) => {
+    const path = `employees[${index}]`;
+    objectAt(emp, path);
+    textAt(emp.id, `${path}.id`, { required: true, max: IMPORT_LIMITS.id });
+    textAt(emp.name, `${path}.name`, { required: true });
+    textAt(emp.dept, `${path}.dept`);
+    dateAt(emp.hireDate, `${path}.hireDate`);
+    dateAt(emp.leaveDate, `${path}.leaveDate`);
+    if (emp.hireDate && emp.leaveDate && emp.leaveDate < emp.hireDate) importError(path, "离职日期不能早于入职日期");
+    finiteNumberAt(emp.baseSalary, `${path}.baseSalary`);
+    finiteNumberAt(emp.restSeedMinutes, `${path}.restSeedMinutes`);
+    finiteNumberAt(emp.insuranceBase, `${path}.insuranceBase`);
+    if (emp.employmentStatus != null && !Object.hasOwn(EMPLOYMENT_STATUS, emp.employmentStatus)) importError(`${path}.employmentStatus`, "无效");
+  });
+
+  const employeeIds = data.employees.map(emp => emp.id);
   if (new Set(employeeIds).size !== employeeIds.length) throw new Error("employees 存在重复 id");
+  const employeeIdSet = new Set(employeeIds);
+
+  const attendanceKeys = new Set();
+  data.attendance.forEach((attendance, index) => {
+    const path = `attendance[${index}]`;
+    objectAt(attendance, path);
+    textAt(attendance.id, `${path}.id`, { max: IMPORT_LIMITS.id });
+    textAt(attendance.empId, `${path}.empId`, { required: true, max: IMPORT_LIMITS.id });
+    monthAt(attendance.month, `${path}.month`);
+    if (!employeeIdSet.has(attendance.empId)) importError(`${path}.empId`, "引用了不存在的员工");
+    const businessKey = `${attendance.month}\0${attendance.empId}`;
+    if (attendanceKeys.has(businessKey)) importError(path, "存在重复月份和员工记录");
+    attendanceKeys.add(businessKey);
+    objectAt(attendance.rec || {}, `${path}.rec`);
+    Object.entries(attendance.rec || {}).forEach(([day, cell]) => {
+      if (!/^(?:[1-9]|[12]\d|3[01])$/.test(day)) importError(`${path}.rec.${day}`, "日期键无效");
+      if (cell && typeof cell === "object" && !Array.isArray(cell)) {
+        for (const shift of ["am", "pm", "ot"]) statusValueAt(cell[shift], `${path}.rec.${day}.${shift}`);
+      } else {
+        statusValueAt(cell, `${path}.rec.${day}`); // 兼容迁移前的旧结构
+      }
+    });
+  });
+
+  const payrollKeys = new Set();
+  data.payroll.forEach((payroll, index) => {
+    const path = `payroll[${index}]`;
+    objectAt(payroll, path);
+    textAt(payroll.id, `${path}.id`, { max: IMPORT_LIMITS.id });
+    textAt(payroll.empId, `${path}.empId`, { required: true, max: IMPORT_LIMITS.id });
+    monthAt(payroll.month, `${path}.month`);
+    if (!employeeIdSet.has(payroll.empId)) importError(`${path}.empId`, "引用了不存在的员工");
+    const businessKey = `${payroll.month}\0${payroll.empId}`;
+    if (payrollKeys.has(businessKey)) importError(path, "存在重复月份和员工记录");
+    payrollKeys.add(businessKey);
+    for (const key of ["baseSalary", "travel", "bonus", "overtime", "gross", "persTotal", "tax", "net"]) {
+      finiteNumberAt(payroll[key], `${path}.${key}`);
+    }
+    for (const group of ["comp", "pers"]) {
+      if (payroll[group] == null) continue;
+      objectAt(payroll[group], `${path}.${group}`);
+      Object.entries(payroll[group]).forEach(([key, value]) => {
+        textAt(key, `${path}.${group} 键`, { required: true });
+        finiteNumberAt(value, `${path}.${group}.${key}`);
+      });
+    }
+    if (payroll.status != null && !Object.hasOwn(PAYROLL_STATUS, payroll.status)) importError(`${path}.status`, "无效");
+  });
+
+  validateSettings(data.settings);
+  validateHolidays(data.holidays);
   return data;
 }
 

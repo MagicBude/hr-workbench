@@ -18,7 +18,7 @@ import { initPayroll, renderPayroll } from "./payroll.js";
 import { initDashboard, renderDashboard } from "./dashboard.js";
 import { exportRosterXlsx, exportAttendanceXlsx, exportPayrollXlsx } from "./export.js";
 import { initSettings, applyOrgSettings } from "./settings.js";
-import { escapeHtml, isEmployeeActiveOn } from "./domain.js";
+import { escapeHtml, isEmployeeActiveOn, IMPORT_LIMITS } from "./domain.js";
 import { StorageError, storageErrorMessage } from "./storage.js";
 
 // #region 全局存储错误反馈
@@ -184,11 +184,19 @@ function bindTopbar() {
   document.getElementById("importFile").addEventListener("change", (e) => {
     const f = e.target.files[0];
     if (!f) return;
+    if (f.size > IMPORT_LIMITS.fileBytes) {
+      alert(`导入失败：文件不能超过 ${IMPORT_LIMITS.fileBytes / 1024 / 1024} MB`);
+      e.target.value = "";
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const obj = JSON.parse(reader.result);
         if (typeof obj !== "object" || !obj || !obj.data) throw new Error("文件格式不对：缺少 data 字段");
+        // 必须在确认、快照、创建组织或切换组织之前完成全部校验和迁移；
+        // 任意校验失败都不能改变现有组织列表、当前组织或运行中数据。
+        const preparedData = prepareImportedData(obj);
         // 备份文件自带组织信息（org.id）→ 自动创建/切换到该组织，让数据正确归属，
         // 避免误覆盖当前正在用的组织；没有 org 信息时则覆盖当前组织（兼容旧备份）。
         let org = null, targetName = "";
@@ -201,13 +209,14 @@ function bindTopbar() {
         if (org) {
           selectImportedOrg(org);
         }
-        state.data = prepareImportedData(obj);
+        state.data = preparedData;
         persist();          // 校验、迁移后写入目标组织的数据键
         applyOrgSettings(true);
         renderAll();        // 含刷新组织下拉
         showToast("导入成功" + (targetName ? "，当前组织：" + targetName : ""));
       } catch (err) { alert("导入失败：" + err.message); }
     };
+    reader.onerror = () => alert("导入失败：无法读取所选文件");
     reader.readAsText(f);
     e.target.value = "";   // 清空，保证同一文件可重复选择
   });
