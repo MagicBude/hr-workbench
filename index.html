@@ -159,24 +159,25 @@
           <button class="btn" id="csvBtn">导出 CSV</button>
           <button class="btn" id="expPayBtn">导出 Excel</button>
           <button class="btn btn-sm help-btn" id="helpPayBtn" title="薪资计算说明">?</button>
+          <button class="btn btn-sm" id="resetPayColBtn" title="清除列宽记忆，恢复默认宽度">恢复默认列宽</button>
         </div>
         <div style="overflow-x:auto;">
           <table id="payTable">
             <thead>
               <tr>
-                <th rowspan="2">姓名</th><th rowspan="2">部门</th>
+                <th rowspan="2" data-col="0">姓名</th><th rowspan="2" data-col="1">部门</th>
                 <th colspan="4" class="grp grp-inc">收入项</th>
-                <th rowspan="2" class="num">本月应发</th>
+                <th rowspan="2" class="num grp-gross" data-col="6">本月应发</th>
                 <th colspan="6" class="grp grp-comp">公司缴纳</th>
                 <th colspan="5" class="grp grp-pers">个人缴纳</th>
-                <th rowspan="2" class="num">个税</th>
-                <th rowspan="2" class="num">实发薪资</th>
-                <th rowspan="2">核算状态</th>
+                <th rowspan="2" class="num grp-tax" data-col="18">个税</th>
+                <th rowspan="2" class="num grp-net" data-col="19">实发薪资</th>
+                <th rowspan="2" class="grp-status" data-col="20">核算状态</th>
               </tr>
               <tr>
-                <th class="num">基本月薪</th><th class="num">出差补贴</th><th class="num">奖金</th><th class="num">加班费</th>
-                <th class="num">养老</th><th class="num">医疗</th><th class="num">工伤</th><th class="num">失业</th><th class="num">生育</th><th class="num">公积金</th>
-                <th class="num">养老</th><th class="num">医疗</th><th class="num">失业</th><th class="num">公积金</th><th class="num">大病医疗</th>
+                <th class="num group-start" data-col="2">基本月薪</th><th class="num" data-col="3">出差补贴</th><th class="num" data-col="4">奖金</th><th class="num" data-col="5">加班费</th>
+                <th class="num group-start" data-col="7">养老</th><th class="num" data-col="8">医疗</th><th class="num" data-col="9">工伤</th><th class="num" data-col="10">失业</th><th class="num" data-col="11">生育</th><th class="num" data-col="12">公积金</th>
+                <th class="num group-start" data-col="13">养老</th><th class="num" data-col="14">医疗</th><th class="num" data-col="15">失业</th><th class="num" data-col="16">公积金</th><th class="num" data-col="17">大病医疗</th>
               </tr>
             </thead>
             <tbody></tbody>

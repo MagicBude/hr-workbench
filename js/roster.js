@@ -327,8 +327,11 @@ function openEditModal(id) {
         <label><input id="emRestHours" type="number" min="0" step="1" value="${restHours}"><span>小时</span></label>
         <label><input id="emRestMins" type="number" min="0" max="59" step="1" value="${restMins}"><span>分钟</span></label>
       </div>
+      <div class="rest-balance-summary" id="emRestHint">
+        <span><small>录入换算</small><strong id="emRestInputSummary"></strong></span>
+        <span><small>保存后可用</small><strong id="emRestAvailableSummary"></strong></span>
+      </div>
     </div>
-    <div class="hint" id="emRestHint"></div>
     <div class="field"><label>社保基数 (¥，留空=用基本月薪)</label><input id="emIns" type="number" min="0" value="${e.insuranceBase ?? ""}"></div>
     <div class="modal-actions">
       <button class="btn" id="emCancel">取消</button>
@@ -344,7 +347,8 @@ function openEditModal(id) {
   const updateRestHint = () => {
     const inputMinutes = readRestMinutes();
     const available = inputMinutes + earnedUsedMinutes;
-    document.getElementById("emRestHint").innerHTML = `录入：<b>${formatRestMinutes(inputMinutes, "smart")}</b> = ${shortDecimal(inputMinutes / 60)} 小时；保存后可用：<b>${formatRestMinutes(available, "smart")}</b>`;
+    document.getElementById("emRestInputSummary").textContent = `${formatRestMinutes(inputMinutes, "smart")}（${shortDecimal(inputMinutes / 60)} 小时）`;
+    document.getElementById("emRestAvailableSummary").textContent = formatRestMinutes(available, "smart");
   };
   ["emRestDays", "emRestHours", "emRestMins"].forEach(id => document.getElementById(id).addEventListener("input", updateRestHint));
   updateRestHint();

@@ -253,6 +253,8 @@ export function enableColResize(opts) {
   ths.forEach(th => {
     const oldHandle = th.querySelector(".col-resize");
     if (oldHandle) oldHandle.remove();
+    // colspan 分组标题只负责表达层级，没有对应单一 <col>；拖拽手柄只绑定实际叶子列。
+    if (!Number.isInteger(Number(th.dataset.col))) return;
     const h = document.createElement("span");
     h.className = "col-resize";
     th.appendChild(h);

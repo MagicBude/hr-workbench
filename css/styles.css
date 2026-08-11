@@ -321,11 +321,26 @@ td.ops{ white-space:nowrap; }
 #payTable thead th.grp-inc{ background:var(--blue-50); color:var(--blue); }   /* 收入项：蓝 */
 #payTable thead th.grp-comp{ background:#eef2ff; color:#3730a3; }             /* 公司缴纳：靛 */
 #payTable thead th.grp-pers{ background:#ecfdf5; color:#047857; }             /* 个人缴纳：绿 */
+#payTable thead th.grp-gross{ background:#fff7e6; color:#9a5b00; }
+#payTable thead th.grp-tax{ background:#fff1f2; color:#b4233c; }
+#payTable thead th.grp-net{ background:#e9fbf3; color:#08785b; }
+#payTable thead th.grp-status{ background:#f3f4f6; color:#4b5563; }
+#payTable thead th.group-start,
+#payTable tbody td:nth-child(3),
+#payTable tbody td:nth-child(7),
+#payTable tbody td:nth-child(8),
+#payTable tbody td:nth-child(14),
+#payTable tbody td:nth-child(19),
+#payTable tbody td:nth-child(20),
+#payTable tbody td:nth-child(21),
+#payTable tfoot .pay-group-start{ border-left:2px solid #cbd5e1; }
+#payTable thead th.grp,#payTable thead th.grp-gross,#payTable thead th.grp-tax,
+#payTable thead th.grp-net,#payTable thead th.grp-status{ border-left:2px solid #cbd5e1; }
 #payTable td input{ width:64px; padding:4px 6px; font-size:13px; background:#f8fbff; border-color:#b9d4ed; }
 #payTable td input:disabled{ background:#f5f6f8; border-color:transparent; color:var(--muted); }
-#payTable th:first-child,#payTable td:first-child{ position:sticky; left:0; z-index:2; background:#fff; }
-#payTable th:nth-child(2),#payTable td:nth-child(2){ position:sticky; left:90px; z-index:2; background:#fff; }
-#payTable thead th:first-child,#payTable thead th:nth-child(2){ z-index:4; background:var(--bg); }
+#payTable thead [data-col="0"],#payTable tbody td:first-child{ position:sticky; left:0; z-index:2; background:#fff; }
+#payTable thead [data-col="1"],#payTable tbody td:nth-child(2){ position:sticky; left:90px; z-index:2; background:#fff; }
+#payTable thead [data-col="0"],#payTable thead [data-col="1"]{ z-index:4; background:var(--bg); }
 #payTable .p-status{ min-width:86px; width:86px; }
 .status-badge{ display:inline-flex; align-items:center; border-radius:999px; padding:2px 8px; font-size:12px; white-space:nowrap; }
 .status-active{ color:#047857; background:#ecfdf5; }.status-probation{ color:#1d4ed8; background:#eff6ff; }
@@ -335,6 +350,14 @@ td.ops{ white-space:nowrap; }
 .snapshot-list{ max-height:220px; overflow:auto; }
 .rest-overdrawn{ color:var(--danger); font-weight:600; }
 .overdrawn-label{ display:block; margin-top:2px; font-size:10px; font-weight:500; }
+.rest-balance-summary{
+  display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; padding:10px;
+  border:1px solid #cfe0ef; border-radius:9px; background:#f5f9fd;
+}
+.rest-balance-summary span{ min-width:0; }
+.rest-balance-summary span + span{ padding-left:10px; border-left:1px solid #cfe0ef; }
+.rest-balance-summary small{ display:block; color:var(--muted); font-size:12px; }
+.rest-balance-summary strong{ display:block; margin-top:2px; color:var(--blue); font-size:14px; }
 .bulk-warning{ color:var(--danger); font-size:11px; font-weight:600; }
 
 @media (min-width:769px){

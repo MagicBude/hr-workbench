@@ -9,8 +9,8 @@
  * 页面渲染和比例变化都不能静默改写。当前个税仅为演示估算，不是正式财税结果。
  */
 
-import { state, persist } from "./store.js";
-import { fmtMoney, downloadFile, requestRefresh, showToast, requestConfirm } from "./ui.js";
+import { state, persist, loadPreference, savePreference, removePreference } from "./store.js";
+import { fmtMoney, downloadFile, enableColResize, normalizeColumnWidths, requestRefresh, showToast, requestConfirm } from "./ui.js";
 import { INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 import { openSettings } from "./settings.js";
 import { estimateTax, escapeHtml, PAYROLL_STATUS, isEmployeeActiveInMonth, buildPayrollRecord, requireNonNegativeNumber } from "./domain.js";
@@ -21,6 +21,10 @@ import { rowsToCsv } from "./spreadsheet.js";
 // 公司缴纳 / 个人缴纳的项目顺序（与表头一致）
 const COMP_KEYS = ["养老", "医疗", "工伤", "失业", "生育", "公积金"];
 const PERS_KEYS = ["养老", "医疗", "失业", "公积金", "大病医疗"];
+// 姓名、部门、4 项收入、应发、6 项公司缴纳、5 项个人缴纳、个税、实发、状态。
+// 默认宽度与表头字段一一对应，便于学习者对照，也为损坏偏好提供完整回退。
+const PAYROLL_DEFAULT_WIDTHS = [90, 110, 90, 90, 80, 80, 100,
+  86, 86, 76, 76, 76, 86, 86, 86, 76, 86, 96, 86, 100, 100];
 
 // 取某员工某月工资记录；没有就按基本月薪新建一条（方便后续编辑）
 function getOrCreatePay(month, empId) {
@@ -132,6 +136,7 @@ export function initPayroll() {
   document.getElementById("csvBtn").addEventListener("click", exportCSV);
   document.getElementById("ratioBtn").addEventListener("click", () => openSettings("payroll"));
   document.getElementById("payMonth").addEventListener("change", renderPayroll);
+  document.getElementById("resetPayColBtn").addEventListener("click", resetPayrollColWidths);
 }
 
 // #endregion 页面初始化
@@ -186,9 +191,9 @@ export function renderPayroll() {
   });
 
   // 合计行
-  const totalCompanyCells = COMP_KEYS.map(key => `<td class="num mono">${fmtMoney(totals.comp[key])}</td>`).join("");
-  const totalPersonalCells = PERS_KEYS.map(key => `<td class="num mono">${fmtMoney(totals.pers[key])}</td>`).join("");
-  tableFoot.innerHTML = `<tr style="font-weight:500;"><td colspan="6">合计</td><td class="num mono">${fmtMoney(totals.gross)}</td>${totalCompanyCells}${totalPersonalCells}<td class="num mono">${fmtMoney(totals.tax)}</td><td class="num mono" style="color:var(--ok)">${fmtMoney(totals.net)}</td><td></td></tr>`;
+  const totalCompanyCells = COMP_KEYS.map((key, index) => `<td class="num mono ${index === 0 ? "pay-group-start" : ""}">${fmtMoney(totals.comp[key])}</td>`).join("");
+  const totalPersonalCells = PERS_KEYS.map((key, index) => `<td class="num mono ${index === 0 ? "pay-group-start" : ""}">${fmtMoney(totals.pers[key])}</td>`).join("");
+  tableFoot.innerHTML = `<tr style="font-weight:500;"><td colspan="6">合计</td><td class="num mono pay-group-start">${fmtMoney(totals.gross)}</td>${totalCompanyCells}${totalPersonalCells}<td class="num mono pay-group-start">${fmtMoney(totals.tax)}</td><td class="num mono pay-group-start" style="color:var(--ok)">${fmtMoney(totals.net)}</td><td class="pay-group-start"></td></tr>`;
 
   // 给每个输入框绑定"修改即重算"
   tableBody.querySelectorAll("input").forEach(inp => {
@@ -219,6 +224,28 @@ export function renderPayroll() {
     persist();
     requestRefresh("payroll", "dashboard", "today");
   }));
+
+  const payrollTable = document.getElementById("payTable");
+  enableColResize({
+    table: payrollTable,
+    widths: normalizeColumnWidths(loadPreference("colw_pay"), PAYROLL_DEFAULT_WIDTHS, { min: 68 }),
+    onCommit: widths => savePreference("colw_pay", widths),
+    onResized: group => { if (group === 0 || group === 1) syncPayrollSticky(payrollTable); },
+    min: 68,
+    max: 260
+  });
+  syncPayrollSticky(payrollTable);
+}
+
+function syncPayrollSticky(table) {
+  const nameWidth = table.querySelector("thead [data-col='0']")?.getBoundingClientRect().width || 90;
+  table.querySelectorAll("thead [data-col='1'], tbody td:nth-child(2)")
+    .forEach(element => { element.style.left = nameWidth + "px"; });
+}
+
+export function resetPayrollColWidths() {
+  removePreference("colw_pay");
+  renderPayroll();
 }
 
 // #endregion 薪资表渲染与编辑
