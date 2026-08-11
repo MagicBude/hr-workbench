@@ -26,6 +26,19 @@ export const PAYROLL_STATUS = {
   paid: "已发放"
 };
 
+// 薪资状态只允许沿核算流程前进；已锁定记录若要修改，必须显式解锁回草稿。
+// 不允许“草稿直接已发放”或“已发放退回已确认”，避免绕过确认和解锁动作。
+const PAYROLL_STATUS_TRANSITIONS = {
+  draft: ["draft", "confirmed"],
+  confirmed: ["draft", "confirmed", "paid"],
+  paid: ["draft", "paid"]
+};
+
+export function canTransitionPayrollStatus(currentStatus, nextStatus) {
+  const current = Object.hasOwn(PAYROLL_STATUS_TRANSITIONS, currentStatus) ? currentStatus : "draft";
+  return PAYROLL_STATUS_TRANSITIONS[current].includes(nextStatus);
+}
+
 // 判断员工在某个自然日是否应参与考勤。入职日和离职日都包含在任职区间内，
 // 因此只有 date 严格早于入职日或晚于离职日时才排除。
 export function isEmployeeActiveOn(employee, date) {

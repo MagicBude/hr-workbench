@@ -13,7 +13,7 @@ import { state, persist, loadPreference, savePreference, removePreference } from
 import { fmtMoney, downloadFile, enableColResize, normalizeColumnWidths, requestRefresh, showToast, requestConfirm } from "./ui.js";
 import { INSURANCE_RATIO, BIG_SICKNESS, PAYROLL_DISCLAIMER } from "./config.js";
 import { openSettings } from "./settings.js";
-import { estimateTax, escapeHtml, PAYROLL_STATUS, isEmployeeActiveInMonth, buildPayrollRecord, requireNonNegativeNumber } from "./domain.js";
+import { estimateTax, escapeHtml, PAYROLL_STATUS, isEmployeeActiveInMonth, buildPayrollRecord, canTransitionPayrollStatus, requireNonNegativeNumber } from "./domain.js";
 import { appendConstantColumn, rowsToCsv } from "./spreadsheet.js";
 
 // #region 核算字段与领域辅助
@@ -175,6 +175,11 @@ export function renderPayroll() {
 
     const companyCells = COMP_KEYS.map(key => `<td class="num mono">${fmtMoney(payrollRecord.comp[key])}</td>`).join("");
     const personalCells = PERS_KEYS.map(key => `<td class="num mono">${fmtMoney(payrollRecord.pers[key])}</td>`).join("");
+    const statusOptions = Object.entries(PAYROLL_STATUS).map(([value, label]) => {
+      const selected = payrollRecord.status === value ? "selected" : "";
+      const disabled = canTransitionPayrollStatus(payrollRecord.status, value) ? "" : "disabled";
+      return `<option value="${value}" ${selected} ${disabled}>${label}</option>`;
+    }).join("");
     const row = document.createElement("tr");
     row.innerHTML = `
       <td>${escapeHtml(employee.name)}</td><td>${escapeHtml(employee.dept)}</td>
@@ -186,7 +191,7 @@ export function renderPayroll() {
       ${companyCells}${personalCells}
       <td class="num"><input class="p-tax" type="number" min="0" value="${round2(payrollRecord.tax)}" data-id="${employee.id}" ${payrollRecord.status !== "draft" ? "disabled" : ""} title="${payrollRecord.taxManual ? "人工覆盖" : "演示估算"}"></td>
       <td class="num mono" style="color:var(--ok)">${fmtMoney(payrollRecord.net)}</td>
-      <td><select class="p-status" data-id="${employee.id}">${Object.entries(PAYROLL_STATUS).map(([value, label]) => `<option value="${value}" ${payrollRecord.status === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>`;
+      <td><select class="p-status" data-id="${employee.id}" title="状态按草稿 → 已确认 → 已发放流转；解锁需回到草稿">${statusOptions}</select></td>`;
     tableBody.appendChild(row);
   });
 
@@ -219,7 +224,24 @@ export function renderPayroll() {
   });
   tableBody.querySelectorAll(".p-status").forEach(sel => sel.addEventListener("change", async () => {
     const p = getOrCreatePay(month, sel.dataset.id);
-    if (p.status !== "draft" && sel.value === "draft" && !await requestConfirm({ title: "解锁薪资记录", message: "改回草稿后可以重新编辑并按当前参数计算。", confirmText: "解锁为草稿", danger: true })) { sel.value = p.status; return; }
+    if (!canTransitionPayrollStatus(p.status, sel.value)) {
+      sel.value = p.status;
+      showToast("薪资状态需按“草稿 → 已确认 → 已发放”流转");
+      return;
+    }
+    const requiresUnlock = p.status !== "draft" && sel.value === "draft";
+    if (requiresUnlock) {
+      const confirmed = await requestConfirm({
+        title: "解锁薪资记录",
+        message: "改回草稿后可以重新编辑并按当前参数计算。",
+        confirmText: "解锁为草稿",
+        danger: true
+      });
+      if (!confirmed) {
+        sel.value = p.status;
+        return;
+      }
+    }
     p.status = sel.value;
     persist();
     requestRefresh("payroll", "dashboard", "today");

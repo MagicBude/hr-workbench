@@ -8,7 +8,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { attendanceMetrics, buildPayrollRecord, escapeHtml, estimateTax, isEmployeeActiveInMonth, isEmployeeActiveOn, isWorkdayDate, requireNonNegativeNumber, summarizeAttendance, validateImportPayload } from "../js/domain.js";
+import { attendanceMetrics, buildPayrollRecord, canTransitionPayrollStatus, escapeHtml, estimateTax, isEmployeeActiveInMonth, isEmployeeActiveOn, isWorkdayDate, requireNonNegativeNumber, summarizeAttendance, validateImportPayload } from "../js/domain.js";
 
 // #region 员工与工作日边界
 
@@ -82,6 +82,16 @@ test("导入数据拒绝异形字段", () => {
   assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1", name: 123 }], attendance: [], payroll: [] } }), /name/);
   assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1", name: "甲" }, { id: "e1", name: "乙" }], attendance: [], payroll: [] } }), /重复 id/);
   assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1", name: "甲", employmentStatus: "unknown" }], attendance: [], payroll: [] } }), /employmentStatus/);
+});
+
+test("薪资状态必须按核算流程前进或显式解锁", () => {
+  assert.equal(canTransitionPayrollStatus("draft", "confirmed"), true);
+  assert.equal(canTransitionPayrollStatus("draft", "paid"), false);
+  assert.equal(canTransitionPayrollStatus("confirmed", "paid"), true);
+  assert.equal(canTransitionPayrollStatus("confirmed", "draft"), true);
+  assert.equal(canTransitionPayrollStatus("paid", "confirmed"), false);
+  assert.equal(canTransitionPayrollStatus("paid", "draft"), true);
+  assert.equal(canTransitionPayrollStatus("unknown", "paid"), false);
 });
 
 test("半天为空或只填加班时仍计入待补录分钟", () => {
