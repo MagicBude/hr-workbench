@@ -78,6 +78,21 @@ header{
 .org-switch{ display:flex; align-items:center; gap:6px; }
 .org-switch select{ min-width:150px; width:auto; }
 
+/* ---------- 4.1 隐私遮罩 ---------- */
+.privacy-shield{
+  position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center;
+  padding:24px; background:linear-gradient(145deg,#123b60,#071b2d); color:#fff;
+}
+.privacy-shield-card{ width:min(420px,100%); text-align:center; }
+.privacy-shield-card .logo{
+  display:inline-flex; width:54px; height:54px; align-items:center; justify-content:center;
+  border-radius:15px; background:#fff; color:var(--blue); font-size:20px; font-weight:600;
+}
+.privacy-shield-card h2{ margin-top:18px; font-size:24px; }
+.privacy-shield-card p{ margin:8px 0 20px; color:#d9e6f1; }
+.privacy-shield-card .btn{ margin:auto; }
+.privacy-shield-card .hint{ margin-top:18px; color:#afc4d6; }
+
 /* ---------- 5. 今天要处理置顶区 ---------- */
 #today{
   margin:14px 16px 0; background:var(--card); border:1px solid var(--border);

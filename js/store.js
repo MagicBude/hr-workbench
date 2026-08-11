@@ -29,6 +29,7 @@ let lastPersistedData = null;
 // ---------- 存储键名拼接 ----------
 const KEY_ORGS = STORAGE_PREFIX + "orgs";        // 组织列表
 const KEY_CURRENT = STORAGE_PREFIX + "current";  // 当前组织 id
+const KEY_PRIVACY_ACK = STORAGE_PREFIX + "privacy_ack_v1";
 const dataKey = (id) => STORAGE_PREFIX + id + "_data"; // 某组织的数据
 const snapshotKey = (id) => STORAGE_PREFIX + id + "_snapshots";
 const preferenceKey = (name) => STORAGE_PREFIX + state.current + "_pref_" + name;
@@ -191,6 +192,8 @@ export function getStorageUsage() {
   return bytes;
 }
 export function prepareImportedData(input) { return migrate(structuredClone(validateImportPayload(input))); }
+export function hasAcknowledgedLocalPrivacy() { return readText(KEY_PRIVACY_ACK, "") === "yes"; }
+export function acknowledgeLocalPrivacy() { writeText(KEY_PRIVACY_ACK, "yes"); }
 
 // #endregion 持久化、偏好与快照
 

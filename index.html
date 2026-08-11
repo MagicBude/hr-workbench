@@ -56,6 +56,9 @@
     <button class="btn" id="settingsBtn" title="当前组织设置">
       <svg class="icon" viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM19.4 15a1.7 1.7 0 00.34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 00-1.88-.34 1.7 1.7 0 00-1.04 1.56V20.3h-3v-.08a1.7 1.7 0 00-1.04-1.56 1.7 1.7 0 00-1.88.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 007 15a1.7 1.7 0 00-1.56-1.04H5.3v-3h.14A1.7 1.7 0 007 9.92a1.7 1.7 0 00-.34-1.88l-.06-.06 2.12-2.12.06.06a1.7 1.7 0 001.88.34A1.7 1.7 0 0011.7 4.7V4.6h3v.1a1.7 1.7 0 001.04 1.56 1.7 1.7 0 001.88-.34l.06-.06 2.12 2.12-.06.06a1.7 1.7 0 00-.34 1.88A1.7 1.7 0 0020.96 11h.14v3h-.14A1.7 1.7 0 0019.4 15z"/></svg>设置
     </button>
+    <button class="btn" id="privacyBtn" title="临时遮住当前页面中的人事数据">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M4 11h16v10H4zM8 11V7a4 4 0 018 0v4"/></svg>遮罩
+    </button>
     <button class="btn btn-danger" id="clearBtn" title="清空示例数据">
       <svg class="icon" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>清空
     </button>
@@ -212,6 +215,17 @@
   <!-- #region 公共弹窗与脚本 -->
   <div class="modal-mask" id="modalMask">
     <div class="modal" id="modal"></div>
+  </div>
+
+  <!-- 隐私遮罩只阻止旁观者查看当前页面，不加密 localStorage，也不代替账号登录。 -->
+  <div class="privacy-shield" id="privacyShield" role="dialog" aria-modal="true" aria-labelledby="privacyShieldTitle" hidden>
+    <div class="privacy-shield-card">
+      <span class="logo">HR</span>
+      <h2 id="privacyShieldTitle">页面已遮罩</h2>
+      <p>员工、考勤和薪资内容已暂时隐藏。</p>
+      <button class="btn btn-primary" id="privacyResumeBtn">继续使用</button>
+      <p class="hint">这不是密码锁，也不会加密浏览器中的本地数据。</p>
+    </div>
   </div>
 
   <!-- 本地 SheetJS（Excel 导出用，零 CDN） -->

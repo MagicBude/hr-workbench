@@ -9,7 +9,7 @@
 // 业务模块通过 ui.requestRefresh 声明受影响视图；全量刷新仅用于组织切换和整包数据替换。
 // ============================================================
 
-import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg, createSnapshot, createSnapshotForOrg, prepareImportedData, selectImportedOrg } from "./store.js";
+import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg, createSnapshot, createSnapshotForOrg, prepareImportedData, selectImportedOrg, hasAcknowledgedLocalPrivacy, acknowledgeLocalPrivacy } from "./store.js";
 import { buildSample } from "./sample.js";
 import { openModal, closeModal, downloadFile, curMonth, curDay, showHelp, showToast, requestConfirm } from "./ui.js";
 import { initRoster, renderRoster, resetEmpColWidths } from "./roster.js";
@@ -151,6 +151,42 @@ window.__refresh = (...modules) => {
 // #endregion 视图调度
 
 // #region 全局事件绑定
+
+// 隐私遮罩是“离开座位时临时挡住页面”的本机会话功能，不是身份认证。
+// 启用时给页面其他顶层节点加 inert，避免键盘焦点或读屏继续访问遮罩后的敏感内容。
+function setPrivacyShield(active) {
+  const shield = document.getElementById("privacyShield");
+  document.querySelectorAll("body > :not(#privacyShield)").forEach(element => { element.inert = active; });
+  shield.hidden = !active;
+  if (active) document.getElementById("privacyResumeBtn").focus();
+  else document.getElementById("privacyBtn").focus();
+}
+
+function bindPrivacyControls() {
+  const privacyButton = document.getElementById("privacyBtn");
+  const resumeButton = document.getElementById("privacyResumeBtn");
+  // 静态站点更新时，浏览器可能短暂组合旧 HTML 与新 JS。缺少新节点时跳过该增强，
+  // 让主应用仍能启动；下一次刷新拿到同版本资源后遮罩功能会自然恢复。
+  if (!privacyButton || !resumeButton) return;
+  privacyButton.addEventListener("click", () => {
+    closeModal();
+    setPrivacyShield(true);
+  });
+  resumeButton.addEventListener("click", () => setPrivacyShield(false));
+}
+
+function showFirstUsePrivacyNotice() {
+  if (hasAcknowledgedLocalPrivacy()) return;
+  openModal(`
+    <h3>使用真实人事数据前请确认</h3>
+    <p>这是单设备本地工具，数据以明文保存在当前浏览器中，没有账号、权限控制或企业级加密。</p>
+    <p>请勿在共享电脑、公共终端或不受信任的浏览器中录入真实员工和薪资数据。</p>
+    <div class="modal-actions"><button class="btn btn-primary" id="privacyAckBtn">我已了解</button></div>`);
+  document.getElementById("privacyAckBtn").addEventListener("click", () => {
+    acknowledgeLocalPrivacy();
+    closeModal();
+  });
+}
 
 // ---------- 绑定顶部栏：组织切换 / 新建组织 / 导出 / 导入 / 清空 ----------
 function bindTopbar() {
@@ -315,6 +351,7 @@ try {
   initDashboard();
   initSettings();
   bindTopbar();              // 4) 顶部栏与 Tab 绑定
+  bindPrivacyControls();     // 4.1) 临时隐藏当前页面中的敏感内容
   document.getElementById("modalMask").addEventListener("click", (e) => { if (e.target === e.currentTarget) closeModal(); });
   bindTabs();
   bindExport();              // 4.5) 各模块"导出 Excel"按钮
@@ -323,6 +360,7 @@ try {
   bindHelp();                // 4.7) 帮助按钮（规则说明）
   applyOrgSettings(true);    // 4.8) 应用当前组织的界面偏好与默认月份
   renderAll();               // 5) 首次绘制全部内容
+  showFirstUsePrivacyNotice(); // 6) 仅首次说明本地明文存储的使用边界
 } catch (error) {
   showStartupError(error);
 }
