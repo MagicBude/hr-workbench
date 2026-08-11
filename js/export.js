@@ -29,16 +29,34 @@ function weekdayOf(month, day) {
 
 // #endregion 日期辅助
 
+export function monthRange(startMonth, endMonth, maxMonths = 12) {
+  const pattern = /^\d{4}-(0[1-9]|1[0-2])$/;
+  if (!pattern.test(startMonth) || !pattern.test(endMonth)) throw new Error("请选择有效的起止月份");
+  const [startYear, startNumber] = startMonth.split("-").map(Number);
+  const [endYear, endNumber] = endMonth.split("-").map(Number);
+  const startIndex = startYear * 12 + startNumber - 1;
+  const endIndex = endYear * 12 + endNumber - 1;
+  if (endIndex < startIndex) throw new Error("结束月份不能早于开始月份");
+  if (endIndex - startIndex + 1 > maxMonths) throw new Error(`一次最多导出连续 ${maxMonths} 个月`);
+  return Array.from({ length: endIndex - startIndex + 1 }, (_, offset) => {
+    const index = startIndex + offset;
+    return `${Math.floor(index / 12)}-${String(index % 12 + 1).padStart(2, "0")}`;
+  });
+}
+
 // #region 花名册导出
 
 // ---------- 导出花名册 ----------
-export function exportRosterXlsx() {
+export function buildRosterRows() {
   const rows = [["序号", "姓名", "部门", "状态", "入职日期", "离职日期", "基本月薪", "可调休(小时)", "社保基数"]];
   state.data.employees.filter(e => !e.deletedAt).forEach((e, i) => {
     rows.push([i + 1, e.name, e.dept, EMPLOYMENT_STATUS[e.employmentStatus || "active"], e.hireDate || "", e.leaveDate || "", e.baseSalary,
       round1(computeRestMinutes(e.id) / 60), e.insuranceBase ?? ""]);
   });
-  writeBook(rows, "花名册", "花名册.xlsx");
+  return rows;
+}
+export function exportRosterXlsx() {
+  writeBook(buildRosterRows(), "花名册", "花名册.xlsx", { kind: "roster" });
 }
 
 // #endregion 花名册导出
@@ -46,7 +64,7 @@ export function exportRosterXlsx() {
 // #region 考勤导出
 
 // ---------- 导出考勤表（表头：日期+星期；每员工三行 上/下/加；右侧汇总） ----------
-export function exportAttendanceXlsx(month) {
+export function buildAttendanceRows(month) {
   const N = daysInMonth(month);
   const SHIFTS3 = [["am", "上午"], ["pm", "下午"], ["ot", "加班"]];
 
@@ -77,7 +95,10 @@ export function exportAttendanceXlsx(month) {
       rows.push(row);
     });
   });
-  writeBook(rows, "考勤表_" + month, "考勤表_" + month + ".xlsx");
+  return rows;
+}
+export function exportAttendanceXlsx(month) {
+  writeBook(buildAttendanceRows(month), "考勤表_" + month, "考勤表_" + month + ".xlsx", { kind: "attendance" });
 }
 
 // #endregion 考勤导出
@@ -85,7 +106,7 @@ export function exportAttendanceXlsx(month) {
 // #region 薪资导出
 
 // ---------- 导出薪资表（含考勤统计 + 公司/个人缴纳分项） ----------
-export function exportPayrollXlsx(month) {
+export function buildPayrollRows(month) {
   const COMP_KEYS = ["养老", "医疗", "工伤", "失业", "生育", "公积金"];
   const PERS_KEYS = ["养老", "医疗", "失业", "公积金", "大病医疗"];
   const rows = [["姓名", "部门", "入职日期", "出勤", "缺勤", "实出勤", "出差补贴", "奖金", "基本月薪", "加班费", "本月应发",
@@ -108,11 +129,14 @@ export function exportPayrollXlsx(month) {
       ...PERS_KEYS.map(k => round2(pers[k] || 0)),
       round2(p.tax), round2(p.net), PAYROLL_STATUS[p.status || "draft"]]);
   });
+  return appendConstantColumn(rows, "核算说明", PAYROLL_DISCLAIMER);
+}
+export function exportPayrollXlsx(month) {
   writeBook(
-    appendConstantColumn(rows, "核算说明", PAYROLL_DISCLAIMER),
+    buildPayrollRows(month),
     "薪资表_" + month,
     "薪资表_" + month + ".xlsx",
-    { notice: PAYROLL_DISCLAIMER }
+    { notice: PAYROLL_DISCLAIMER, kind: "payroll" }
   );
 }
 
@@ -123,22 +147,80 @@ export function exportPayrollXlsx(month) {
 // ---------- 工具 ----------
 function round2(n) { return Math.round((n || 0) * 100) / 100; }
 function round1(n) { return Math.round((n || 0) * 10) / 10; }
+function excelColumnName(index) {
+  let name = "", current = index + 1;
+  while (current > 0) {
+    current -= 1;
+    name = String.fromCharCode(65 + current % 26) + name;
+    current = Math.floor(current / 26);
+  }
+  return name;
+}
+
+function worksheetFromRows(rows, { kind = "table" } = {}) {
+  const safeRows = safeSpreadsheetRows(rows);
+  const worksheet = XLSX.utils.aoa_to_sheet(safeRows);
+  const columnCount = Math.max(1, ...safeRows.map(row => row.length));
+  worksheet["!cols"] = Array.from({ length: columnCount }, (_, columnIndex) => {
+    const width = Math.max(...safeRows.slice(0, 200).map(row => String(row[columnIndex] ?? "").length));
+    return { wch: Math.min(32, Math.max(8, width + 2)) };
+  });
+  const headerRows = kind === "attendance" ? 2 : 1;
+  worksheet["!autofilter"] = { ref: `A${headerRows}:${excelColumnName(columnCount - 1)}${Math.max(headerRows, safeRows.length)}` };
+  worksheet["!freeze"] = { xSplit: kind === "attendance" ? 4 : 2, ySplit: headerRows };
+  for (let rowIndex = 0; rowIndex < headerRows; rowIndex += 1) {
+    for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+      const cell = worksheet[`${excelColumnName(columnIndex)}${rowIndex + 1}`];
+      if (cell) cell.s = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "185FA5" } }, alignment: { horizontal: "center", vertical: "center" } };
+    }
+  }
+  return worksheet;
+}
+
+function appendNoticeSheet(workbook, title, lines) {
+  const noticeSheet = XLSX.utils.aoa_to_sheet([[title], ...lines.map(line => [line])]);
+  noticeSheet["!cols"] = [{ wch: 96 }];
+  XLSX.utils.book_append_sheet(workbook, noticeSheet, "导出说明");
+}
+
 // 用 SheetJS 生成并触发下载
-export function createWorkbook(aoa, sheetName, { notice = "" } = {}) {
+export function createWorkbook(aoa, sheetName, { notice = "", kind = "table" } = {}) {
   const wb = XLSX.utils.book_new();
   if (notice) {
-    const noticeSheet = XLSX.utils.aoa_to_sheet([
-      ["HR Workbench 薪资核算说明"],
-      [notice],
-      ["当前规则未覆盖累计预扣、税率级距、专项附加扣除、社保上下限及地区生效日期。"]
-    ]);
-    noticeSheet["!cols"] = [{ wch: 96 }];
-    XLSX.utils.book_append_sheet(wb, noticeSheet, "重要说明");
+    appendNoticeSheet(wb, "HR Workbench 薪资核算说明", [notice, "当前规则未覆盖累计预扣、税率级距、专项附加扣除、社保上下限及地区生效日期。"]);
   }
-  // 明确把用户文本保持为字符串；公式前缀加单引号后，SheetJS 不会生成公式单元格。
-  const ws = XLSX.utils.aoa_to_sheet(safeSpreadsheetRows(aoa));
+  const ws = worksheetFromRows(aoa, { kind });
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
   return wb;
+}
+
+export function createCombinedWorkbook({ modules, months, orgName = "当前组织", generatedAt = new Date() }) {
+  if (!Array.isArray(modules) || !modules.length) throw new Error("请至少选择一个导出模块");
+  if (!Array.isArray(months) || !months.length) throw new Error("请至少选择一个月份");
+  const allowedModules = new Set(["roster", "attendance", "payroll"]);
+  if (modules.some(module => !allowedModules.has(module))) throw new Error("包含不支持的导出模块");
+  const workbook = XLSX.utils.book_new();
+  const includesPayroll = modules.includes("payroll");
+  const lines = [
+    `组织：${orgName}`,
+    `导出时间：${generatedAt.toLocaleString("zh-CN")}`,
+    `月份范围：${months[0]} 至 ${months.at(-1)}`,
+    `包含模块：${modules.map(module => ({ roster: "花名册", attendance: "考勤", payroll: "薪资" })[module]).join("、")}`
+  ];
+  if (includesPayroll) lines.push(PAYROLL_DISCLAIMER);
+  appendNoticeSheet(workbook, "HR Workbench 综合报表", lines);
+  if (modules.includes("roster")) XLSX.utils.book_append_sheet(workbook, worksheetFromRows(buildRosterRows(), { kind: "roster" }), "花名册");
+  months.forEach(month => {
+    if (modules.includes("attendance")) XLSX.utils.book_append_sheet(workbook, worksheetFromRows(buildAttendanceRows(month), { kind: "attendance" }), `考勤_${month}`);
+    if (modules.includes("payroll")) XLSX.utils.book_append_sheet(workbook, worksheetFromRows(buildPayrollRows(month), { kind: "payroll" }), `薪资_${month}`);
+  });
+  return workbook;
+}
+
+export function exportCombinedXlsx(options) {
+  const workbook = createCombinedWorkbook(options);
+  const range = options.months.length === 1 ? options.months[0] : `${options.months[0]}_至_${options.months.at(-1)}`;
+  XLSX.writeFile(workbook, `HR综合报表_${range}.xlsx`);
 }
 
 function writeBook(aoa, sheetName, filename, options = {}) {

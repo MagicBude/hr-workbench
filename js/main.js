@@ -16,7 +16,7 @@ import { initRoster, renderRoster, resetEmpColWidths } from "./roster.js";
 import { initAttendance, renderAttendance, resetAttColWidths } from "./attendance.js";
 import { initPayroll, renderPayroll } from "./payroll.js";
 import { initDashboard, renderDashboard } from "./dashboard.js";
-import { exportRosterXlsx, exportAttendanceXlsx, exportPayrollXlsx } from "./export.js";
+import { exportRosterXlsx, exportAttendanceXlsx, exportPayrollXlsx, exportCombinedXlsx, monthRange } from "./export.js";
 import { initSettings, applyOrgSettings } from "./settings.js";
 import { attendanceMetrics, escapeHtml, isEmployeeActiveInMonth, isEmployeeActiveOn, IMPORT_LIMITS } from "./domain.js";
 import { StorageError, storageErrorMessage } from "./storage.js";
@@ -291,6 +291,44 @@ function bindExport() {
   document.getElementById("expRosterBtn").addEventListener("click", exportRosterXlsx);
   document.getElementById("expAttBtn").addEventListener("click", () => exportAttendanceXlsx(document.getElementById("attMonth").value || "2026-08"));
   document.getElementById("expPayBtn").addEventListener("click", () => exportPayrollXlsx(document.getElementById("payMonth").value || "2026-08"));
+  document.getElementById("reportBtn").addEventListener("click", openCombinedExportModal);
+}
+
+function openCombinedExportModal() {
+  const defaultMonth = document.getElementById("attMonth").value || curMonth();
+  openModal(`
+    <h3>导出综合 Excel 报表</h3>
+    <p class="hint">花名册导出当前档案；考勤和薪资按月份分别生成工作表。一次最多连续 12 个月。</p>
+    <div class="export-module-grid">
+      <label><input type="checkbox" id="reportRoster" checked><span><b>花名册</b><small>当前员工档案与调休余额</small></span></label>
+      <label><input type="checkbox" id="reportAttendance" checked><span><b>考勤</b><small>每个月一张考勤表</small></span></label>
+      <label><input type="checkbox" id="reportPayroll" checked><span><b>薪资</b><small>每个月一张薪资表</small></span></label>
+    </div>
+    <div class="row export-month-range">
+      <div class="field"><label>开始月份</label><input type="month" id="reportStart" value="${defaultMonth}"></div>
+      <div class="field"><label>结束月份</label><input type="month" id="reportEnd" value="${defaultMonth}"></div>
+    </div>
+    <div class="hint" id="reportError" role="alert"></div>
+    <div class="modal-actions">
+      <button class="btn" id="reportCancel">取消</button>
+      <button class="btn btn-primary" id="reportExport">生成 Excel</button>
+    </div>`);
+  document.getElementById("reportCancel").addEventListener("click", closeModal);
+  document.getElementById("reportExport").addEventListener("click", () => {
+    const modules = [
+      document.getElementById("reportRoster").checked ? "roster" : "",
+      document.getElementById("reportAttendance").checked ? "attendance" : "",
+      document.getElementById("reportPayroll").checked ? "payroll" : ""
+    ].filter(Boolean);
+    try {
+      const months = monthRange(document.getElementById("reportStart").value, document.getElementById("reportEnd").value);
+      exportCombinedXlsx({ modules, months, orgName: getCurrentOrg()?.name || "当前组织" });
+      closeModal();
+      showToast(`综合报表已生成（${modules.length} 个模块，${months.length} 个月）`);
+    } catch (error) {
+      document.getElementById("reportError").textContent = error.message;
+    }
+  });
 }
 
 // ---------- 绑定"恢复默认列宽"按钮 ----------
