@@ -9,7 +9,7 @@
  * DEFAULT_SETTINGS、迁移逻辑和依赖模块，保存后也要刷新所有使用该设置的视图。
  */
 
-import { state, persist, getCurrentOrg, removePreference, createSnapshot, listSnapshots, restoreSnapshot, getStorageUsage } from "./store.js";
+import { state, persist, getCurrentOrg, removePreference, createSnapshot, listSnapshots, restoreSnapshot, deleteSnapshot, clearSnapshots, getStorageUsage } from "./store.js";
 import { DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 import { openModal, closeModal, curMonth, showToast, requestRefresh } from "./ui.js";
 import { escapeHtml } from "./domain.js";
@@ -104,8 +104,8 @@ export function openSettings(section = "attendance") {
     <div class="settings-page" data-settings-page="safety">
       <div class="settings-row"><div><b>本地存储占用</b><div class="hint">当前浏览器内全部组织与快照</div></div><span>${(getStorageUsage() / 1024).toFixed(1)} KB</span></div>
       <div class="settings-row"><div><b>数据快照</b><div class="hint">最多保留最近 10 份，导入、清空、回收前会自动创建</div></div><button class="btn" id="createSnapshotBtn">立即备份</button></div>
-      <div class="grp-title">最近快照</div>
-      <div class="snapshot-list">${listSnapshots().map(s => `<div class="settings-row"><div><b>${new Date(s.createdAt).toLocaleString()}</b><div class="hint">${escapeHtml(s.reason)}</div></div><button class="btn btn-sm" data-restore-snapshot="${s.id}">恢复</button></div>`).join("") || '<div class="empty">暂无快照</div>'}</div>
+      <div class="grp-title">最近快照 <button class="btn btn-sm" id="clearSnapshotsBtn">清空快照</button></div>
+      <div class="snapshot-list">${listSnapshots().map(s => `<div class="settings-row"><div><b>${new Date(s.createdAt).toLocaleString()}</b><div class="hint">${escapeHtml(s.reason)}</div></div><div><button class="btn btn-sm" data-restore-snapshot="${s.id}">恢复</button><button class="btn btn-sm btn-quiet-danger" data-delete-snapshot="${s.id}">删除</button></div></div>`).join("") || '<div class="empty">暂无快照</div>'}</div>
       <div class="grp-title">员工回收站</div>
       <div class="snapshot-list">${state.data.employees.filter(e => e.deletedAt).map(e => `<div class="settings-row"><div><b>${escapeHtml(e.name)}</b><div class="hint">${escapeHtml(e.dept || "无部门")}</div></div><button class="btn btn-sm" data-restore-emp="${e.id}">恢复</button></div>`).join("") || '<div class="empty">回收站为空</div>'}</div>
     </div>
@@ -159,6 +159,16 @@ export function openSettings(section = "attendance") {
     requestRefresh("today", "roster", "attendance", "payroll", "dashboard");
     showToast("快照已恢复");
   }));
+  document.querySelectorAll("[data-delete-snapshot]").forEach(button => button.addEventListener("click", () => {
+    if (!confirm("确认删除这份快照？删除后无法恢复。")) return;
+    deleteSnapshot(button.dataset.deleteSnapshot);
+    closeModal(); openSettings("safety"); showToast("快照已删除");
+  }));
+  document.getElementById("clearSnapshotsBtn").addEventListener("click", () => {
+    if (!confirm("确认清空当前组织的全部快照？此操作无法撤销。")) return;
+    clearSnapshots();
+    closeModal(); openSettings("safety"); showToast("快照已清空");
+  });
   document.querySelectorAll("[data-restore-emp]").forEach(button => button.addEventListener("click", () => {
     const employee = state.data.employees.find(item => item.id === button.dataset.restoreEmp);
     if (!employee) return;

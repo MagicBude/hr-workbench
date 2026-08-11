@@ -11,7 +11,7 @@
 
 import { STORAGE_PREFIX, SCHEMA_VERSION, HOLIDAYS_2026, DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS, HALF_DAY_MINUTES } from "./config.js";
 import { summarizeAttendance, validateImportPayload } from "./domain.js";
-import { readJSON, writeJSON, readText, writeText, removeStoredValue } from "./storage.js";
+import { readJSON, writeJSON, readText, writeText, removeStoredValue, StorageError } from "./storage.js";
 
 // #region 状态与存储键
 // ---------- 内存中的运行时状态（整个应用共享这一份） ----------
@@ -153,11 +153,27 @@ export function createSnapshotForOrg(orgId, reason, sourceData = null) {
   const data = sourceData || readJSON(dataKey(orgId), null);
   if (!data) return null;
   const snapshots = readJSON(snapshotKey(orgId), []);
-  snapshots.unshift({ id: `snap_${Date.now()}`, createdAt: new Date().toISOString(), reason, data: structuredClone(data) });
-  writeJSON(snapshotKey(orgId), snapshots.slice(0, 10));
+  snapshots.unshift({ id: `snap_${crypto.randomUUID()}`, createdAt: new Date().toISOString(), reason, data: structuredClone(data) });
+  const retained = snapshots.slice(0, 10);
+  // localStorage 的实际配额因浏览器而异；4.5 MB 作为保守安全线，给主数据和偏好留出空间。
+  // 在写入前估算，避免明知快照会挤占主数据空间仍继续尝试。
+  const previousSnapshotBytes = (readText(snapshotKey(orgId), "") || "").length * 2;
+  const projectedBytes = getStorageUsage() - previousSnapshotBytes + JSON.stringify(retained).length * 2;
+  if (projectedBytes > 4.5 * 1024 * 1024) throw new StorageError("quota", snapshotKey(orgId));
+  writeJSON(snapshotKey(orgId), retained);
   return snapshots[0];
 }
 export function listSnapshots() { return readJSON(snapshotKey(state.current), []); }
+export function deleteSnapshot(id) {
+  const snapshots = listSnapshots();
+  const retained = snapshots.filter(snapshot => snapshot.id !== id);
+  if (retained.length === snapshots.length) return false;
+  writeJSON(snapshotKey(state.current), retained);
+  return true;
+}
+export function clearSnapshots() {
+  removeStoredValue(snapshotKey(state.current));
+}
 export function restoreSnapshot(id) {
   const item = listSnapshots().find(x => x.id === id);
   if (!item) throw new Error("快照不存在或已被清理");
