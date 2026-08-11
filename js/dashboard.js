@@ -9,7 +9,7 @@
  * 否则会与考勤表和导出结果产生无法解释的差异。
  */
 
-import { state } from "./store.js";
+import { state, computeRestMinutes } from "./store.js";
 import { fmtMoney } from "./ui.js";
 import { attendanceMetrics, isEmployeeActiveInMonth } from "./domain.js";
 
@@ -17,6 +17,12 @@ import { attendanceMetrics, isEmployeeActiveInMonth } from "./domain.js";
 
 export function initDashboard() {
   document.getElementById("dashMonth").addEventListener("change", renderDashboard);
+}
+
+// 余额由 store.js 根据初始值和全部考勤动态计算；通过参数传入读取函数，既避免
+// 看板复制口径，也让“正数、零、负数”边界可以在无 DOM 环境中单独测试。
+export function countOverdrawnEmployees(employees, getBalance) {
+  return employees.reduce((count, employee) => count + (getBalance(employee.id) < 0 ? 1 : 0), 0);
 }
 
 export function renderDashboard() {
@@ -38,13 +44,23 @@ export function renderDashboard() {
   const payRecs = state.data.payroll.filter(p => p.month === month);
   const grossSum = payRecs.reduce((s, p) => s + p.gross, 0);
   const netSum = payRecs.reduce((s, p) => s + p.net, 0);
+  const overdrawnCount = countOverdrawnEmployees(emps, computeRestMinutes);
 
   // —— KPI 卡片 ——
   document.getElementById("kpi").innerHTML = `
     <div class="box"><div class="v">${emps.length}</div><div class="l">在职员工</div></div>
     <div class="box"><div class="v">${rate}%</div><div class="l">本月出勤率</div></div>
     <div class="box"><div class="v">${fmtMoney(grossSum)}</div><div class="l">本月应发合计</div></div>
-    <div class="box"><div class="v" style="color:var(--ok)">${fmtMoney(netSum)}</div><div class="l">本月实发合计</div></div>`;
+    <div class="box"><div class="v" style="color:var(--ok)">${fmtMoney(netSum)}</div><div class="l">本月实发合计</div></div>
+    <button class="box kpi-alert ${overdrawnCount ? "active" : ""}" id="overdrawnKpi" type="button" ${overdrawnCount ? "" : "disabled"}>
+      <span class="v">${overdrawnCount}</span><span class="l">调休透支人数</span>
+      <span class="kpi-action">${overdrawnCount ? "查看花名册 →" : "暂无异常"}</span>
+    </button>`;
+
+  // 透支卡是异常入口而非静态数字。复用主导航按钮触发切页，避免看板反向依赖 main.js。
+  document.getElementById("overdrawnKpi").addEventListener("click", () => {
+    document.querySelector('nav.tabs button[data-tab="roster"]')?.click();
+  });
 
   renderDonut(actual, expected, leave, absent, missing);
   renderTrend();

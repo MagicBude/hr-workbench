@@ -221,10 +221,16 @@ body.col-resizing, body.col-resizing *{ cursor:col-resize !important; user-selec
 .att-table thead th.sumcol{ background:var(--bg); }
 
 /* ---------- 9. 看板（KPI 卡片 + 图表） ---------- */
-.kpi{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
+.kpi{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:16px; }
 .kpi .box{ background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; }
 .kpi .v{ font-size:22px; font-weight:500; color:var(--blue); }
 .kpi .l{ font-size:12px; color:var(--muted); margin-top:2px; }
+.kpi button.box{ font:inherit; text-align:left; }
+.kpi button.box:disabled{ cursor:default; opacity:.72; }
+.kpi .kpi-alert.active{ border-color:#efb8b4; background:var(--danger-bg); }
+.kpi .kpi-alert.active .v{ color:var(--danger); }
+.kpi .kpi-action{ display:block; margin-top:6px; color:var(--muted); font-size:11px; }
+.kpi .kpi-alert.active .kpi-action{ color:var(--danger); }
 .charts{ display:grid; grid-template-columns:300px 1fr; gap:16px; }
 .charts .box{ background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; }
 .legend{ display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:8px; }
@@ -298,7 +304,7 @@ body.compact-tables table{ font-size:12px; }
   .brand{ font-size:15px; }
   .org-switch{ order:3; width:100%; }
   .org-switch select{ width:100%; }
-  .kpi{ grid-template-columns:repeat(2,1fr); }
+  .kpi{ grid-template-columns:repeat(2,minmax(0,1fr)); }
   .charts{ grid-template-columns:1fr; }
   .row .field{ flex:1; min-width:120px; }
   .settings-row{ gap:12px; }
