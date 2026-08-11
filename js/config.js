@@ -20,21 +20,28 @@ export const STATUSES = ["√", "事", "病", "缺", "调", "年", "加", "迟",
 
 // 每种状态的中文名（用于“汇总”列展示，例如 出勤/事假）
 export const STATUS_LABEL = {
-  "√": "出勤", "事": "事假", "病": "病假", "缺": "缺勤",
-  "调": "调休", "年": "年假", "加": "加班", "迟": "迟到", "退": "早退"
+  "√": "出勤",
+  事: "事假",
+  病: "病假",
+  缺: "缺勤",
+  调: "调休",
+  年: "年假",
+  加: "加班",
+  迟: "迟到",
+  退: "早退",
 };
 
 // 每种状态的显示颜色（背景色 bg + 文字色 fg），让表格一眼能区分
 export const STATUS_COLOR = {
   "√": { bg: "#e8f5e9", fg: "#1b5e20" }, // 出勤：绿
-  "事": { bg: "#fff3e0", fg: "#e65100" }, // 事假：橙
-  "病": { bg: "#e3f2fd", fg: "#0d47a1" }, // 病假：蓝
-  "缺": { bg: "#fce4ec", fg: "#b71c1c" }, // 缺勤：红
-  "调": { bg: "#f3e5f5", fg: "#4a148c" }, // 调休：紫
-  "年": { bg: "#e0f7fa", fg: "#006064" }, // 年假：青
-  "加": { bg: "#fffde7", fg: "#f57f17" }, // 加班：黄
-  "迟": { bg: "#ffebee", fg: "#c62828" }, // 迟到：红
-  "退": { bg: "#e8eaf6", fg: "#283593" }  // 早退：蓝紫
+  事: { bg: "#fff3e0", fg: "#e65100" }, // 事假：橙
+  病: { bg: "#e3f2fd", fg: "#0d47a1" }, // 病假：蓝
+  缺: { bg: "#fce4ec", fg: "#b71c1c" }, // 缺勤：红
+  调: { bg: "#f3e5f5", fg: "#4a148c" }, // 调休：紫
+  年: { bg: "#e0f7fa", fg: "#006064" }, // 年假：青
+  加: { bg: "#fffde7", fg: "#f57f17" }, // 加班：黄
+  迟: { bg: "#ffebee", fg: "#c62828" }, // 迟到：红
+  退: { bg: "#e8eaf6", fg: "#283593" }, // 早退：蓝紫
 };
 
 // 汇总列顺序，与考勤表头和导出字段保持一致。
@@ -47,9 +54,9 @@ export const SUM_KEYS = ["出勤", "事假", "病假", "缺勤", "调休", "年�
 // #region 时段、星期与节假日
 
 // ---------- 考勤时段：一天分上午 / 下午 / 加班 ----------
-export const SHIFTS = ["am", "pm", "ot"];      // am=上午 pm=下午 ot=加班
+export const SHIFTS = ["am", "pm", "ot"]; // am=上午 pm=下午 ot=加班
 export const SHIFT_LABEL = { am: "上午", pm: "下午", ot: "加班" };
-export const HALF_DAY_MINUTES = 240;           // 半天 = 240 分钟（4 小时），调休/加班换算单位
+export const HALF_DAY_MINUTES = 240; // 半天 = 240 分钟（4 小时），调休/加班换算单位
 
 // 星期中文（数组下标 0=周日），用于考勤表头第二行
 export const WEEK_LABEL = ["日", "一", "二", "三", "四", "五", "六"];
@@ -93,7 +100,7 @@ export const HOLIDAYS_2026 = {
   "2026-10-05": { name: "国庆节", type: "holiday" },
   "2026-10-06": { name: "国庆节", type: "holiday" },
   "2026-10-07": { name: "国庆节", type: "holiday" },
-  "2026-10-09": { name: "国庆节调休上班", type: "workday" }
+  "2026-10-09": { name: "国庆节调休上班", type: "workday" },
 };
 
 // #endregion 时段、星期与节假日
@@ -102,16 +109,16 @@ export const HOLIDAYS_2026 = {
 
 // 默认组织设置（新增组织 / 旧数据迁移时注入）
 export const DEFAULT_SETTINGS = {
-  overtimeToRest: true,                 // 加班是否自动转为可调休
-  overtimeToRestRatio: 1.0,             // 加班分钟 × 比例 = 增加的可调休分钟
-  halfDayMinutes: HALF_DAY_MINUTES,     // 半天分钟数（调休扣减 / 加班增加的单位）
-  enableLateEarly: true,                // 是否允许迟到 / 早退状态
-  enforceRestBalance: true,             // 调休时是否强制校验可用余额
-  showTodayTodos: true,                 // 是否显示首页“今天要处理”
-  compactTables: false,                 // 是否使用紧凑表格密度
-  defaultMonth: "",                     // 默认月份；空字符串表示当前月份
-  restBalanceDisplay: "smart",          // 调休余额显示：smart / hours / days
-  departments: []                       // 部门列表（组织级选项，避免手输拼出幽灵部门）
+  overtimeToRest: true, // 加班是否自动转为可调休
+  overtimeToRestRatio: 1.0, // 加班分钟 × 比例 = 增加的可调休分钟
+  halfDayMinutes: HALF_DAY_MINUTES, // 半天分钟数（调休扣减 / 加班增加的单位）
+  enableLateEarly: true, // 是否允许迟到 / 早退状态
+  enforceRestBalance: true, // 调休时是否强制校验可用余额
+  showTodayTodos: true, // 是否显示首页“今天要处理”
+  compactTables: false, // 是否使用紧凑表格密度
+  defaultMonth: "", // 默认月份；空字符串表示当前月份
+  restBalanceDisplay: "smart", // 调休余额显示：smart / hours / days
+  departments: [], // 部门列表（组织级选项，避免手输拼出幽灵部门）
 };
 
 // #endregion 组织默认设置
@@ -122,12 +129,19 @@ export const DEFAULT_SETTINGS = {
 // 说明：这里用的是“演示用简化值”，真实比例请以当地最新社保政策为准。
 // company = 公司承担部分，personal = 个人承担部分。
 export const INSURANCE_RATIO = {
-  company:  { 养老: 0.16, 医疗: 0.08, 工伤: 0.002, 失业: 0.005, 生育: 0.008, 公积金: 0.12 },
-  personal: { 养老: 0.08, 医疗: 0.02, 失业: 0.005, 公积金: 0.12 }
+  company: {
+    养老: 0.16,
+    医疗: 0.08,
+    工伤: 0.002,
+    失业: 0.005,
+    生育: 0.008,
+    公积金: 0.12,
+  },
+  personal: { 养老: 0.08, 医疗: 0.02, 失业: 0.005, 公积金: 0.12 },
 };
 
-export const BIG_SICKNESS = 5;     // 大病医疗个人固定 5 元/月
+export const BIG_SICKNESS = 5; // 大病医疗个人固定 5 元/月
 export const TAX_THRESHOLD = 5000; // 个税起征点（每月）
-export const TAX_RATE = 0.1;       // 个税简化税率（演示用，非真实累进税率）
+export const TAX_RATE = 0.1; // 个税简化税率（演示用，非真实累进税率）
 
 // #endregion 演示薪资参数

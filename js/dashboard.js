@@ -22,20 +22,34 @@ export function initDashboard() {
 export function renderDashboard() {
   const month = document.getElementById("dashMonth").value || "2026-08";
   const asOf = new Date().toLocaleDateString("sv-SE");
-  const emps = state.data.employees.filter(e => isEmployeeActiveInMonth(e, month));
+  const emps = state.data.employees.filter((e) => isEmployeeActiveInMonth(e, month));
 
   // —— 出勤统计：累加当月所有员工的出勤天数与事病缺天数 ——
-  let actual = 0, expected = 0, leave = 0, absent = 0, missing = 0;
-  emps.forEach(emp => {
-    const att = state.data.attendance.find(a => a.month === month && a.empId === emp.id);
-    const m = attendanceMetrics(emp, month, att, state.data.holidays, state.data.settings.halfDayMinutes, asOf);
-    actual += m.actualMinutes; expected += m.expectedMinutes; leave += m.leaveMinutes;
-    absent += m.absentMinutes; missing += m.missingMinutes;
+  let actual = 0,
+    expected = 0,
+    leave = 0,
+    absent = 0,
+    missing = 0;
+  emps.forEach((emp) => {
+    const att = state.data.attendance.find((a) => a.month === month && a.empId === emp.id);
+    const m = attendanceMetrics(
+      emp,
+      month,
+      att,
+      state.data.holidays,
+      state.data.settings.halfDayMinutes,
+      asOf,
+    );
+    actual += m.actualMinutes;
+    expected += m.expectedMinutes;
+    leave += m.leaveMinutes;
+    absent += m.absentMinutes;
+    missing += m.missingMinutes;
   });
-  const rate = expected ? Math.round(actual / expected * 100) : 0;
+  const rate = expected ? Math.round((actual / expected) * 100) : 0;
 
   // —— 工资统计 ——
-  const payRecs = state.data.payroll.filter(p => p.month === month);
+  const payRecs = state.data.payroll.filter((p) => p.month === month);
   const grossSum = payRecs.reduce((s, p) => s + p.gross, 0);
   const netSum = payRecs.reduce((s, p) => s + p.net, 0);
 
@@ -57,11 +71,17 @@ export function renderDashboard() {
 // 环形图：用一个完整的灰圈 + 一段绿色弧（stroke-dasharray 控制长度）表示占比
 function renderDonut(actual, total, leave, absent, missing) {
   const el = document.getElementById("donut");
-  if (total === 0) { el.innerHTML = '<div class="empty">本月暂无考勤数据</div>'; return; }
+  if (total === 0) {
+    el.innerHTML = '<div class="empty">本月暂无考勤数据</div>';
+    return;
+  }
 
-  const r = 70, cx = 150, cy = 80, circumference = 2 * Math.PI * r;
+  const r = 70,
+    cx = 150,
+    cy = 80,
+    circumference = 2 * Math.PI * r;
   const ratio = actual / total;
-  const offset = circumference * (1 - ratio);   // 绿色弧的“缺失长度”= 剩余比例
+  const offset = circumference * (1 - ratio); // 绿色弧的“缺失长度”= 剩余比例
 
   el.innerHTML = `<svg viewBox="0 0 300 160" width="100%">
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#e5e7eb" stroke-width="20"/>
@@ -81,7 +101,7 @@ function renderDonut(actual, total, leave, absent, missing) {
 function renderTrend() {
   const el = document.getElementById("trend");
   const legend = document.getElementById("trendLegend");
-  const months = [...new Set(state.data.payroll.map(p => p.month))].sort(); // 去重并排序
+  const months = [...new Set(state.data.payroll.map((p) => p.month))].sort(); // 去重并排序
 
   if (months.length === 0) {
     el.innerHTML = '<div class="empty">暂无薪资数据，生成薪资后可见趋势</div>';
@@ -89,18 +109,30 @@ function renderTrend() {
     return;
   }
 
-  const vals = months.map(m => state.data.payroll.filter(p => p.month === m).reduce((s, p) => s + p.net, 0));
-  const W = 560, H = 200, pad = 34;
-  const max = Math.max(...vals), min = Math.min(...vals, 0);
+  const vals = months.map((m) =>
+    state.data.payroll.filter((p) => p.month === m).reduce((s, p) => s + p.net, 0),
+  );
+  const W = 560,
+    H = 200,
+    pad = 34;
+  const max = Math.max(...vals),
+    min = Math.min(...vals, 0);
   const span = Math.max(1, max - min);
 
   // 把数据值映射到画布坐标：x 均匀分布，y 按数值高低换算
-  const x = i => pad + i * (W - 2 * pad) / (months.length - 1 || 1);
-  const y = v => H - pad - (v - min) / span * (H - 2 * pad);
+  const x = (i) => pad + (i * (W - 2 * pad)) / (months.length - 1 || 1);
+  const y = (v) => H - pad - ((v - min) / span) * (H - 2 * pad);
 
   const pts = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const dots = vals.map((v, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4" fill="#185FA5"/>`).join("");
-  const labels = months.map((m, i) => `<text x="${x(i).toFixed(1)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="#6b7280">${m.slice(2)}</text>`).join("");
+  const dots = vals
+    .map((v, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4" fill="#185FA5"/>`)
+    .join("");
+  const labels = months
+    .map(
+      (m, i) =>
+        `<text x="${x(i).toFixed(1)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="#6b7280">${m.slice(2)}</text>`,
+    )
+    .join("");
   const yLabel = `<text x="6" y="${pad}" font-size="10" fill="#9aa0a6">${fmtMoney(max)}</text>`;
 
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%">

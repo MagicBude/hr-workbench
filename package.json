@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "format": "npx --yes prettier@3.6.2 --write index.html css/styles.css \"js/*.js\" \"scripts/*.js\" \"scripts/*.mjs\" \"tests/*.js\"",
+    "format:check": "npx --yes prettier@3.6.2 --check index.html css/styles.css \"js/*.js\" \"scripts/*.js\" \"scripts/*.mjs\" \"tests/*.js\"",
     "check": "node scripts/check-js.js",
     "test": "node --test tests/*.test.js",
     "verify": "npm run check && npm test"

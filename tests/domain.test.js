@@ -8,12 +8,26 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { attendanceMetrics, buildPayrollRecord, escapeHtml, estimateTax, isEmployeeActiveInMonth, isEmployeeActiveOn, isWorkdayDate, summarizeAttendance, validateImportPayload } from "../js/domain.js";
+import {
+  attendanceMetrics,
+  buildPayrollRecord,
+  escapeHtml,
+  estimateTax,
+  isEmployeeActiveInMonth,
+  isEmployeeActiveOn,
+  isWorkdayDate,
+  summarizeAttendance,
+  validateImportPayload,
+} from "../js/domain.js";
 
 // #region 员工与工作日边界
 
 test("员工入离职日期限定有效在职区间", () => {
-  const emp = { hireDate: "2026-08-10", leaveDate: "2026-08-20", employmentStatus: "departed" };
+  const emp = {
+    hireDate: "2026-08-10",
+    leaveDate: "2026-08-20",
+    employmentStatus: "departed",
+  };
   assert.equal(isEmployeeActiveOn(emp, "2026-08-09"), false);
   assert.equal(isEmployeeActiveOn(emp, "2026-08-10"), true);
   assert.equal(isEmployeeActiveOn(emp, "2026-08-20"), true);
@@ -21,7 +35,11 @@ test("员工入离职日期限定有效在职区间", () => {
 });
 
 test("月中入职又离职的员工仍属于该月有效员工", () => {
-  const emp = { hireDate: "2026-08-10", leaveDate: "2026-08-20", employmentStatus: "departed" };
+  const emp = {
+    hireDate: "2026-08-10",
+    leaveDate: "2026-08-20",
+    employmentStatus: "departed",
+  };
   assert.equal(isEmployeeActiveInMonth(emp, "2026-08"), true);
   assert.equal(isEmployeeActiveInMonth(emp, "2026-09"), false);
 });
@@ -49,8 +67,18 @@ test("出勤率按应出勤分钟计算并单列未录入", () => {
 });
 
 test("部分请假按实际分钟拆分出勤与请假", () => {
-  const emp = { hireDate: "2026-08-03", employmentStatus: "active", leaveDate: "2026-08-03" };
-  const metrics = attendanceMetrics(emp, "2026-08", { rec: { 3: { am: { s: "事", min: 120 }, pm: "√" } } }, {}, 240);
+  const emp = {
+    hireDate: "2026-08-03",
+    employmentStatus: "active",
+    leaveDate: "2026-08-03",
+  };
+  const metrics = attendanceMetrics(
+    emp,
+    "2026-08",
+    { rec: { 3: { am: { s: "事", min: 120 }, pm: "√" } } },
+    {},
+    240,
+  );
   assert.equal(metrics.expectedMinutes, 480);
   assert.equal(metrics.actualMinutes, 360);
   assert.equal(metrics.leaveMinutes, 120);
@@ -69,8 +97,13 @@ test("个税估算与 HTML 转义", () => {
 });
 
 test("考勤汇总和初始薪资记录使用统一领域函数", () => {
-  const summary = summarizeAttendance({ 1: { am: "√", pm: "迟", ot: { s: "加", min: 90 } } });
-  assert.deepEqual({ 出勤: summary.出勤, 迟到: summary.迟到, 加班: summary.加班 }, { 出勤: 0.5, 迟到: 0.5, 加班: 1 });
+  const summary = summarizeAttendance({
+    1: { am: "√", pm: "迟", ot: { s: "加", min: 90 } },
+  });
+  assert.deepEqual(
+    { 出勤: summary.出勤, 迟到: summary.迟到, 加班: summary.加班 },
+    { 出勤: 0.5, 迟到: 0.5, 加班: 1 },
+  );
   const payroll = buildPayrollRecord("2026-08", "e1", 10000);
   assert.equal(payroll.status, "draft");
   assert.equal(payroll.taxManual, false);
@@ -78,10 +111,42 @@ test("考勤汇总和初始薪资记录使用统一领域函数", () => {
 });
 
 test("导入数据拒绝异形字段", () => {
-  assert.throws(() => validateImportPayload({ data: { employees: {}, attendance: [], payroll: [] } }), /employees/);
-  assert.throws(() => validateImportPayload({ data: { employees: [{ name: 123 }], attendance: [], payroll: [] } }), /name/);
-  assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1" }, { id: "e1" }], attendance: [], payroll: [] } }), /重复 id/);
-  assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1", employmentStatus: "unknown" }], attendance: [], payroll: [] } }), /employmentStatus/);
+  assert.throws(
+    () =>
+      validateImportPayload({
+        data: { employees: {}, attendance: [], payroll: [] },
+      }),
+    /employees/,
+  );
+  assert.throws(
+    () =>
+      validateImportPayload({
+        data: { employees: [{ name: 123 }], attendance: [], payroll: [] },
+      }),
+    /name/,
+  );
+  assert.throws(
+    () =>
+      validateImportPayload({
+        data: {
+          employees: [{ id: "e1" }, { id: "e1" }],
+          attendance: [],
+          payroll: [],
+        },
+      }),
+    /重复 id/,
+  );
+  assert.throws(
+    () =>
+      validateImportPayload({
+        data: {
+          employees: [{ id: "e1", employmentStatus: "unknown" }],
+          attendance: [],
+          payroll: [],
+        },
+      }),
+    /employmentStatus/,
+  );
 });
 
 // #endregion 考勤、薪资与输入安全

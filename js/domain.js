@@ -9,7 +9,14 @@
  * 才能被看板、导出和页面共同复用，并在 Node 环境中可靠测试。
  */
 
-import { HALF_DAY_MINUTES, TAX_RATE, TAX_THRESHOLD, STATUS_LABEL, INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
+import {
+  HALF_DAY_MINUTES,
+  TAX_RATE,
+  TAX_THRESHOLD,
+  STATUS_LABEL,
+  INSURANCE_RATIO,
+  BIG_SICKNESS,
+} from "./config.js";
 
 // #region 员工生命周期
 
@@ -17,13 +24,13 @@ export const EMPLOYMENT_STATUS = {
   probation: "试用",
   active: "在职",
   suspended: "停薪",
-  departed: "离职"
+  departed: "离职",
 };
 
 export const PAYROLL_STATUS = {
   draft: "草稿",
   confirmed: "已确认",
-  paid: "已发放"
+  paid: "已发放",
 };
 
 // 判断员工在某个自然日是否应参与考勤。入职日和离职日都包含在任职区间内，
@@ -46,8 +53,10 @@ export function isEmployeeActiveInMonth(employee, month) {
   const monthEnd = `${month}-${String(new Date(year, monthNumber, 0).getDate()).padStart(2, "0")}`;
   if (!employee || employee.deletedAt || employee.employmentStatus === "suspended") return false;
   if (employee.employmentStatus === "departed" && !employee.leaveDate) return false;
-  return (!employee.hireDate || employee.hireDate <= monthEnd)
-    && (!employee.leaveDate || employee.leaveDate >= monthStart);
+  return (
+    (!employee.hireDate || employee.hireDate <= monthEnd) &&
+    (!employee.leaveDate || employee.leaveDate >= monthStart)
+  );
 }
 
 // #endregion 员工生命周期
@@ -80,14 +89,29 @@ function minutesOf(value, fallback) {
  * 请假、缺勤和未录入单列，供看板解释出勤率。迟到/早退计异常但仍计该时段出勤。
  * 当前月传入 asOf 后只统计截止日，避免把未来日期误判为未录入。
  */
-export function attendanceMetrics(employee, month, attendanceRecord, holidays = {}, halfDayMinutes = HALF_DAY_MINUTES, asOf = "") {
+export function attendanceMetrics(
+  employee,
+  month,
+  attendanceRecord,
+  holidays = {},
+  halfDayMinutes = HALF_DAY_MINUTES,
+  asOf = "",
+) {
   const [year, monthNumber] = month.split("-").map(Number);
   let days = new Date(year, monthNumber, 0).getDate();
   if (asOf && asOf.slice(0, 7) === month) {
     days = Math.min(days, Number(asOf.slice(8, 10)) || days);
   }
   const dailyRecords = attendanceRecord?.rec || {};
-  const result = { expectedMinutes: 0, actualMinutes: 0, leaveMinutes: 0, absentMinutes: 0, missingMinutes: 0, lateCount: 0, earlyCount: 0 };
+  const result = {
+    expectedMinutes: 0,
+    actualMinutes: 0,
+    leaveMinutes: 0,
+    absentMinutes: 0,
+    missingMinutes: 0,
+    lateCount: 0,
+    earlyCount: 0,
+  };
   for (let day = 1; day <= days; day += 1) {
     const date = `${month}-${String(day).padStart(2, "0")}`;
     if (!isWorkdayDate(date, holidays) || !isEmployeeActiveOn(employee, date)) continue;
@@ -113,7 +137,9 @@ export function attendanceMetrics(employee, month, attendanceRecord, holidays = 
       if (status === "退") result.earlyCount += 1;
     }
   }
-  result.rate = result.expectedMinutes ? Math.round(result.actualMinutes / result.expectedMinutes * 100) : 0;
+  result.rate = result.expectedMinutes
+    ? Math.round((result.actualMinutes / result.expectedMinutes) * 100)
+    : 0;
   return result;
 }
 
@@ -128,7 +154,17 @@ export function estimateTax(gross, personalTotal, threshold = TAX_THRESHOLD, rat
 
 // 上午和下午每格各计 0.5 天；加班位于独立 ot 时段，按次数统计。
 export function summarizeAttendance(rec = {}) {
-  const summary = { 出勤: 0, 事假: 0, 病假: 0, 缺勤: 0, 调休: 0, 年假: 0, 加班: 0, 迟到: 0, 早退: 0 };
+  const summary = {
+    出勤: 0,
+    事假: 0,
+    病假: 0,
+    缺勤: 0,
+    调休: 0,
+    年假: 0,
+    加班: 0,
+    迟到: 0,
+    早退: 0,
+  };
   for (const day of Object.values(rec)) {
     if (day && typeof day === "object") {
       for (const shift of ["am", "pm"]) {
@@ -148,18 +184,31 @@ export function buildPayrollRecord(month, empId, baseSalary, travel = 0, bonus =
   const company = INSURANCE_RATIO.company;
   const personal = INSURANCE_RATIO.personal;
   const companyContributions = {
-    养老: baseSalary * company.养老, 医疗: baseSalary * company.医疗, 工伤: baseSalary * company.工伤,
-    失业: baseSalary * company.失业, 生育: baseSalary * company.生育, 公积金: baseSalary * company.公积金
+    养老: baseSalary * company.养老,
+    医疗: baseSalary * company.医疗,
+    工伤: baseSalary * company.工伤,
+    失业: baseSalary * company.失业,
+    生育: baseSalary * company.生育,
+    公积金: baseSalary * company.公积金,
   };
   const personalContributions = {
-    养老: baseSalary * personal.养老, 医疗: baseSalary * personal.医疗, 失业: baseSalary * personal.失业,
-    公积金: baseSalary * personal.公积金, 大病医疗: BIG_SICKNESS
+    养老: baseSalary * personal.养老,
+    医疗: baseSalary * personal.医疗,
+    失业: baseSalary * personal.失业,
+    公积金: baseSalary * personal.公积金,
+    大病医疗: BIG_SICKNESS,
   };
   const gross = baseSalary + travel + bonus + overtime;
   const personalTotal = Object.values(personalContributions).reduce((sum, value) => sum + value, 0);
   const tax = estimateTax(gross, personalTotal);
   return {
-    id: `p_${month}_${empId}`, month, empId, baseSalary, travel, bonus, overtime,
+    id: `p_${month}_${empId}`,
+    month,
+    empId,
+    baseSalary,
+    travel,
+    bonus,
+    overtime,
     comp: companyContributions,
     pers: personalContributions,
     gross,
@@ -167,7 +216,7 @@ export function buildPayrollRecord(month, empId, baseSalary, travel = 0, bonus =
     tax,
     taxManual: false,
     status: "draft",
-    net: gross - personalTotal - tax
+    net: gross - personalTotal - tax,
   };
 }
 
@@ -177,8 +226,14 @@ export function buildPayrollRecord(month, empId, baseSalary, travel = 0, bonus =
 
 // 仅用于 HTML 文本和普通属性值的基础转义；更安全的选择仍是 textContent/value。
 export function escapeHtml(value) {
-  const entities = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" };
-  return String(value ?? "").replace(/[&<>'"]/g, character => entities[character]);
+  const entities = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    '"': "&quot;",
+  };
+  return String(value ?? "").replace(/[&<>'"]/g, (character) => entities[character]);
 }
 
 /*
@@ -188,26 +243,32 @@ export function escapeHtml(value) {
  */
 export function validateImportPayload(input) {
   const data = input?.data || input;
-  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("导入文件不是有效的数据对象");
+  if (!data || typeof data !== "object" || Array.isArray(data))
+    throw new Error("导入文件不是有效的数据对象");
   for (const key of ["employees", "attendance", "payroll"]) {
     if (data[key] != null && !Array.isArray(data[key])) throw new Error(`${key} 必须是数组`);
   }
   (data.employees || []).forEach((emp, index) => {
     if (!emp || typeof emp !== "object") throw new Error(`employees[${index}] 格式无效`);
     for (const key of ["id", "name", "dept"]) {
-      if (emp[key] != null && typeof emp[key] !== "string") throw new Error(`employees[${index}].${key} 必须是文本`);
+      if (emp[key] != null && typeof emp[key] !== "string")
+        throw new Error(`employees[${index}].${key} 必须是文本`);
       if (String(emp[key] || "").length > 100) throw new Error(`employees[${index}].${key} 过长`);
     }
-    if (emp.employmentStatus != null && !Object.hasOwn(EMPLOYMENT_STATUS, emp.employmentStatus)) throw new Error(`employees[${index}].employmentStatus 无效`);
+    if (emp.employmentStatus != null && !Object.hasOwn(EMPLOYMENT_STATUS, emp.employmentStatus))
+      throw new Error(`employees[${index}].employmentStatus 无效`);
   });
   for (const key of ["attendance", "payroll"]) {
     (data[key] || []).forEach((item, index) => {
-      if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error(`${key}[${index}] 格式无效`);
-      if (item.id != null && (typeof item.id !== "string" || item.id.length > 120)) throw new Error(`${key}[${index}].id 无效`);
-      if (item.empId != null && (typeof item.empId !== "string" || item.empId.length > 120)) throw new Error(`${key}[${index}].empId 无效`);
+      if (!item || typeof item !== "object" || Array.isArray(item))
+        throw new Error(`${key}[${index}] 格式无效`);
+      if (item.id != null && (typeof item.id !== "string" || item.id.length > 120))
+        throw new Error(`${key}[${index}].id 无效`);
+      if (item.empId != null && (typeof item.empId !== "string" || item.empId.length > 120))
+        throw new Error(`${key}[${index}].empId 无效`);
     });
   }
-  const employeeIds = (data.employees || []).map(emp => emp.id).filter(Boolean);
+  const employeeIds = (data.employees || []).map((emp) => emp.id).filter(Boolean);
   if (new Set(employeeIds).size !== employeeIds.length) throw new Error("employees 存在重复 id");
   return data;
 }
