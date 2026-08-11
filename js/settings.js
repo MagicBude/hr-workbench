@@ -9,7 +9,16 @@
  * DEFAULT_SETTINGS、迁移逻辑和依赖模块，保存后也要刷新所有使用该设置的视图。
  */
 
-import { state, persist, getCurrentOrg, removePreference, createSnapshot, listSnapshots, restoreSnapshot, getStorageUsage } from "./store.js";
+import {
+  state,
+  persist,
+  getCurrentOrg,
+  removePreference,
+  createSnapshot,
+  listSnapshots,
+  restoreSnapshot,
+  getStorageUsage
+} from "./store.js";
 import { DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 import { openModal, closeModal, curMonth, showToast, requestRefresh } from "./ui.js";
 import { escapeHtml } from "./domain.js";
@@ -29,7 +38,206 @@ function checked(value) {
 }
 
 function ratioInputs(cls, keys, values) {
-  return keys.map(key => `<div class="field"><label>${key}</label><input class="${cls}" data-k="${key}" type="number" step="0.001" min="0" max="1" value="${values[key] ?? 0}"></div>`).join("");
+  return keys.map(key => `
+        <div class="field">
+          <label>${key}</label>
+          <input class="${cls}" data-k="${key}" type="number"
+                 step="0.001" min="0" max="1" value="${values[key] ?? 0}">
+        </div>`).join("");
+}
+
+function attendancePage(settings) {
+  return `
+    <div class="settings-page active" data-settings-page="attendance">
+      <div class="settings-row">
+        <div>
+          <b>半天标准工时</b>
+          <div class="hint">用于整段请假默认时长及调休扣减</div>
+        </div>
+        <div class="setting-input">
+          <input id="setHalfHours" type="number" min="0.5" max="12" step="0.5"
+                 value="${settings.halfDayMinutes / 60}">
+          <span>小时</span>
+        </div>
+      </div>
+      <label class="settings-row switch-row">
+        <div>
+          <b>加班自动转调休</b>
+          <div class="hint">按实际加班分钟累计可调休余额</div>
+        </div>
+        <input id="setOtToRest" type="checkbox"${checked(settings.overtimeToRest)}>
+      </label>
+      <div class="settings-row">
+        <div>
+          <b>加班转调休比例</b>
+          <div class="hint">例如 1.5 表示加班 1 小时增加 1.5 小时调休</div>
+        </div>
+        <div class="setting-input">
+          <input id="setOtRatio" type="number" min="0" max="5" step="0.1"
+                 value="${settings.overtimeToRestRatio}">
+          <span>倍</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function featuresPage(settings) {
+  return `
+    <div class="settings-page" data-settings-page="features">
+      <label class="settings-row switch-row">
+        <div>
+          <b>允许迟到 / 早退状态</b>
+          <div class="hint">关闭后考勤循环和批量工具不再提供“迟、退”</div>
+        </div>
+        <input id="setLateEarly" type="checkbox"${checked(settings.enableLateEarly !== false)}>
+      </label>
+      <label class="settings-row switch-row">
+        <div>
+          <b>强制校验调休余额</b>
+          <div class="hint">关闭后允许调休余额为负数</div>
+        </div>
+        <input id="setRestCheck" type="checkbox"${checked(settings.enforceRestBalance !== false)}>
+      </label>
+      <label class="settings-row switch-row">
+        <div>
+          <b>显示“今天要处理”</b>
+          <div class="hint">控制顶部考勤补录和薪资待核算提醒</div>
+        </div>
+        <input id="setToday" type="checkbox"${checked(settings.showTodayTodos !== false)}>
+      </label>
+    </div>`;
+}
+
+function payrollPage(settings, ratio) {
+  return `
+    <div class="settings-page" data-settings-page="payroll">
+      <div class="hint">比例填写小数，例如 0.16 = 16%；以员工社保基数计算。</div>
+      <div class="grp-title">公司缴纳</div>
+      <div class="ratio-grid">${ratioInputs("src", COMP_KEYS, ratio.company)}</div>
+      <div class="grp-title">个人缴纳</div>
+      <div class="ratio-grid">
+        ${ratioInputs("srp", PERS_KEYS, ratio.personal)}
+        <div class="field">
+          <label>大病医疗(元/月)</label>
+          <input id="setBigSickness" type="number" min="0" step="1"
+                 value="${settings.bigSickness ?? BIG_SICKNESS}">
+        </div>
+      </div>
+    </div>`;
+}
+
+function appearancePage(settings) {
+  return `
+    <div class="settings-page" data-settings-page="appearance">
+      <div class="settings-row">
+        <div>
+          <b>默认月份</b>
+          <div class="hint">留空时使用当前月份，切换组织时生效</div>
+        </div>
+        <input id="setDefaultMonth" type="month" value="${settings.defaultMonth || ""}">
+      </div>
+      <label class="settings-row switch-row">
+        <div>
+          <b>紧凑表格</b>
+          <div class="hint">减少单元格留白，在一屏显示更多数据</div>
+        </div>
+        <input id="setCompact" type="checkbox"${checked(settings.compactTables)}>
+      </label>
+      <div class="settings-row">
+        <div>
+          <b>调休余额显示</b>
+          <div class="hint">控制花名册中可调休余额的展示方式</div>
+        </div>
+        <select id="setRestDisplay" class="setting-select">
+          <option value="smart"${settings.restBalanceDisplay === "smart" ? " selected" : ""}>智能格式（2天3小时30分钟）</option>
+          <option value="hours"${settings.restBalanceDisplay === "hours" ? " selected" : ""}>总小时（19.5小时）</option>
+          <option value="days"${settings.restBalanceDisplay === "days" ? " selected" : ""}>天数小数（2.44天）</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <div>
+          <b>列宽记忆</b>
+          <div class="hint">清除当前组织的花名册和考勤列宽</div>
+        </div>
+        <button class="btn" id="settingsResetCols">恢复默认列宽</button>
+      </div>
+    </div>`;
+}
+
+function snapshotRows() {
+  const rows = listSnapshots().map(snapshot => `
+        <div class="settings-row">
+          <div>
+            <b>${new Date(snapshot.createdAt).toLocaleString()}</b>
+            <div class="hint">${escapeHtml(snapshot.reason)}</div>
+          </div>
+          <button class="btn btn-sm" data-restore-snapshot="${snapshot.id}">恢复</button>
+        </div>`);
+  return rows.join("") || '<div class="empty">暂无快照</div>';
+}
+
+function recycledEmployeeRows() {
+  const rows = state.data.employees.filter(employee => employee.deletedAt).map(employee => `
+        <div class="settings-row">
+          <div>
+            <b>${escapeHtml(employee.name)}</b>
+            <div class="hint">${escapeHtml(employee.dept || "无部门")}</div>
+          </div>
+          <button class="btn btn-sm" data-restore-emp="${employee.id}">恢复</button>
+        </div>`);
+  return rows.join("") || '<div class="empty">回收站为空</div>';
+}
+
+function safetyPage() {
+  return `
+    <div class="settings-page" data-settings-page="safety">
+      <div class="settings-row">
+        <div>
+          <b>本地存储占用</b>
+          <div class="hint">当前浏览器内全部组织与快照</div>
+        </div>
+        <span>${(getStorageUsage() / 1024).toFixed(1)} KB</span>
+      </div>
+      <div class="settings-row">
+        <div>
+          <b>数据快照</b>
+          <div class="hint">最多保留最近 10 份，导入、清空、回收前会自动创建</div>
+        </div>
+        <button class="btn" id="createSnapshotBtn">立即备份</button>
+      </div>
+      <div class="grp-title">最近快照</div>
+      <div class="snapshot-list">${snapshotRows()}</div>
+      <div class="grp-title">员工回收站</div>
+      <div class="snapshot-list">${recycledEmployeeRows()}</div>
+    </div>`;
+}
+
+function settingsModal(settings, ratio) {
+  const organizationName = escapeHtml(getCurrentOrg()?.name || "当前组织");
+  return `
+    <div class="settings-head">
+      <div>
+        <h3>组织设置</h3>
+        <div class="hint">${organizationName} · 设置仅对本组织生效</div>
+      </div>
+    </div>
+    <div class="settings-tabs">
+      <button class="active" data-settings-tab="attendance">考勤规则</button>
+      <button data-settings-tab="features">功能开关</button>
+      <button data-settings-tab="payroll">薪资参数</button>
+      <button data-settings-tab="appearance">界面设置</button>
+      <button data-settings-tab="safety">数据安全</button>
+    </div>
+    ${attendancePage(settings)}
+    ${featuresPage(settings)}
+    ${payrollPage(settings, ratio)}
+    ${appearancePage(settings)}
+    ${safetyPage()}
+    <div class="modal-actions settings-actions">
+      <button class="btn" id="settingsCancel">取消</button>
+      <button class="btn" id="settingsReset">全部恢复默认</button>
+      <button class="btn btn-primary" id="settingsSave">保存设置</button>
+    </div>`;
 }
 
 // #endregion 设置字段与模板工具
@@ -63,57 +271,7 @@ export function initSettings() {
 export function openSettings(section = "attendance") {
   const settings = state.data.settings || (state.data.settings = { ...DEFAULT_SETTINGS });
   const ratio = settings.insuranceRatio || INSURANCE_RATIO;
-  openModal(`
-    <div class="settings-head">
-      <div><h3>组织设置</h3><div class="hint">${escapeHtml(getCurrentOrg()?.name || "当前组织")} · 设置仅对本组织生效</div></div>
-    </div>
-    <div class="settings-tabs">
-      <button class="active" data-settings-tab="attendance">考勤规则</button>
-      <button data-settings-tab="features">功能开关</button>
-      <button data-settings-tab="payroll">薪资参数</button>
-      <button data-settings-tab="appearance">界面设置</button>
-      <button data-settings-tab="safety">数据安全</button>
-    </div>
-    <div class="settings-page active" data-settings-page="attendance">
-      <div class="settings-row"><div><b>半天标准工时</b><div class="hint">用于整段请假默认时长及调休扣减</div></div><div class="setting-input"><input id="setHalfHours" type="number" min="0.5" max="12" step="0.5" value="${settings.halfDayMinutes / 60}"><span>小时</span></div></div>
-      <label class="settings-row switch-row"><div><b>加班自动转调休</b><div class="hint">按实际加班分钟累计可调休余额</div></div><input id="setOtToRest" type="checkbox"${checked(settings.overtimeToRest)}></label>
-      <div class="settings-row"><div><b>加班转调休比例</b><div class="hint">例如 1.5 表示加班 1 小时增加 1.5 小时调休</div></div><div class="setting-input"><input id="setOtRatio" type="number" min="0" max="5" step="0.1" value="${settings.overtimeToRestRatio}"><span>倍</span></div></div>
-    </div>
-    <div class="settings-page" data-settings-page="features">
-      <label class="settings-row switch-row"><div><b>允许迟到 / 早退状态</b><div class="hint">关闭后考勤循环和批量工具不再提供“迟、退”</div></div><input id="setLateEarly" type="checkbox"${checked(settings.enableLateEarly !== false)}></label>
-      <label class="settings-row switch-row"><div><b>强制校验调休余额</b><div class="hint">关闭后允许调休余额为负数</div></div><input id="setRestCheck" type="checkbox"${checked(settings.enforceRestBalance !== false)}></label>
-      <label class="settings-row switch-row"><div><b>显示“今天要处理”</b><div class="hint">控制顶部考勤补录和薪资待核算提醒</div></div><input id="setToday" type="checkbox"${checked(settings.showTodayTodos !== false)}></label>
-    </div>
-    <div class="settings-page" data-settings-page="payroll">
-      <div class="hint">比例填写小数，例如 0.16 = 16%；以员工社保基数计算。</div>
-      <div class="grp-title">公司缴纳</div><div class="ratio-grid">${ratioInputs("src", COMP_KEYS, ratio.company)}</div>
-      <div class="grp-title">个人缴纳</div><div class="ratio-grid">${ratioInputs("srp", PERS_KEYS, ratio.personal)}
-        <div class="field"><label>大病医疗(元/月)</label><input id="setBigSickness" type="number" min="0" step="1" value="${settings.bigSickness ?? BIG_SICKNESS}"></div>
-      </div>
-    </div>
-    <div class="settings-page" data-settings-page="appearance">
-      <div class="settings-row"><div><b>默认月份</b><div class="hint">留空时使用当前月份，切换组织时生效</div></div><input id="setDefaultMonth" type="month" value="${settings.defaultMonth || ""}"></div>
-      <label class="settings-row switch-row"><div><b>紧凑表格</b><div class="hint">减少单元格留白，在一屏显示更多数据</div></div><input id="setCompact" type="checkbox"${checked(settings.compactTables)}></label>
-      <div class="settings-row"><div><b>调休余额显示</b><div class="hint">控制花名册中可调休余额的展示方式</div></div><select id="setRestDisplay" class="setting-select">
-        <option value="smart"${settings.restBalanceDisplay === "smart" ? " selected" : ""}>智能格式（2天3小时30分钟）</option>
-        <option value="hours"${settings.restBalanceDisplay === "hours" ? " selected" : ""}>总小时（19.5小时）</option>
-        <option value="days"${settings.restBalanceDisplay === "days" ? " selected" : ""}>天数小数（2.44天）</option>
-      </select></div>
-      <div class="settings-row"><div><b>列宽记忆</b><div class="hint">清除当前组织的花名册和考勤列宽</div></div><button class="btn" id="settingsResetCols">恢复默认列宽</button></div>
-    </div>
-    <div class="settings-page" data-settings-page="safety">
-      <div class="settings-row"><div><b>本地存储占用</b><div class="hint">当前浏览器内全部组织与快照</div></div><span>${(getStorageUsage() / 1024).toFixed(1)} KB</span></div>
-      <div class="settings-row"><div><b>数据快照</b><div class="hint">最多保留最近 10 份，导入、清空、回收前会自动创建</div></div><button class="btn" id="createSnapshotBtn">立即备份</button></div>
-      <div class="grp-title">最近快照</div>
-      <div class="snapshot-list">${listSnapshots().map(s => `<div class="settings-row"><div><b>${new Date(s.createdAt).toLocaleString()}</b><div class="hint">${escapeHtml(s.reason)}</div></div><button class="btn btn-sm" data-restore-snapshot="${s.id}">恢复</button></div>`).join("") || '<div class="empty">暂无快照</div>'}</div>
-      <div class="grp-title">员工回收站</div>
-      <div class="snapshot-list">${state.data.employees.filter(e => e.deletedAt).map(e => `<div class="settings-row"><div><b>${escapeHtml(e.name)}</b><div class="hint">${escapeHtml(e.dept || "无部门")}</div></div><button class="btn btn-sm" data-restore-emp="${e.id}">恢复</button></div>`).join("") || '<div class="empty">回收站为空</div>'}</div>
-    </div>
-    <div class="modal-actions settings-actions">
-      <button class="btn" id="settingsCancel">取消</button>
-      <button class="btn" id="settingsReset">全部恢复默认</button>
-      <button class="btn btn-primary" id="settingsSave">保存设置</button>
-    </div>`);
+  openModal(settingsModal(settings, ratio));
   document.getElementById("modal").classList.add("modal-wide");
 
   const activate = name => {
@@ -137,8 +295,14 @@ export function openSettings(section = "attendance") {
   });
   document.getElementById("settingsReset").addEventListener("click", () => {
     if (!confirm("确认将当前组织的全部设置恢复默认？员工和业务数据不会受影响。")) return;
+
     const departments = state.data.settings.departments || [];
-    state.data.settings = { ...clone(DEFAULT_SETTINGS), departments, insuranceRatio: clone(INSURANCE_RATIO), bigSickness: BIG_SICKNESS };
+    state.data.settings = {
+      ...clone(DEFAULT_SETTINGS),
+      departments,
+      insuranceRatio: clone(INSURANCE_RATIO),
+      bigSickness: BIG_SICKNESS
+    };
     persist();
     closeModal();
     applyOrgSettings(true);
@@ -152,22 +316,28 @@ export function openSettings(section = "attendance") {
     openSettings("safety");
     showToast("数据快照已创建");
   });
-  document.querySelectorAll("[data-restore-snapshot]").forEach(button => button.addEventListener("click", () => {
-    if (!confirm("恢复后当前数据会先自动备份。确认继续？")) return;
-    restoreSnapshot(button.dataset.restoreSnapshot);
-    closeModal();
-    requestRefresh("today", "roster", "attendance", "payroll", "dashboard");
-    showToast("快照已恢复");
-  }));
-  document.querySelectorAll("[data-restore-emp]").forEach(button => button.addEventListener("click", () => {
-    const employee = state.data.employees.find(item => item.id === button.dataset.restoreEmp);
-    if (!employee) return;
-    employee.deletedAt = null;
-    persist();
-    closeModal();
-    requestRefresh("today", "roster", "attendance", "payroll", "dashboard");
-    showToast("员工已恢复");
-  }));
+  document.querySelectorAll("[data-restore-snapshot]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (!confirm("恢复后当前数据会先自动备份。确认继续？")) return;
+
+      restoreSnapshot(button.dataset.restoreSnapshot);
+      closeModal();
+      requestRefresh("today", "roster", "attendance", "payroll", "dashboard");
+      showToast("快照已恢复");
+    });
+  });
+  document.querySelectorAll("[data-restore-emp]").forEach(button => {
+    button.addEventListener("click", () => {
+      const employee = state.data.employees.find(item => item.id === button.dataset.restoreEmp);
+      if (!employee) return;
+
+      employee.deletedAt = null;
+      persist();
+      closeModal();
+      requestRefresh("today", "roster", "attendance", "payroll", "dashboard");
+      showToast("员工已恢复");
+    });
+  });
 }
 
 // 所有设置在校验通过后一次性写回，避免表单只保存一半。
