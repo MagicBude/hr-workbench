@@ -1,16 +1,19 @@
-// ============================================================
-// dashboard.js — 月度看板模块
-// ------------------------------------------------------------
-// 负责：把考勤/薪资数据汇总成“一眼看懂”的图表。
-//  - KPI 卡片：在职人数、出勤率、应发/实发合计
-//  - 出勤率环形图（内联 SVG，不依赖任何图表库）
-//  - 工资趋势折线图（内联 SVG，按月）
-// 说明：图表用原生 SVG 手画，保证零依赖、离线可用。
-// ============================================================
+/*
+ * dashboard.js — 月度人事看板
+ *
+ * 输入：员工任职区间、考勤记录、节假日设置和薪资记录。
+ * 输出：KPI、出勤率环形图和实发工资趋势图。
+ * 协作：domain.js 提供统一出勤口径，store.js 提供当前组织数据，ui.js 格式化金额。
+ *
+ * 图表使用内联 SVG，以保持零运行时依赖和离线能力。看板不得自行发明业务口径，
+ * 否则会与考勤表和导出结果产生无法解释的差异。
+ */
 
 import { state } from "./store.js";
 import { fmtMoney } from "./ui.js";
 import { attendanceMetrics, isEmployeeActiveInMonth } from "./domain.js";
+
+// #region 初始化与指标汇总
 
 export function initDashboard() {
   document.getElementById("dashMonth").addEventListener("change", renderDashboard);
@@ -46,6 +49,10 @@ export function renderDashboard() {
   renderDonut(actual, expected, leave, absent, missing);
   renderTrend();
 }
+
+// #endregion 初始化与指标汇总
+
+// #region SVG 图表
 
 // 环形图：用一个完整的灰圈 + 一段绿色弧（stroke-dasharray 控制长度）表示占比
 function renderDonut(actual, total, leave, absent, missing) {
@@ -103,3 +110,5 @@ function renderTrend() {
   </svg>`;
   legend.innerHTML = `<span><i style="background:#185FA5"></i>实发工资总额（¥）</span>`;
 }
+
+// #endregion SVG 图表

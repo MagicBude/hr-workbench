@@ -1,13 +1,17 @@
-// ============================================================
-// sample.js — 首次启动使用的虚构示例数据
-// ------------------------------------------------------------
-// 重要：所有姓名、部门、金额都是“虚构”的，方便你直接看到效果，
-//       又不会在部署到公网时泄露任何真实隐私（符合数据隐私规范）。
-// ============================================================
+/*
+ * sample.js — 首次启动的虚构示例数据
+ *
+ * 输入：默认设置、节假日及 domain.js 的汇总和薪资构造函数。
+ * 输出：符合当前 schema 的完整组织数据，供 store.ensureSeed() 首次启动时写入。
+ * 协作：示例必须与迁移、导入校验和页面期望的数据结构保持一致。
+ *
+ * 本文件只负责造数据，不承载生产业务规则；姓名、部门和金额均为虚构内容。
+ */
 
 import { HOLIDAYS_2026, DEFAULT_SETTINGS, SCHEMA_VERSION } from "./config.js";
 import { summarizeAttendance, buildPayrollRecord } from "./domain.js";
 
+// #region 示例组织构造
 // 生成一份完整的示例数据（data 对象）
 export function buildSample() {
   // 1) 员工花名册：5 个虚构员工（restSeedMinutes=初始可调休余额分钟数；可用余额=初始+加班−调休 动态算）
@@ -56,3 +60,5 @@ export function buildSample() {
   employees.forEach(e => { e.employmentStatus = "active"; e.leaveDate = ""; e.deletedAt = null; });
   return { schemaVersion: SCHEMA_VERSION, employees, attendance, payroll, holidays: { ...HOLIDAYS_2026 }, settings: { ...DEFAULT_SETTINGS } };
 }
+
+// #endregion 示例组织构造

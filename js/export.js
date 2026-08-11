@@ -1,16 +1,20 @@
-// ============================================================
-// export.js — Excel 导出
-// ------------------------------------------------------------
-// 把花名册、考勤表和薪资表导出为可直接流转的 .xlsx 文件。
-// 依赖：vendor/xlsx.mini.min.js（本地 SheetJS，通过 <script> 加载为全局 XLSX）。
-// 说明：本项目"零 CDN 依赖"，故 SheetJS 文件下载到本地 vendor/ 目录，
-//       离线或部署 GitHub Pages 都能正常导出。
-// ============================================================
+/*
+ * export.js — Excel 工作簿导出
+ *
+ * 输入：当前组织的员工、考勤、薪资数据和目标月份。
+ * 输出：可下载的花名册、考勤表或薪资表 .xlsx 文件。
+ * 协作：store.js 提供数据和调休余额，domain.js 提供状态与任职区间，
+ * vendor/xlsx.mini.min.js 在本模块之前加载并暴露全局 XLSX。
+ *
+ * SheetJS 固定放在本地 vendor 中以保持离线能力。导出字段必须与页面业务口径同步，
+ * 用户文本还需要遵守审查计划中的电子表格公式注入防护要求。
+ */
 
 import { state, computeRestMinutes } from "./store.js";
 import { WEEK_LABEL, SUM_KEYS } from "./config.js";
 import { EMPLOYMENT_STATUS, PAYROLL_STATUS, isEmployeeActiveInMonth } from "./domain.js";
 
+// #region 日期辅助
 // 该月实际天数
 function daysInMonth(month) {
   const [y, m] = month.split("-").map(Number);
@@ -22,6 +26,10 @@ function weekdayOf(month, day) {
   return new Date(y, m - 1, day).getDay();
 }
 
+// #endregion 日期辅助
+
+// #region 花名册导出
+
 // ---------- 导出花名册 ----------
 export function exportRosterXlsx() {
   const rows = [["序号", "姓名", "部门", "状态", "入职日期", "离职日期", "基本月薪", "可调休(小时)", "社保基数"]];
@@ -31,6 +39,10 @@ export function exportRosterXlsx() {
   });
   writeBook(rows, "花名册", "花名册.xlsx");
 }
+
+// #endregion 花名册导出
+
+// #region 考勤导出
 
 // ---------- 导出考勤表（表头：日期+星期；每员工三行 上/下/加；右侧汇总） ----------
 export function exportAttendanceXlsx(month) {
@@ -67,6 +79,10 @@ export function exportAttendanceXlsx(month) {
   writeBook(rows, "考勤表_" + month, "考勤表_" + month + ".xlsx");
 }
 
+// #endregion 考勤导出
+
+// #region 薪资导出
+
 // ---------- 导出薪资表（含考勤统计 + 公司/个人缴纳分项） ----------
 export function exportPayrollXlsx(month) {
   const COMP_KEYS = ["养老", "医疗", "工伤", "失业", "生育", "公积金"];
@@ -94,6 +110,10 @@ export function exportPayrollXlsx(month) {
   writeBook(rows, "薪资表_" + month, "薪资表_" + month + ".xlsx");
 }
 
+// #endregion 薪资导出
+
+// #region 工作簿工具
+
 // ---------- 工具 ----------
 function round2(n) { return Math.round((n || 0) * 100) / 100; }
 function round1(n) { return Math.round((n || 0) * 10) / 10; }
@@ -104,3 +124,5 @@ function writeBook(aoa, sheetName, filename) {
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
   XLSX.writeFile(wb, filename);
 }
+
+// #endregion 工作簿工具

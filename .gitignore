@@ -12,3 +12,6 @@ Thumbs.db
 
 # 临时校验文件
 _check.js
+
+# 项目内部文件夹（开发笔记、日志、对话记录等）
+.internal/

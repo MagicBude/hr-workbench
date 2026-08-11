@@ -34,7 +34,7 @@
 </head>
 <body>
 
-  <!-- ============ 顶部栏：标题 + 组织切换 + 数据备份 ============ -->
+  <!-- #region 顶部组织与数据操作 -->
   <header>
     <div class="brand"><span class="logo">HR</span> HR Workbench</div>
 
@@ -62,8 +62,9 @@
     <!-- 隐藏的文件选择器：点击“导入”时触发它 -->
     <input type="file" id="importFile" accept="application/json" hidden>
   </header>
+  <!-- #endregion 顶部组织与数据操作 -->
 
-  <!-- ============ 置顶区：今天要处理 ============ -->
+  <!-- #region 今日待办 -->
   <!-- 打开页面第一眼就能看到“逾期/待办”，等价于一种不打扰的提醒 -->
   <section id="today">
     <h2>
@@ -72,8 +73,9 @@
     </h2>
     <div id="todoList"></div>
   </section>
+  <!-- #endregion 今日待办 -->
 
-  <!-- ============ 底部 Tab 导航（移动端固定在底部） ============ -->
+  <!-- #region 模块导航 -->
   <nav class="tabs">
     <button data-tab="roster" class="active">
       <svg class="icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-8 0v2M12 11a4 4 0 100-8 4 4 0 000 8z"/></svg>花名册
@@ -88,8 +90,9 @@
       <svg class="icon" viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-5 3 3 5-7"/></svg>看板
     </button>
   </nav>
+  <!-- #endregion 模块导航 -->
 
-  <!-- ============ 主体：四个功能模块 ============ -->
+  <!-- #region HR 业务模块 -->
   <main>
 
     <!-- 模块一：员工花名册 -->
@@ -204,8 +207,9 @@
     </section>
 
   </main>
+  <!-- #endregion HR 业务模块 -->
 
-  <!-- ============ 弹窗容器（新建组织等用） ============ -->
+  <!-- #region 公共弹窗与脚本 -->
   <div class="modal-mask" id="modalMask">
     <div class="modal" id="modal"></div>
   </div>
@@ -214,5 +218,6 @@
   <script src="vendor/xlsx.mini.min.js"></script>
   <!-- 入口脚本：type="module" 开启 ES Modules 模块化 -->
   <script type="module" src="js/main.js"></script>
+  <!-- #endregion 公共弹窗与脚本 -->
 </body>
 </html>

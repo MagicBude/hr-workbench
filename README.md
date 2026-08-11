@@ -56,6 +56,8 @@ hr-workbench/
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 系统架构：模块划分、数据流、存储、扩展点 |
 | [`docs/SPEC.md`](docs/SPEC.md) | 功能规格：各模块详细行为规格与验收标准 |
 | [`docs/STANDARD.md`](docs/STANDARD.md) | 开发标准：代码规范、数据格式、命名、计算口径 |
+| [`docs/CODE_COMMENTING_STANDARD.md`](docs/CODE_COMMENTING_STANDARD.md) | 教材型代码与注释规范：文件头、分区、命名、解释深度与检查清单 |
+| [`docs/AUDIT_AND_IMPROVEMENT_PLAN.md`](docs/AUDIT_AND_IMPROVEMENT_PLAN.md) | 安全、质量与性能审查结论及分批执行计划 |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | 产品路线图与愿景：从 MVP 到可上市系统的演进 |
 | [`docs/OPTIMIZATION_BACKLOG.md`](docs/OPTIMIZATION_BACKLOG.md) | 产品审视、优化优先级、验收标准与实施追踪 |
 

@@ -1,9 +1,16 @@
-/* ============================================================
-   styles.css — 全部样式集中在这里
-   说明：用 CSS 变量（:root 里 --xxx）统一管理颜色/圆角，
-        以后想换主题色，只改这几行即可。
-   ============================================================ */
+/*
+ * styles.css — HR Workbench 的完整视觉与响应式规则
+ *
+ * 输入：index.html 的结构，以及 JavaScript 添加的状态类和 CSS 变量。
+ * 输出：桌面/移动端布局、业务表格、弹窗、拖拽状态和视觉反馈。
+ * 协作：ui.js 控制 modal/col-resizing，settings.js 切换 compact-tables，
+ * attendance.js 依赖 sticky 列、状态色和批量操作条的布局约定。
+ *
+ * 修改注意：大表同时使用 fixed table-layout、colgroup 和 sticky 列；改变表格布局、
+ * 层级或列尺寸时必须回归花名册、考勤、薪资以及窄屏横向滚动。
+ */
 
+/* #region 设计令牌与基础元素 */
 /* ---------- 1. 设计变量（主题色、间距等） ---------- */
 :root{
   --blue:#185FA5;          /* 主色：按钮、链接、强调 */
@@ -40,6 +47,10 @@ input,select{
   background:#fff; color:var(--text); width:100%;
 }
 input:focus,select:focus{ outline:none; border-color:var(--blue); }
+
+/* #endregion 设计令牌与基础元素 */
+
+/* #region 通用组件与页面框架 */
 
 /* ---------- 3. 通用按钮 ---------- */
 .btn{
@@ -94,6 +105,10 @@ main{ max-width:100%; margin:0 auto; padding:14px 16px 30px; }
 .field{ display:flex; flex-direction:column; gap:4px; min-width:140px; }
 .field label{ font-size:12px; color:var(--muted); }
 
+/* #endregion 通用组件与页面框架 */
+
+/* #region 表格与列宽拖拽 */
+
 /* ---------- 7. 表格 ---------- */
 table{ width:100%; border-collapse:collapse; font-size:13px; }
 th,td{ padding:9px 10px; text-align:left; border-bottom:1px solid var(--border); }
@@ -116,6 +131,10 @@ thead th{ position:relative; padding-right:8px; }
 .col-resize:hover::after{ background:rgba(33,118,199,.35); }
 body.col-resizing .col-resize::after{ background:rgba(33,118,199,.35); }
 body.col-resizing, body.col-resizing *{ cursor:col-resize !important; user-select:none !important; }
+
+/* #endregion 表格与列宽拖拽 */
+
+/* #region 考勤、看板与导航 */
 
 /* 花名册：固定布局便于列宽拖拽；操作列是末列，天然在最右侧 */
 #empTable{ table-layout:fixed !important; }
@@ -212,6 +231,10 @@ nav.tabs button svg{ width:22px; height:22px; }
 .section{ display:none; }
 .section.active{ display:block; }
 
+/* #endregion 考勤、看板与导航 */
+
+/* #region 弹窗与组织设置 */
+
 /* ---------- 11. 弹窗 ---------- */
 .modal-mask{ position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:50; display:none;
   align-items:center; justify-content:center; padding:20px; }
@@ -249,6 +272,10 @@ body.compact-tables table{ font-size:12px; }
 .rest-duration-grid label{ display:flex; align-items:center; gap:5px; color:var(--muted); font-size:12px; }
 .rest-duration-grid label span{ white-space:nowrap; flex:0 0 auto; }
 .rest-duration-grid input{ min-width:0; text-align:right; }
+
+/* #endregion 弹窗与组织设置 */
+
+/* #region 响应式与业务模块增强 */
 
 /* ---------- 12. 移动端适配（窄屏单列） ---------- */
 @media (max-width:768px){
@@ -323,3 +350,5 @@ td.ops{ white-space:nowrap; }
   box-shadow:0 4px 14px rgba(0,0,0,.18);
 }
 #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* #endregion 响应式与业务模块增强 */

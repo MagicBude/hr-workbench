@@ -1,6 +1,16 @@
+/*
+ * domain.test.js — 纯业务规则的 Node 回归测试
+ *
+ * 直接测试 domain.js，不启动浏览器，也不接触 DOM/localStorage。
+ * 这里覆盖日期、考勤分钟、薪资初值、转义和导入校验；浏览器交互与存储失败
+ * 仍需要独立的集成或端到端测试。
+ */
+
 import test from "node:test";
 import assert from "node:assert/strict";
 import { attendanceMetrics, buildPayrollRecord, escapeHtml, estimateTax, isEmployeeActiveInMonth, isEmployeeActiveOn, isWorkdayDate, summarizeAttendance, validateImportPayload } from "../js/domain.js";
+
+// #region 员工与工作日边界
 
 test("员工入离职日期限定有效在职区间", () => {
   const emp = { hireDate: "2026-08-10", leaveDate: "2026-08-20", employmentStatus: "departed" };
@@ -21,6 +31,10 @@ test("节假日覆盖周末和工作日", () => {
   assert.equal(isWorkdayDate("2026-08-09", {}), false);
   assert.equal(isWorkdayDate("2026-08-09", { "2026-08-09": { type: "workday" } }), true);
 });
+
+// #endregion 员工与工作日边界
+
+// #region 考勤、薪资与输入安全
 
 test("出勤率按应出勤分钟计算并单列未录入", () => {
   const emp = { hireDate: "2026-08-03", employmentStatus: "active" };
@@ -69,3 +83,5 @@ test("导入数据拒绝异形字段", () => {
   assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1" }, { id: "e1" }], attendance: [], payroll: [] } }), /重复 id/);
   assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1", employmentStatus: "unknown" }], attendance: [], payroll: [] } }), /employmentStatus/);
 });
+
+// #endregion 考勤、薪资与输入安全

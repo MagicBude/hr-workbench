@@ -1,14 +1,18 @@
-// ============================================================
-// store.js — 本地数据仓库
-// ------------------------------------------------------------
-// 集中管理组织数据、迁移、偏好、快照与 localStorage 键名。
-// 业务模块只读写 state 并调用本模块 API；未来若改为异步后端，需要在本边界上增加
-// repository/service 层，而不是让页面直接接触传输与持久化细节。
-// ============================================================
+/*
+ * store.js — 本地数据仓库
+ *
+ * 输入：业务模块修改后的 state、导入数据、组织/偏好/快照操作。
+ * 输出：内存中的统一 state，以及写入 localStorage 的组织级数据。
+ * 协作：所有页面模块依赖本文件；domain.js 提供迁移所需的汇总和导入校验。
+ *
+ * 关键约束：业务模块不得直接访问 localStorage。迁移到异步后端时需要调整整条
+ * 调用链，不能只把 setItem 替换成 fetch。
+ */
 
 import { STORAGE_PREFIX, SCHEMA_VERSION, HOLIDAYS_2026, DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS, HALF_DAY_MINUTES } from "./config.js";
 import { summarizeAttendance, validateImportPayload } from "./domain.js";
 
+// #region 状态与存储键
 // ---------- 内存中的运行时状态（整个应用共享这一份） ----------
 export const state = {
   orgs: [],      // 组织（公司）列表：[{ id, name }]
@@ -22,6 +26,10 @@ const KEY_CURRENT = STORAGE_PREFIX + "current";  // 当前组织 id
 const dataKey = (id) => STORAGE_PREFIX + id + "_data"; // 某组织的数据
 const snapshotKey = (id) => STORAGE_PREFIX + id + "_snapshots";
 const preferenceKey = (name) => STORAGE_PREFIX + state.current + "_pref_" + name;
+
+// #endregion 状态与存储键
+
+// #region JSON 读写与空数据
 
 // ---------- 最底层的读写小工具 ----------
 // 读取并解析 JSON；出错或没有时返回 fallback（默认值）
@@ -42,6 +50,10 @@ export function emptyData() {
     settings: { ...DEFAULT_SETTINGS, departments: [], insuranceRatio: JSON.parse(JSON.stringify(INSURANCE_RATIO)), bigSickness: BIG_SICKNESS }
   };
 }
+
+// #endregion JSON 读写与空数据
+
+// #region 数据迁移与初始化
 
 // ---------- 数据迁移：把旧版本数据升级到当前结构（向后兼容） ----------
 // 设计原则："只增不减"——只给缺失的字段补默认值，绝不删除用户已有字段。
@@ -119,6 +131,10 @@ export function reloadCurrent() {
   migrateCurrent(); // 升级旧数据到新结构（向后兼容）
 }
 
+// #endregion 数据迁移与初始化
+
+// #region 持久化、偏好与快照
+
 // 把内存里当前组织的数据保存回存储（任何修改后都要调用）
 export function persist() {
   writeJSON(dataKey(state.current), state.data);
@@ -156,6 +172,10 @@ export function getStorageUsage() {
   return bytes;
 }
 export function prepareImportedData(input) { return migrate(structuredClone(validateImportPayload(input))); }
+
+// #endregion 持久化、偏好与快照
+
+// #region 组织与部门
 
 // ---------- 组织（公司）相关 ----------
 export function getOrgs() { return state.orgs; }
@@ -199,6 +219,10 @@ export function addDepartment(name) {
   if (!list.includes(n)) { list.push(n); persist(); }
 }
 
+// #endregion 组织与部门
+
+// #region 动态调休余额
+
 // ---------- 可调休余额（动态计算，分钟级） ----------
 // 可用余额 = 初始余额(restSeedMinutes) + 加班累计(分钟) − 调休累计(分钟)。
 // 每次考勤变动后无需手动维护计数器，按记录实时算，不会漂移。
@@ -234,3 +258,5 @@ export function computeRestMinutes(empId) {
   const seed = (emp && emp.restSeedMinutes) || 0;
   return Math.round(seed + earned - used);
 }
+
+// #endregion 动态调休余额

@@ -1,17 +1,21 @@
-// ============================================================
-// payroll.js — 月度薪资核算
-// ------------------------------------------------------------
-// 负责：按「月份」为每位员工生成薪资，自动算五险一金/个税/实发，
-//        支持手动修改、展示公司/个人缴纳分项、设置组织比例，并可导出 CSV。
-// 计算基数：员工设置了 insuranceBase 就用它，否则用薪资的基本月薪。
-// 计算比例：settings.insuranceRatio（组织级，可在"比例设置"弹窗里改）。
-// ============================================================
+/*
+ * payroll.js — 月度薪资核算页面
+ *
+ * 输入：当前月份、员工档案、组织薪资参数和用户编辑的收入/税额/状态。
+ * 输出：state.data.payroll 中的月度记录、薪资表格以及 CSV 下载文件。
+ * 协作：domain.js 提供初始薪资和税额口径，store.js 持久化，settings.js 编辑组织比例。
+ *
+ * 关键约束：草稿可按最新员工工资和组织参数重算；已确认/已发放记录是历史快照，
+ * 页面渲染和比例变化都不能静默改写。当前个税仅为演示估算，不是正式财税结果。
+ */
 
 import { state, persist } from "./store.js";
 import { fmtMoney, downloadFile, requestRefresh, showToast } from "./ui.js";
 import { INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 import { openSettings } from "./settings.js";
 import { estimateTax, escapeHtml, PAYROLL_STATUS, isEmployeeActiveInMonth, buildPayrollRecord } from "./domain.js";
+
+// #region 核算字段与领域辅助
 
 // 公司缴纳 / 个人缴纳的项目顺序（与表头一致）
 const COMP_KEYS = ["养老", "医疗", "工伤", "失业", "生育", "公积金"];
@@ -43,7 +47,8 @@ function bigSickness() {
   return (s && s.bigSickness != null) ? s.bigSickness : BIG_SICKNESS;
 }
 
-// 重新计算五险一金、个税、实发
+// 按当前员工基数和组织比例重算草稿。人工覆盖税额时保留用户输入，
+// 但应发、个人缴纳和实发仍跟随收入变化更新。
 function recompute(p) {
   const base = baseOf(p);
   const r = ratioOf();
@@ -62,7 +67,9 @@ function recompute(p) {
   if (!p.taxManual) p.tax = estimateTax(p.gross, p.persTotal);
   p.net = p.gross - p.persTotal - p.tax;                       // 实发
 }
-function round2(n) { return Math.round(n * 100) / 100; }
+function round2(number) {
+  return Math.round(number * 100) / 100;
+}
 function employeesForMonth(month) {
   return state.data.employees.filter(e => !e.deletedAt && isEmployeeActiveInMonth(e, month));
 }
@@ -76,6 +83,10 @@ function recomputeDraft(p) {
   p.tax ??= 0;
   p.net ??= p.gross - p.persTotal - p.tax;
 }
+
+// #endregion 核算字段与领域辅助
+
+// #region 页面初始化
 
 export function initPayroll() {
   // "生成/刷新薪资"：对当前月份每位员工确保有一条薪资记录
@@ -96,6 +107,10 @@ export function initPayroll() {
   document.getElementById("ratioBtn").addEventListener("click", () => openSettings("payroll"));
   document.getElementById("payMonth").addEventListener("change", renderPayroll);
 }
+
+// #endregion 页面初始化
+
+// #region 薪资表渲染与编辑
 
 export function renderPayroll() {
   const month = document.getElementById("payMonth").value || "2026-08";
@@ -168,7 +183,12 @@ export function renderPayroll() {
   }));
 }
 
-// 导出 CSV：带 BOM(﻿) 让 Excel 正确显示中文（含公司/个人缴纳分项）
+// #endregion 薪资表渲染与编辑
+
+// #region CSV 导出
+
+// 带 UTF-8 BOM 可让常见 Windows Excel 正确识别中文。
+// 当前字段转义和公式前缀防护仍需按审查计划补齐，不能把此导出用于不可信文本流转。
 function exportCSV() {
   const month = document.getElementById("payMonth").value || "2026-08";
   const head = ["姓名", "部门", "基本月薪", "出差补贴", "奖金", "加班费", "本月应发",
@@ -187,3 +207,5 @@ function exportCSV() {
   const csv = "﻿" + rows.map(r => r.join(",")).join("\n");
   downloadFile(csv, "薪资_" + month + ".csv", "text/csv");
 }
+
+// #endregion CSV 导出

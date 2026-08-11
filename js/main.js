@@ -20,6 +20,7 @@ import { exportRosterXlsx, exportAttendanceXlsx, exportPayrollXlsx } from "./exp
 import { initSettings, applyOrgSettings } from "./settings.js";
 import { escapeHtml, isEmployeeActiveOn } from "./domain.js";
 
+// #region 组织与顶部待办渲染
 // ---------- 顶部：组织下拉框渲染 ----------
 function renderOrgs() {
   const sel = document.getElementById("orgSelect");
@@ -80,6 +81,10 @@ function renderToday() {
   });
 }
 
+// #endregion 组织与顶部待办渲染
+
+// #region 视图调度
+
 // ---------- 切换 Tab ----------
 function switchTab(name) {
   document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
@@ -101,6 +106,10 @@ window.__refresh = (...modules) => {
   const refreshers = { orgs: renderOrgs, today: renderToday, roster: renderRoster, attendance: renderAttendance, payroll: renderPayroll, dashboard: renderDashboard };
   [...new Set(modules)].forEach(name => refreshers[name]?.());
 };
+
+// #endregion 视图调度
+
+// #region 全局事件绑定
 
 // ---------- 绑定顶部栏：组织切换 / 新建组织 / 导出 / 导入 / 清空 ----------
 function bindTopbar() {
@@ -217,6 +226,10 @@ function bindGlobalKeys() {
   });
 }
 
+// #endregion 全局事件绑定
+
+// #region 帮助内容
+
 // ---------- 帮助按钮（规则说明弹窗） ----------
 function bindHelp() {
   document.getElementById("helpAttBtn").addEventListener("click", () => showHelp("考勤规则说明", [
@@ -237,6 +250,10 @@ function bindHelp() {
   ]));
 }
 
+// #endregion 帮助内容
+
+// #region 启动顺序
+
 // ============================================================
 // 启动！
 // ============================================================
@@ -255,3 +272,5 @@ bindGlobalKeys();          // 4.6) 弹窗 Esc 关闭 / Enter 保存
 bindHelp();                // 4.7) 帮助按钮（规则说明）
 applyOrgSettings(true);     // 4.8) 应用当前组织的界面偏好与默认月份
 renderAll();               // 5) 首次绘制全部内容
+
+// #endregion 启动顺序

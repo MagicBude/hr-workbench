@@ -1,10 +1,15 @@
-// ============================================================
-// ui.js — 通用界面小工具
-// ------------------------------------------------------------
-// 这些功能在多个模块里都会用到（弹窗、文件下载、金额格式化、日期），
-// 抽出来放一处，避免每个文件重复写一遍。
-// 模块通过 export 把函数暴露出去，别的文件用 import 引入即可。
-// ============================================================
+/*
+ * ui.js — 与业务无关的通用界面工具
+ *
+ * 输入：弹窗模板、下载内容、日期/金额及表格列宽配置。
+ * 输出：公共弹窗、Toast、文件下载、格式化文本和列宽拖拽行为。
+ * 协作：各页面模块调用这里的 UI 能力；requestRefresh 通过 main.js 的全局入口调度视图。
+ *
+ * 修改注意：openModal 目前只接收项目内部可信模板；列宽工具会重建 colgroup，
+ * 因此必须同时重绑拖拽手柄，不能保留指向旧 <col> 的事件闭包。
+ */
+
+// #region 弹窗与文件下载
 
 // 打开弹窗：参数是弹窗内部的 HTML 字符串
 export function openModal(html) {
@@ -35,6 +40,10 @@ export function downloadFile(content, filename, type) {
   a.click();                                // 模拟点击“下载”
   URL.revokeObjectURL(url);                 // 用完释放，避免内存泄漏
 }
+
+// #endregion 弹窗与文件下载
+
+// #region 格式化、帮助与反馈
 
 // 金额格式化：12345 -> "¥12,345"（数字加千位分隔，前面加人民币符号）
 export function fmtMoney(n) {
@@ -81,6 +90,10 @@ export function requestRefresh(...modules) {
   if (typeof window.__refresh === "function") window.__refresh(...modules);
   else if (typeof window.__renderAll === "function") window.__renderAll();
 }
+
+// #endregion 格式化、帮助与反馈
+
+// #region 表格列宽拖拽
 
 // ============================================================
 // enableColResize — Excel 式列宽拖拽（零依赖）
@@ -165,3 +178,5 @@ function startResize(e, th, cols, widths, group, onCommit, onResized, min) {
   document.addEventListener("mouseup", up);
   document.body.classList.add("col-resizing");
 }
+
+// #endregion 表格列宽拖拽

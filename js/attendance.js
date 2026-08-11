@@ -1,21 +1,21 @@
-// ============================================================
-// attendance.js — 月度分时段考勤
-// ------------------------------------------------------------
-// 页面结构（参照传统考勤表，与"导出 Excel"列一致）：
-//   序号 | 姓名 | 部门 | 时段 | 1 2 3 … N(日期) | 出勤 事假 病假 缺勤 调休 年假 加班
-//   每个员工占 3 行：上午 / 下午 / 加班；序号/姓名/部门/汇总用 rowspan 合并 3 行。
-//   表头两行：第 1 行是日期，第 2 行是星期（节假日显示 休/班）。
-// 数据结构：rec = { 1: { am:"√", pm:"√", ot:"" }, ... }（每天上午/下午/加班三时段）
-// 交互：点击某时段格循环切换。普通工作日上午/下午：√→事→病→缺→调→年→空；周末/节假日上午/下午可走完整循环（含「加」）；加班行：加↔空。
-// 联动：选「调」扣可调休余额（余额不足则【跳过】该状态，不卡死循环，并 toast 提示）；
-//       选「加」且开启"加班转调休"时自动增加余额。节假日列自动标色（放假红/调休上班蓝）。
-// 布局：用真 <table> + border-collapse，保证横竖线对齐；左侧员工信息列 sticky 固定。
-// ============================================================
+/*
+ * attendance.js — 月度分时段考勤表
+ *
+ * 输入：月份、员工任职区间、节假日覆盖、组织考勤设置和鼠标操作。
+ * 输出：state.data.attendance、考勤汇总、调休余额变化及可交互的大表格。
+ * 协作：domain.js 统一工作日与汇总口径，store.js 持久化并计算调休余额，
+ * ui.js 提供弹窗、列宽和刷新，config.js 定义状态、时段和内置节假日。
+ *
+ * 每名员工占上午/下午/加班三行；上午和下午是应出勤时段，加班是独立时段。
+ * 节假日覆盖普通周末规则。批量操作必须与单格操作遵守相同的状态和余额约束。
+ */
 
 import { state, persist, getDepartments, computeRestMinutes, loadPreference, savePreference, removePreference } from "./store.js";
 import { STATUSES, STATUS_LABEL, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026, SUM_KEYS, HALF_DAY_MINUTES } from "./config.js";
 import { openModal, closeModal, showToast, enableColResize, requestRefresh } from "./ui.js";
 import { escapeHtml, isEmployeeActiveInMonth, summarizeAttendance } from "./domain.js";
+
+// #region 时长与单元格显示
 
 // ---------- 时长相关：可带时长的状态 ----------
 // 除出勤√外，其它状态都支持填分钟：
@@ -44,6 +44,10 @@ function fmtMin(m) {
   if (m < 60) return m + "m";
   return Math.floor(m / 60) + "h" + (m % 60) + "m";
 }
+
+// #endregion 时长与单元格显示
+
+// #region 考勤记录与日期规则
 
 // 考勤筛选（仅内存）：按姓名模糊匹配 + 按部门精确匹配
 let attFilter = { name: "", dept: "", summaryCollapsed: false };
@@ -87,6 +91,10 @@ export function isWorkday(month, day) {
   const wd = weekdayOf(month, day);
   return wd !== 0 && wd !== 6;
 }
+
+// #endregion 考勤记录与日期规则
+
+// #region 初始化与表格渲染
 
 export function initAttendance() {
   document.getElementById("attMonth").addEventListener("change", renderAttendance);
@@ -218,6 +226,10 @@ export function renderAttendance() {
   syncAttSticky(table);   // 初次渲染也要按实际列宽定位 sticky 列
 }
 
+// #endregion 初始化与表格渲染
+
+// #region 列宽与固定列
+
 // 列宽持久化（按组织）：花名册用一维数组；考勤用 {fixed,date,sum}（日期/汇总整组同宽）
 // 恢复默认列宽：清除记忆并刷新
 export function resetAttColWidths() {
@@ -252,7 +264,13 @@ function syncAttSticky(table) {
 }
 
 // 半天数显示：整数不带小数点，0.5 显示为 0.5
-function fmt1(n) { return (n % 1 === 0) ? String(n) : n.toFixed(1); }
+function fmt1(number) {
+  return (number % 1 === 0) ? String(number) : number.toFixed(1);
+}
+
+// #endregion 列宽与固定列
+
+// #region 单格交互与区域选择
 
 // 单元格点击：点格子循环切换状态；点「时长」角标打开时长编辑（不切换状态）
 function onCellClick(td, ev) {
@@ -365,6 +383,10 @@ function highlightRange(cur) {
     td.classList.toggle("sel", inRange);
   });
 }
+
+// #endregion 单格交互与区域选择
+
+// #region 批量操作
 function showBulkBar(ev) {
   const cells = [...document.querySelectorAll("#attGrid td.cell.sel")];
   if (!cells.length) return;
@@ -424,6 +446,10 @@ function applyBulk(cells, status) {
   if (skipped) showToast(`已应用 ${applied} 格，跳过 ${skipped} 格（所选状态不适用于这些单元格）`);
   else if (applied) showToast(`已批量应用 ${applied} 格`);
 }
+
+// #endregion 批量操作
+
+// #region 状态应用与时长编辑
 // 设置单个格状态；avail 为“进入本格前的可用余额”，返回更新后的可用余额（批量内联动）
 function setCellStatus(emp, rec, day, shift, status, avail) {
   const st = state.data.settings || {};
@@ -558,6 +584,10 @@ function openDurationEditor(empId, day, shift) {
   };
 }
 
+// #endregion 状态应用与时长编辑
+
+// #region 节假日设置
+
 // ---------- 节假日设置弹窗 ----------
 function openHolidayModal() {
   const month = document.getElementById("attMonth").value || "2026-08";
@@ -606,3 +636,5 @@ function clearHoliday(date) {
   delete state.data.holidays[date];
   persist(); closeModal(); requestRefresh("attendance", "dashboard", "today");
 }
+
+// #endregion 节假日设置

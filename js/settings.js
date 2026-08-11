@@ -1,30 +1,50 @@
-// ============================================================
-// settings.js — 组织级设置中心
-// ------------------------------------------------------------
-// 所有设置跟随当前组织保存；界面只负责编辑，业务模块直接读取 state.data.settings。
-// ============================================================
+/*
+ * settings.js — 组织级设置中心
+ *
+ * 输入：当前组织的 settings、快照列表和弹窗表单值。
+ * 输出：更新后的组织设置、恢复后的数据，以及应用到 body/月份控件的界面状态。
+ * 协作：store.js 负责持久化与快照，ui.js 提供弹窗和刷新，考勤/薪资/看板读取设置。
+ *
+ * 修改注意：半天工时、加班比例和社保比例会改变业务结果。新增设置时必须同步
+ * DEFAULT_SETTINGS、迁移逻辑和依赖模块，保存后也要刷新所有使用该设置的视图。
+ */
 
 import { state, persist, getCurrentOrg, removePreference, createSnapshot, listSnapshots, restoreSnapshot, getStorageUsage } from "./store.js";
 import { DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 import { openModal, closeModal, curMonth, showToast, requestRefresh } from "./ui.js";
 import { escapeHtml } from "./domain.js";
 
+// #region 设置字段与模板工具
+
 const COMP_KEYS = ["养老", "医疗", "工伤", "失业", "生育", "公积金"];
 const PERS_KEYS = ["养老", "医疗", "失业", "公积金"];
 
-function clone(v) { return JSON.parse(JSON.stringify(v)); }
-function checked(v) { return v ? " checked" : ""; }
-function ratioInputs(cls, keys, values) {
-  return keys.map(k => `<div class="field"><label>${k}</label><input class="${cls}" data-k="${k}" type="number" step="0.001" min="0" max="1" value="${values[k] ?? 0}"></div>`).join("");
+// 设置对象只包含 JSON 数据，深拷贝可避免恢复默认值后继续共享嵌套比例对象。
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
 }
 
+function checked(value) {
+  return value ? " checked" : "";
+}
+
+function ratioInputs(cls, keys, values) {
+  return keys.map(key => `<div class="field"><label>${key}</label><input class="${cls}" data-k="${key}" type="number" step="0.001" min="0" max="1" value="${values[key] ?? 0}"></div>`).join("");
+}
+
+// #endregion 设置字段与模板工具
+
+// #region 设置应用与入口
+
+// resetMonths 只在组织切换、导入和保存设置时使用；普通视图重绘不能把用户
+// 正在查看的月份强行改回默认值。
 export function applyOrgSettings(resetMonths = false) {
-  const st = state.data.settings || DEFAULT_SETTINGS;
-  document.body.classList.toggle("compact-tables", !!st.compactTables);
+  const settings = state.data.settings || DEFAULT_SETTINGS;
+  document.body.classList.toggle("compact-tables", !!settings.compactTables);
   const today = document.getElementById("today");
-  if (today) today.hidden = st.showTodayTodos === false;
+  if (today) today.hidden = settings.showTodayTodos === false;
   if (resetMonths) {
-    const month = st.defaultMonth || curMonth();
+    const month = settings.defaultMonth || curMonth();
     ["attMonth", "payMonth", "dashMonth"].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = month;
@@ -35,6 +55,10 @@ export function applyOrgSettings(resetMonths = false) {
 export function initSettings() {
   document.getElementById("settingsBtn").addEventListener("click", () => openSettings());
 }
+
+// #endregion 设置应用与入口
+
+// #region 设置弹窗渲染与事件
 
 export function openSettings(section = "attendance") {
   const st = state.data.settings || (state.data.settings = { ...DEFAULT_SETTINGS });
@@ -123,25 +147,39 @@ export function openSettings(section = "attendance") {
   }));
 }
 
+// 所有设置在校验通过后一次性写回，避免表单只保存一半。
+// 保存后刷新全部依赖视图，防止新规则与旧计算结果同时显示。
 function saveSettings() {
   const halfHours = Number(document.getElementById("setHalfHours").value);
   const otRatio = Number(document.getElementById("setOtRatio").value);
   if (!(halfHours >= 0.5 && halfHours <= 12)) { alert("半天标准工时需在 0.5～12 小时之间"); return; }
   if (!(otRatio >= 0 && otRatio <= 5)) { alert("加班转调休比例需在 0～5 之间"); return; }
-  const st = state.data.settings;
-  st.halfDayMinutes = Math.round(halfHours * 60);
-  st.overtimeToRest = document.getElementById("setOtToRest").checked;
-  st.overtimeToRestRatio = otRatio;
-  st.enableLateEarly = document.getElementById("setLateEarly").checked;
-  st.enforceRestBalance = document.getElementById("setRestCheck").checked;
-  st.showTodayTodos = document.getElementById("setToday").checked;
-  st.compactTables = document.getElementById("setCompact").checked;
-  st.defaultMonth = document.getElementById("setDefaultMonth").value;
-  st.restBalanceDisplay = document.getElementById("setRestDisplay").value;
-  const nr = { company: {}, personal: {} };
-  document.querySelectorAll(".src").forEach(i => nr.company[i.dataset.k] = Math.max(0, Number(i.value) || 0));
-  document.querySelectorAll(".srp").forEach(i => nr.personal[i.dataset.k] = Math.max(0, Number(i.value) || 0));
-  st.insuranceRatio = nr;
-  st.bigSickness = Math.max(0, Number(document.getElementById("setBigSickness").value) || 0);
-  persist(); closeModal(); applyOrgSettings(true); requestRefresh("today", "roster", "attendance", "payroll", "dashboard"); showToast("组织设置已保存");
+  const settings = state.data.settings;
+  settings.halfDayMinutes = Math.round(halfHours * 60);
+  settings.overtimeToRest = document.getElementById("setOtToRest").checked;
+  settings.overtimeToRestRatio = otRatio;
+  settings.enableLateEarly = document.getElementById("setLateEarly").checked;
+  settings.enforceRestBalance = document.getElementById("setRestCheck").checked;
+  settings.showTodayTodos = document.getElementById("setToday").checked;
+  settings.compactTables = document.getElementById("setCompact").checked;
+  settings.defaultMonth = document.getElementById("setDefaultMonth").value;
+  settings.restBalanceDisplay = document.getElementById("setRestDisplay").value;
+
+  const insuranceRatio = { company: {}, personal: {} };
+  document.querySelectorAll(".src").forEach(input => {
+    insuranceRatio.company[input.dataset.k] = Math.max(0, Number(input.value) || 0);
+  });
+  document.querySelectorAll(".srp").forEach(input => {
+    insuranceRatio.personal[input.dataset.k] = Math.max(0, Number(input.value) || 0);
+  });
+  settings.insuranceRatio = insuranceRatio;
+  settings.bigSickness = Math.max(0, Number(document.getElementById("setBigSickness").value) || 0);
+
+  persist();
+  closeModal();
+  applyOrgSettings(true);
+  requestRefresh("today", "roster", "attendance", "payroll", "dashboard");
+  showToast("组织设置已保存");
 }
+
+// #endregion 设置弹窗渲染与事件

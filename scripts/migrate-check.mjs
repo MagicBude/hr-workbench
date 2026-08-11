@@ -1,15 +1,18 @@
-// ============================================================
-// migrate-check.mjs — 数据迁移回测脚本（Phase 5）
-// ------------------------------------------------------------
-// 用途：在 Node 里验证 store.migrate() 能把"旧版 JSON"自动升级为新结构，
-//       确保老数据（如最初导出的斯迈孚 JSON）导入后不报错、字段齐全。
-// 运行：node scripts/migrate-check.mjs
-// 说明：这里 mock 了浏览器 localStorage（Node 环境没有），再 import 数据层。
-// ============================================================
+/*
+ * migrate-check.mjs — 手动数据迁移回测脚本
+ *
+ * 输入：仓库外层指定的旧版 JSON；输出：各迁移断言的 PASS/FAIL 和进程退出码。
+ * 协作：在 Node 中模拟 localStorage 后动态加载 store.js，避免依赖浏览器页面。
+ *
+ * 该脚本依赖开发者本机的历史样本，不属于 npm test 的稳定测试集；通用迁移场景
+ * 应逐步改写为仓库内的脱敏 fixture 和 node:test 用例。
+ */
 
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+// #region Node 浏览器环境适配
 
 // mock 浏览器 localStorage（store.js 顶层不调用，但保险起见）
 global.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
@@ -17,6 +20,10 @@ global.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () =
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Windows 下动态 import 必须用 file:// URL，不能直接用 C:\ 绝对路径
 const store = await import(pathToFileURL(path.join(__dirname, "..", "js", "store.js")).href);
+
+// #endregion Node 浏览器环境适配
+
+// #region 旧数据迁移与断言
 
 // 读取旧版 JSON（在仓库外层，避免误提交真实隐私）
 const jsonPath = path.join(__dirname, "..", "..", "斯迈孚导入数据.json");
@@ -41,3 +48,5 @@ check("payroll 含缴纳明细(comp/pers)", d.payroll.every(p => p.comp && p.per
 
 console.log(ok ? "\n迁移回测：全部通过 ✓" : "\n迁移回测：存在失败项 ✗");
 process.exit(ok ? 0 : 1);
+
+// #endregion 旧数据迁移与断言

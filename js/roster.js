@@ -1,16 +1,21 @@
-// ============================================================
-// roster.js — 员工档案与生命周期
-// ------------------------------------------------------------
-// 负责员工档案的展示、筛选、新增、编辑、离职归档、回收和排序。
-// 数据都来自 store.js 的 state.data.employees，改动后调用 persist() 保存。
-// 可调休余额以分钟为存储单位，由初始余额与考勤中的加班/调休动态计算。
-// ============================================================
+/*
+ * roster.js — 员工档案与生命周期页面
+ *
+ * 输入：员工数组、组织部门列表、筛选条件和员工表单值。
+ * 输出：员工表格及新增、编辑、排序、离职归档和回收后的员工数据。
+ * 协作：store.js 持久化并计算调休余额，domain.js 提供状态与安全文本处理，
+ * 考勤、薪资和看板在员工变化后同步刷新。
+ *
+ * 关键约束：回收员工不能删除历史记录；可调休余额由初始值和考勤动态计算，
+ * 不能再维护一份容易漂移的“当前余额”。
+ */
 
 import { state, persist, getDepartments, addDepartment, computeRestMinutes, loadPreference, savePreference, removePreference, createSnapshot } from "./store.js";
 import { HALF_DAY_MINUTES } from "./config.js";
 import { fmtMoney, openModal, closeModal, enableColResize, requestRefresh } from "./ui.js";
 import { escapeHtml, EMPLOYMENT_STATUS } from "./domain.js";
 
+// #region 调休显示、列宽与筛选状态
 // 列宽持久化（按组织）：存在 localStorage 的 wb_hr_{org}_colw_{tag}
 // 花名册默认列宽（序号/姓名/部门/入职/月薪/可调休/操作）
 const EMP_DEF_W = [44, 110, 120, 120, 80, 110, 110, 160];
@@ -45,6 +50,10 @@ export function resetEmpColWidths() {
 
 // 花名册筛选项（仅内存，不持久化）：按姓名模糊匹配 + 按部门精确匹配
 let rosterFilter = { name: "", dept: "", status: "current" };
+
+// #endregion 调休显示、列宽与筛选状态
+
+// #region 部门选项
 
 // —— 小工具：转义，避免部门名里的引号/尖括号破坏 HTML ——
 // 生成部门下拉的 <option>（含「无部门」和「➕ 新增部门」）
@@ -98,6 +107,10 @@ function syncAddDeptSelect() {
   }
 }
 
+// #endregion 部门选项
+
+// #region 初始化与新增员工
+
 // 初始化：只绑定一次“添加员工”按钮（它在页面上是固定存在的元素）
 export function initRoster() {
   document.getElementById("toggleAddEmpBtn").addEventListener("click", () => {
@@ -146,6 +159,10 @@ export function initRoster() {
     requestRefresh("roster", "attendance", "payroll", "dashboard", "today");
   });
 }
+
+// #endregion 初始化与新增员工
+
+// #region 花名册渲染与行操作
 
 // 渲染：把员工数组画成表格（带序号、可调休、编辑/删除、拖拽手柄）
 export function renderRoster() {
@@ -232,6 +249,10 @@ export function renderRoster() {
   });
 }
 
+// #endregion 花名册渲染与行操作
+
+// #region 拖拽排序
+
 // 拖拽排序：拖起一行 → 放到另一行 → 交换两行在数组里的位置
 function bindDnD(tb) {
   let dragId = null;   // 当前被拖拽的员工 id（用 id 而非行号，兼容筛选后的顺序）
@@ -265,6 +286,10 @@ function bindDnD(tb) {
     tr.addEventListener("dragend", () => tr.classList.remove("dragging"));
   });
 }
+
+// #endregion 拖拽排序
+
+// #region 员工编辑
 
 // 编辑弹窗：修改员工全部字段（含可调休余额、社保基数）
 function openEditModal(id) {
@@ -331,3 +356,5 @@ function openEditModal(id) {
   // 编辑弹窗里的部门下拉同样支持「➕ 新增部门」
   wireNewDept(document.getElementById("emDept"));
 }
+
+// #endregion 员工编辑
