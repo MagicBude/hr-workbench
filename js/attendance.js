@@ -22,27 +22,29 @@ import { escapeHtml, isEmployeeActiveInMonth, summarizeAttendance } from "./doma
 //   - 调/年/事/病/缺：整段请假默认按半天(240 分钟)，可改为任意分钟（如请 2 小时）
 //   - 加：加班，默认 1 小时（用户选择），可按分钟调
 //   - 迟/退：迟到/早退，默认 30 分钟
-function isDurationStatus(s) { return s && s !== "√"; }
-function defaultMinFor(s) {
+function isDurationStatus(status) {
+  return status && status !== "√";
+}
+function defaultMinFor(status) {
   const half = (state.data.settings && state.data.settings.halfDayMinutes) || HALF_DAY_MINUTES;
-  if (s === "加") return 60;
-  if (s === "迟" || s === "退") return 30;
+  if (status === "加") return 60;
+  if (status === "迟" || status === "退") return 30;
   return half; // 调/年/事/病/缺 整段按半天
 }
 // 把单元格值（字符串 或 {s,min}）解析成展示所需 {s,min,color}
-function cellView(v) {
-  const s = (v && typeof v === "object") ? v.s : v;
-  const min = (v && typeof v === "object" && v.min != null) ? v.min : null;
-  const color = s ? STATUS_COLOR[s] : null;
-  return { s: s || "", min, color };
+function cellView(value) {
+  const status = (value && typeof value === "object") ? value.s : value;
+  const minutes = (value && typeof value === "object" && value.min != null) ? value.min : null;
+  const color = status ? STATUS_COLOR[status] : null;
+  return { s: status || "", min: minutes, color };
 }
 // 分钟 → 简短文案：240→"4h"，60→"1h"，30→"30m"，90→"1h30m"
-function fmtMin(m) {
-  m = Math.round(m || 0);
-  if (m <= 0) return "0m";
-  if (m % 60 === 0) return (m / 60) + "h";
-  if (m < 60) return m + "m";
-  return Math.floor(m / 60) + "h" + (m % 60) + "m";
+function fmtMin(value) {
+  const minutes = Math.round(value || 0);
+  if (minutes <= 0) return "0m";
+  if (minutes % 60 === 0) return (minutes / 60) + "h";
+  if (minutes < 60) return minutes + "m";
+  return Math.floor(minutes / 60) + "h" + (minutes % 60) + "m";
 }
 
 // #endregion 时长与单元格显示
@@ -54,16 +56,20 @@ let attFilter = { name: "", dept: "", summaryCollapsed: false };
 
 // 取某员工某月考勤 rec（{day:{am,pm,ot}}），没有则返回空对象
 function getAtt(month, empId) {
-  const a = state.data.attendance.find(x => x.month === month && x.empId === empId);
-  return a ? a.rec : {};
+  const attendanceRecord = state.data.attendance.find(item => item.month === month && item.empId === empId);
+  return attendanceRecord ? attendanceRecord.rec : {};
 }
 
 // 保存某员工某月考勤：存在则更新，不存在则新建；同时重算汇总
 function saveAtt(month, empId, rec) {
   const summary = summarizeAttendance(rec);
   const exist = state.data.attendance.find(x => x.month === month && x.empId === empId);
-  if (exist) { exist.rec = rec; exist.summary = summary; }
-  else state.data.attendance.push({ id: "a_" + month + "_" + empId, month, empId, rec, summary });
+  if (exist) {
+    exist.rec = rec;
+    exist.summary = summary;
+  } else {
+    state.data.attendance.push({ id: "a_" + month + "_" + empId, month, empId, rec, summary });
+  }
   persist();
 }
 
@@ -100,12 +106,18 @@ export function initAttendance() {
   document.getElementById("attMonth").addEventListener("change", renderAttendance);
   document.getElementById("holidayBtn").addEventListener("click", openHolidayModal);
   // 筛选：姓名 + 部门（与花名册共享组织级部门列表）
-  const fn = document.getElementById("attFilterName");
-  const fd = document.getElementById("attFilterDept");
-  fd.innerHTML = '<option value="">全部部门</option>'
+  const nameFilter = document.getElementById("attFilterName");
+  const departmentFilter = document.getElementById("attFilterDept");
+  departmentFilter.innerHTML = '<option value="">全部部门</option>'
     + getDepartments().map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
-  fn.addEventListener("input", () => { attFilter.name = fn.value; renderAttendance(); });
-  fd.addEventListener("change", () => { attFilter.dept = fd.value; renderAttendance(); });
+  nameFilter.addEventListener("input", () => {
+    attFilter.name = nameFilter.value;
+    renderAttendance();
+  });
+  departmentFilter.addEventListener("change", () => {
+    attFilter.dept = departmentFilter.value;
+    renderAttendance();
+  });
   document.getElementById("toggleAttSummaryBtn").addEventListener("click", () => {
     attFilter.summaryCollapsed = !attFilter.summaryCollapsed;
     document.getElementById("toggleAttSummaryBtn").textContent = attFilter.summaryCollapsed ? "展开汇总列" : "收起汇总列";
@@ -551,16 +563,28 @@ function openDurationEditor(empId, day, shift) {
       <button class="btn btn-primary" id="dOk">确定</button>
     </div>`);
 
-  const hEl = document.getElementById("dH"), mEl = document.getElementById("dM");
-  const upd = () => { hEl.textContent = h; mEl.textContent = m; };
-  const setH = v => { h = Math.max(0, Math.min(23, v)); upd(); };
-  const setM = v => { m = Math.max(0, Math.min(59, v)); upd(); };
-  document.getElementById("dHdec").onclick = () => setH(h - 1);
-  document.getElementById("dHinc").onclick = () => setH(h + 1);
-  document.getElementById("dMdec").onclick = () => setM(m - 1);
-  document.getElementById("dMinc").onclick = () => setM(m + 1);
-  document.querySelectorAll("[data-chip]").forEach(b => b.onclick = () => {
-    const mm = +b.dataset.chip; setH(Math.floor(mm / 60)); setM(mm % 60);
+  const hoursElement = document.getElementById("dH");
+  const minutesElement = document.getElementById("dM");
+  const updateDurationDisplay = () => {
+    hoursElement.textContent = h;
+    minutesElement.textContent = m;
+  };
+  const setHours = value => {
+    h = Math.max(0, Math.min(23, value));
+    updateDurationDisplay();
+  };
+  const setMinutes = value => {
+    m = Math.max(0, Math.min(59, value));
+    updateDurationDisplay();
+  };
+  document.getElementById("dHdec").onclick = () => setHours(h - 1);
+  document.getElementById("dHinc").onclick = () => setHours(h + 1);
+  document.getElementById("dMdec").onclick = () => setMinutes(m - 1);
+  document.getElementById("dMinc").onclick = () => setMinutes(m + 1);
+  document.querySelectorAll("[data-chip]").forEach(button => button.onclick = () => {
+    const presetMinutes = +button.dataset.chip;
+    setHours(Math.floor(presetMinutes / 60));
+    setMinutes(presetMinutes % 60);
   });
   document.getElementById("dCancel").onclick = closeModal;
   document.getElementById("dOk").onclick = () => {

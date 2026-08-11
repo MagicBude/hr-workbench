@@ -28,25 +28,26 @@ export const PAYROLL_STATUS = {
 
 // 判断员工在某个自然日是否应参与考勤。入职日和离职日都包含在任职区间内，
 // 因此只有 date 严格早于入职日或晚于离职日时才排除。
-export function isEmployeeActiveOn(emp, date) {
-  if (!emp || emp.deletedAt) return false;
-  const status = emp.employmentStatus || "active";
+export function isEmployeeActiveOn(employee, date) {
+  if (!employee || employee.deletedAt) return false;
+  const status = employee.employmentStatus || "active";
   if (status === "suspended") return false;
-  if (emp.hireDate && date < emp.hireDate) return false;
-  if (emp.leaveDate && date > emp.leaveDate) return false;
-  if (status === "departed" && !emp.leaveDate) return false;
+  if (employee.hireDate && date < employee.hireDate) return false;
+  if (employee.leaveDate && date > employee.leaveDate) return false;
+  if (status === "departed" && !employee.leaveDate) return false;
   return status === "active" || status === "probation" || status === "departed";
 }
 
 // 月度列表只关心任职区间是否与该月有交集，不能只看月末状态。
 // 例如员工月中入职又在月末前离职，仍然属于该月的有效员工。
-export function isEmployeeActiveInMonth(emp, month) {
-  const [year, mon] = month.split("-").map(Number);
+export function isEmployeeActiveInMonth(employee, month) {
+  const [year, monthNumber] = month.split("-").map(Number);
   const monthStart = `${month}-01`;
-  const monthEnd = `${month}-${String(new Date(year, mon, 0).getDate()).padStart(2, "0")}`;
-  if (!emp || emp.deletedAt || emp.employmentStatus === "suspended") return false;
-  if (emp.employmentStatus === "departed" && !emp.leaveDate) return false;
-  return (!emp.hireDate || emp.hireDate <= monthEnd) && (!emp.leaveDate || emp.leaveDate >= monthStart);
+  const monthEnd = `${month}-${String(new Date(year, monthNumber, 0).getDate()).padStart(2, "0")}`;
+  if (!employee || employee.deletedAt || employee.employmentStatus === "suspended") return false;
+  if (employee.employmentStatus === "departed" && !employee.leaveDate) return false;
+  return (!employee.hireDate || employee.hireDate <= monthEnd)
+    && (!employee.leaveDate || employee.leaveDate >= monthStart);
 }
 
 // #endregion 员工生命周期
@@ -68,7 +69,9 @@ function statusOf(value) {
 }
 // 自定义分钟数只允许落在 0 到当前时段标准分钟数之间，避免异常导入制造负工时。
 function minutesOf(value, fallback) {
-  return value && typeof value === "object" && value.min != null ? Math.max(0, Math.min(fallback, Number(value.min) || 0)) : fallback;
+  if (!value || typeof value !== "object" || value.min == null) return fallback;
+  const minutes = Number(value.min) || 0;
+  return Math.max(0, Math.min(fallback, minutes));
 }
 
 /*
@@ -77,27 +80,35 @@ function minutesOf(value, fallback) {
  * 请假、缺勤和未录入单列，供看板解释出勤率。迟到/早退计异常但仍计该时段出勤。
  * 当前月传入 asOf 后只统计截止日，避免把未来日期误判为未录入。
  */
-export function attendanceMetrics(emp, month, attendance, holidays = {}, halfDayMinutes = HALF_DAY_MINUTES, asOf = "") {
-  const [year, mon] = month.split("-").map(Number);
-  let days = new Date(year, mon, 0).getDate();
-  if (asOf && asOf.slice(0, 7) === month) days = Math.min(days, Number(asOf.slice(8, 10)) || days);
-  const rec = attendance?.rec || {};
+export function attendanceMetrics(employee, month, attendanceRecord, holidays = {}, halfDayMinutes = HALF_DAY_MINUTES, asOf = "") {
+  const [year, monthNumber] = month.split("-").map(Number);
+  let days = new Date(year, monthNumber, 0).getDate();
+  if (asOf && asOf.slice(0, 7) === month) {
+    days = Math.min(days, Number(asOf.slice(8, 10)) || days);
+  }
+  const dailyRecords = attendanceRecord?.rec || {};
   const result = { expectedMinutes: 0, actualMinutes: 0, leaveMinutes: 0, absentMinutes: 0, missingMinutes: 0, lateCount: 0, earlyCount: 0 };
   for (let day = 1; day <= days; day += 1) {
     const date = `${month}-${String(day).padStart(2, "0")}`;
-    if (!isWorkdayDate(date, holidays) || !isEmployeeActiveOn(emp, date)) continue;
+    if (!isWorkdayDate(date, holidays) || !isEmployeeActiveOn(employee, date)) continue;
     result.expectedMinutes += halfDayMinutes * 2;
-    const cell = rec[day] || rec[String(day)] || {};
+    const cell = dailyRecords[day] || dailyRecords[String(day)] || {};
     for (const shift of ["am", "pm"]) {
       const value = cell?.[shift];
       const status = statusOf(value);
-      if (status === "√" || status === "迟" || status === "退") result.actualMinutes += halfDayMinutes;
-      else if (status === "事" || status === "病" || status === "调" || status === "年") {
-        const minutes = minutesOf(value, halfDayMinutes); result.leaveMinutes += minutes; result.actualMinutes += halfDayMinutes - minutes;
+      if (status === "√" || status === "迟" || status === "退") {
+        result.actualMinutes += halfDayMinutes;
+      } else if (status === "事" || status === "病" || status === "调" || status === "年") {
+        const minutes = minutesOf(value, halfDayMinutes);
+        result.leaveMinutes += minutes;
+        result.actualMinutes += halfDayMinutes - minutes;
       } else if (status === "缺") {
-        const minutes = minutesOf(value, halfDayMinutes); result.absentMinutes += minutes; result.actualMinutes += halfDayMinutes - minutes;
+        const minutes = minutesOf(value, halfDayMinutes);
+        result.absentMinutes += minutes;
+        result.actualMinutes += halfDayMinutes - minutes;
+      } else {
+        result.missingMinutes += halfDayMinutes;
       }
-      else result.missingMinutes += halfDayMinutes;
       if (status === "迟") result.lateCount += 1;
       if (status === "退") result.earlyCount += 1;
     }
@@ -136,20 +147,27 @@ export function summarizeAttendance(rec = {}) {
 export function buildPayrollRecord(month, empId, baseSalary, travel = 0, bonus = 0, overtime = 0) {
   const company = INSURANCE_RATIO.company;
   const personal = INSURANCE_RATIO.personal;
-  const comp = {
+  const companyContributions = {
     养老: baseSalary * company.养老, 医疗: baseSalary * company.医疗, 工伤: baseSalary * company.工伤,
     失业: baseSalary * company.失业, 生育: baseSalary * company.生育, 公积金: baseSalary * company.公积金
   };
-  const pers = {
+  const personalContributions = {
     养老: baseSalary * personal.养老, 医疗: baseSalary * personal.医疗, 失业: baseSalary * personal.失业,
     公积金: baseSalary * personal.公积金, 大病医疗: BIG_SICKNESS
   };
   const gross = baseSalary + travel + bonus + overtime;
-  const persTotal = Object.values(pers).reduce((sum, value) => sum + value, 0);
-  const tax = estimateTax(gross, persTotal);
+  const personalTotal = Object.values(personalContributions).reduce((sum, value) => sum + value, 0);
+  const tax = estimateTax(gross, personalTotal);
   return {
     id: `p_${month}_${empId}`, month, empId, baseSalary, travel, bonus, overtime,
-    comp, pers, gross, persTotal, tax, taxManual: false, status: "draft", net: gross - persTotal - tax
+    comp: companyContributions,
+    pers: personalContributions,
+    gross,
+    persTotal: personalTotal,
+    tax,
+    taxManual: false,
+    status: "draft",
+    net: gross - personalTotal - tax
   };
 }
 
@@ -159,7 +177,8 @@ export function buildPayrollRecord(month, empId, baseSalary, travel = 0, bonus =
 
 // 仅用于 HTML 文本和普通属性值的基础转义；更安全的选择仍是 textContent/value。
 export function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>'"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[ch]));
+  const entities = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" };
+  return String(value ?? "").replace(/[&<>'"]/g, character => entities[character]);
 }
 
 /*
