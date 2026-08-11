@@ -182,22 +182,22 @@ export function renderRoster() {
   syncAddDeptSelect();      // 切换组织后同步部门下拉
   refreshDeptSelects();    // 同步筛选用部门下拉（保留当前选择）
 
-  if (!state.data.employees.filter(e => !e.deletedAt).length) {
-    tb.innerHTML = '<tr><td colspan="8" class="empty">暂无员工，添加一条试试。</td></tr>';
-    return;
-  }
-
   // 应用筛选：姓名模糊匹配 + 部门精确匹配
+  const activeEmployees = state.data.employees.filter(employee => !employee.deletedAt);
   const q = rosterFilter.name.trim().toLowerCase();
-  const list = state.data.employees.filter(e =>
-    !e.deletedAt &&
+  const list = activeEmployees.filter(e =>
     (!q || e.name.toLowerCase().includes(q)) &&
     (!rosterFilter.dept || e.dept === rosterFilter.dept) &&
     (rosterFilter.status === "all" || (rosterFilter.status === "current" ? ["active", "probation", "suspended"].includes(e.employmentStatus || "active") : (e.employmentStatus || "active") === rosterFilter.status))
   );
   // 更新筛选计数提示
   const cnt = document.getElementById("empFilterCount");
-  if (cnt) cnt.textContent = `共 ${list.length} / ${state.data.employees.filter(e => !e.deletedAt).length} 人`;
+  if (cnt) cnt.textContent = `共 ${list.length} / ${activeEmployees.length} 人`;
+
+  if (!activeEmployees.length) {
+    tb.innerHTML = '<tr><td colspan="8" class="empty">暂无员工，添加一条试试。</td></tr>';
+    return;
+  }
 
   if (!list.length) {
     tb.innerHTML = '<tr><td colspan="8" class="empty">没有匹配的员工</td></tr>';

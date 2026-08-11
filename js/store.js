@@ -122,13 +122,6 @@ export function ensureSeed(buildSample) {
   lastPersistedData = structuredClone(state.data);
 }
 
-// 切换组织后，从存储重新加载该组织的数据到内存
-export function reloadCurrent() {
-  state.data = readJSON(dataKey(state.current), emptyData());
-  migrateCurrent(); // 升级旧数据到新结构（向后兼容）
-  lastPersistedData = structuredClone(state.data);
-}
-
 // #endregion 数据迁移与初始化
 
 // #region 持久化、偏好与快照
@@ -196,7 +189,7 @@ export function prepareImportedData(input) { return migrate(structuredClone(vali
 // 原子地应用已经完成校验和迁移的导入数据。localStorage 本身没有事务，
 // 因此先记录三个相关存储键的旧值；任一步写入失败时，恢复存储和内存状态，
 // 避免新组织只写入列表或当前组织、却没有对应数据的“半导入”状态。
-export function importPreparedData(org, preparedData) {
+function commitOrgData(org, preparedData) {
   const targetId = org?.id || state.current;
   const previousMemory = {
     orgs: structuredClone(state.orgs),
@@ -240,6 +233,10 @@ export function importPreparedData(org, preparedData) {
     throw error;
   }
 }
+
+export function importPreparedData(org, preparedData) {
+  commitOrgData(org, preparedData);
+}
 export function hasAcknowledgedLocalPrivacy() { return readText(KEY_PRIVACY_ACK, "") === "yes"; }
 export function acknowledgeLocalPrivacy() { writeText(KEY_PRIVACY_ACK, "yes"); }
 
@@ -254,21 +251,21 @@ export function getCurrentOrg() { return state.orgs.find(o => o.id === state.cur
 
 // 切换当前组织
 export function setCurrentOrg(id) {
-  state.current = id;
+  if (!state.orgs.some(org => org.id === id)) throw new Error("组织不存在或已被删除");
+  // 先完整读取并迁移目标数据，再保存当前指针。读取损坏或指针写入失败时，
+  // 当前组织和页面内存都保持原样，不会切到一个无法使用的组织。
+  const nextData = migrate(readJSON(dataKey(id), emptyData()));
   writeText(KEY_CURRENT, id);
-  reloadCurrent(); // 切换后立刻把新组织的数据载入内存
+  state.current = id;
+  state.data = nextData;
+  lastPersistedData = structuredClone(nextData);
 }
 
 // 新建一个组织（初始无数据）
 export function addOrg(name) {
   const id = createId("org");
-  state.orgs.push({ id, name });
-  writeJSON(KEY_ORGS, state.orgs);
-  state.current = id;
-  writeText(KEY_CURRENT, id);
-  writeJSON(dataKey(id), emptyData());
-  state.data = emptyData();
-  lastPersistedData = structuredClone(state.data);
+  commitOrgData({ id, name }, emptyData());
+  return id;
 }
 // ---------- 部门（组织级选项） ----------
 // 返回当前组织的部门列表（数组），新增/编辑员工时作为下拉选项

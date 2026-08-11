@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readJSON, writeJSON, StorageError } from "../js/storage.js";
 import { STORAGE_PREFIX } from "../js/config.js";
-import { state, persist, createSnapshot, listSnapshots, deleteSnapshot, clearSnapshots, computeRestMinutes, importPreparedData } from "../js/store.js";
+import { state, persist, createSnapshot, listSnapshots, deleteSnapshot, clearSnapshots, computeRestMinutes, importPreparedData, addOrg, setCurrentOrg } from "../js/store.js";
 
 function useStorageMock(methods = {}) {
   const values = new Map();
@@ -180,6 +180,74 @@ test("新组织导入在当前指针写入失败时撤销已写入的数据和�
   assert.equal(values.has(STORAGE_PREFIX + "new_data"), false);
   assert.equal(values.get(STORAGE_PREFIX + "current"), "old");
   assert.deepEqual(JSON.parse(values.get(STORAGE_PREFIX + "orgs")), originalOrgs);
+});
+
+test("普通新建组织复用事务写入，失败时不留下空壳组织", () => {
+  let rejectOrganizationWrite = true;
+  const values = useStorageMock({
+    setItem: (key, value) => {
+      if (rejectOrganizationWrite && key === STORAGE_PREFIX + "orgs") {
+        rejectOrganizationWrite = false;
+        throw new Error("blocked");
+      }
+      values.set(key, String(value));
+    }
+  });
+  const originalData = { employees: [], attendance: [], payroll: [] };
+  const originalOrgs = [{ id: "old", name: "原组织" }];
+  values.set(STORAGE_PREFIX + "orgs", JSON.stringify(originalOrgs));
+  values.set(STORAGE_PREFIX + "current", "old");
+  state.orgs = structuredClone(originalOrgs);
+  state.current = "old";
+  state.data = structuredClone(originalData);
+
+  assert.throws(() => addOrg("创建失败的组织"), error => error.kind === "unavailable");
+
+  assert.deepEqual(state.orgs, originalOrgs);
+  assert.equal(state.current, "old");
+  assert.deepEqual(state.data, originalData);
+  assert.deepEqual(
+    [...values.keys()].filter(key => key.endsWith("_data")),
+    []
+  );
+});
+
+test("切换组织先读取目标数据，损坏数据不会改变当前指针", () => {
+  const values = useStorageMock();
+  const originalData = { employees: [{ id: "e1", name: "原员工" }], attendance: [], payroll: [] };
+  state.orgs = [{ id: "old", name: "原组织" }, { id: "broken", name: "损坏组织" }];
+  state.current = "old";
+  state.data = structuredClone(originalData);
+  values.set(STORAGE_PREFIX + "current", "old");
+  values.set(STORAGE_PREFIX + "broken_data", "{broken");
+
+  assert.throws(() => setCurrentOrg("broken"), error => error.kind === "corrupt");
+
+  assert.equal(state.current, "old");
+  assert.deepEqual(state.data, originalData);
+  assert.equal(values.get(STORAGE_PREFIX + "current"), "old");
+});
+
+test("切换组织的当前指针保存失败时不替换页面内存", () => {
+  const values = useStorageMock({
+    setItem: (key, value) => {
+      if (key === STORAGE_PREFIX + "current") throw new Error("blocked");
+      values.set(key, String(value));
+    }
+  });
+  const originalData = { employees: [{ id: "e1", name: "原员工" }], attendance: [], payroll: [] };
+  const nextData = { employees: [{ id: "e2", name: "目标员工" }], attendance: [], payroll: [], settings: {} };
+  state.orgs = [{ id: "old", name: "原组织" }, { id: "next", name: "目标组织" }];
+  state.current = "old";
+  state.data = structuredClone(originalData);
+  values.set(STORAGE_PREFIX + "current", "old");
+  values.set(STORAGE_PREFIX + "next_data", JSON.stringify(nextData));
+
+  assert.throws(() => setCurrentOrg("next"), error => error.kind === "unavailable");
+
+  assert.equal(state.current, "old");
+  assert.deepEqual(state.data, originalData);
+  assert.equal(values.get(STORAGE_PREFIX + "current"), "old");
 });
 
 test("快照最多保留十份，并支持单份删除和全部清理", () => {
