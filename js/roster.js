@@ -14,6 +14,7 @@ import { state, persist, getDepartments, addDepartment, computeRestMinutes, load
 import { HALF_DAY_MINUTES } from "./config.js";
 import { fmtMoney, openModal, closeModal, enableColResize, normalizeColumnWidths, requestRefresh, requestText, requestConfirm } from "./ui.js";
 import { escapeHtml, EMPLOYMENT_STATUS, requireNonNegativeNumber } from "./domain.js";
+import { createId } from "./ids.js";
 
 // #region 调休显示、列宽与筛选状态
 // 列宽持久化（按组织）：存在 localStorage 的 wb_hr_{org}_colw_{tag}
@@ -149,7 +150,7 @@ export function initRoster() {
 
     // 往员工数组里追加一条新记录（新增员工默认无调休余额、社保基数用月薪）
     state.data.employees.push({
-      id: "e_" + Date.now(),                       // 用时间戳保证 id 不重复
+      id: createId("e"),
       name,
       dept: document.getElementById("empDept").value.trim(),
       hireDate: document.getElementById("empHire").value,

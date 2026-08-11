@@ -12,6 +12,7 @@
 import { STORAGE_PREFIX, SCHEMA_VERSION, HOLIDAYS_2026, DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS, HALF_DAY_MINUTES } from "./config.js";
 import { summarizeAttendance, validateImportPayload } from "./domain.js";
 import { readJSON, writeJSON, readText, writeText, removeStoredValue, StorageError } from "./storage.js";
+import { createId } from "./ids.js";
 
 // #region 状态与存储键
 // ---------- 内存中的运行时状态（整个应用共享这一份） ----------
@@ -153,7 +154,7 @@ export function createSnapshotForOrg(orgId, reason, sourceData = null) {
   const data = sourceData || readJSON(dataKey(orgId), null);
   if (!data) return null;
   const snapshots = readJSON(snapshotKey(orgId), []);
-  snapshots.unshift({ id: `snap_${crypto.randomUUID()}`, createdAt: new Date().toISOString(), reason, data: structuredClone(data) });
+  snapshots.unshift({ id: createId("snap"), createdAt: new Date().toISOString(), reason, data: structuredClone(data) });
   const retained = snapshots.slice(0, 10);
   // localStorage 的实际配额因浏览器而异；4.5 MB 作为保守安全线，给主数据和偏好留出空间。
   // 在写入前估算，避免明知快照会挤占主数据空间仍继续尝试。
@@ -209,7 +210,7 @@ export function setCurrentOrg(id) {
 
 // 新建一个组织（初始无数据）
 export function addOrg(name) {
-  const id = "org_" + Date.now();           // 用时间戳保证 id 唯一
+  const id = createId("org");
   state.orgs.push({ id, name });
   writeJSON(KEY_ORGS, state.orgs);
   state.current = id;
