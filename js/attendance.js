@@ -38,6 +38,28 @@ function cellView(value) {
   const color = status ? STATUS_COLOR[status] : null;
   return { s: status || "", min: minutes, color };
 }
+
+// 把一个考勤值转换为单元格展示属性。整表首次渲染和单格局部刷新共用这里，
+// 防止两条渲染路径对“休息日、默认时长、状态颜色”产生不同解释。
+function attendanceCellParts(month, day, shift, value) {
+  const holiday = holidayOf(month, day);
+  const { s, min, color } = cellView(value);
+  const isEmptyRest = !s && !isWorkday(month, day) && shift !== "ot";
+  const shownMinutes = (!isEmptyRest && min != null)
+    ? min
+    : ((!isEmptyRest && isDurationStatus(s)) ? defaultMinFor(s) : null);
+  const badge = shownMinutes != null
+    ? `<span class="dur" title="点此设置时长">${fmtMin(shownMinutes)}</span>`
+    : "";
+  return {
+    className: "cell" + (holiday ? " cell-holiday" : "") + (isEmptyRest ? " cell-rest" : ""),
+    background: color?.bg || "",
+    foreground: color?.fg || "",
+    content: isEmptyRest
+      ? '<span class="rest-tag" title="休息日（无需填写，点击可改）">休</span>'
+      : s + badge
+  };
+}
 // 分钟 → 简短文案：240→"4h"，60→"1h"，30→"30m"，90→"1h30m"
 function fmtMin(value) {
   const minutes = Math.round(value || 0);
@@ -53,6 +75,12 @@ function fmtMin(value) {
 
 // 考勤筛选（仅内存）：按姓名模糊匹配 + 按部门精确匹配
 let attFilter = { name: "", dept: "", summaryCollapsed: false };
+// 整表渲染后建立节点索引。单格修改可直接定位目标，不扫描数千个 td，也不依赖
+// 把业务 ID 拼入 CSS 选择器；下次整表重绘时清空并重建。
+const attendanceCellIndex = new Map();
+const attendanceSummaryIndex = new Map();
+const cellIndexKey = (empId, day, shift) => `${empId}\u0000${day}\u0000${shift}`;
+const summaryIndexKey = (empId, key) => `${empId}\u0000${key}`;
 
 // 取某员工某月考勤 rec（{day:{am,pm,ot}}），没有则返回空对象
 function getAtt(month, empId) {
@@ -143,6 +171,8 @@ export function renderAttendance() {
   const month = document.getElementById("attMonth").value || "2026-08";
   const wrap = document.getElementById("attGrid");
   const N = daysInMonth(month);
+  attendanceCellIndex.clear();
+  attendanceSummaryIndex.clear();
 
   // 应用筛选：姓名模糊匹配 + 部门精确匹配
   const all = state.data.employees.filter(e => !e.deletedAt && isEmployeeActiveInMonth(e, month));
@@ -204,26 +234,23 @@ export function renderAttendance() {
       }
       body += `<td class="st st-shift">${SHIFT_LABEL[sh]}</td>`;      // 时段列：上午/下午/加班
       for (let d = 1; d <= N; d++) {                                   // 各日期格
-        const hol = holidayOf(month, d);
         const v = rec[d] ? (rec[d][sh] || "") : "";
-        const { s, min, color } = cellView(v);
-        const bg = color ? ` style="background:${color.bg};color:${color.fg}"` : "";
-        // 休息日（周末/节假日放假）且为空 → 显示灰色“休”占位，提示“这格不用填”；点击仍可改为出勤/加班等
-        const isRest = !isWorkday(month, d);
-        const isEmptyRest = !s && isRest && sh !== "ot";   // 加班行不加“休”（加班可选，空即无加班）
-        // 时长角标：可带时长的状态都显示（整段请假 4h，加班 1h，迟到 30m）；休息占位格不显示
-        const showMin = (!isEmptyRest && min != null) ? min : ((!isEmptyRest && isDurationStatus(s)) ? defaultMinFor(s) : null);
-        const badge = showMin != null ? `<span class="dur" title="点此设置时长">${fmtMin(showMin)}</span>` : "";
-        const cls = "cell" + (hol ? " cell-holiday" : "") + (isEmptyRest ? " cell-rest" : "");
-        const content = isEmptyRest ? `<span class="rest-tag" title="休息日（无需填写，点击可改）">休</span>` : s + badge;
-        body += `<td class="${cls}" data-emp="${e.id}" data-day="${d}" data-shift="${sh}" data-ei="${i}" data-di="${d}" data-si="${si}"${bg}>${content}</td>`;
+        const parts = attendanceCellParts(month, d, sh, v);
+        const style = parts.background ? ` style="background:${parts.background};color:${parts.foreground}"` : "";
+        body += `<td class="${parts.className}" data-emp="${e.id}" data-day="${d}" data-shift="${sh}" data-ei="${i}" data-di="${d}" data-si="${si}"${style}>${parts.content}</td>`;
       }
-      if (si === 0 && !attFilter.summaryCollapsed) SUM_KEYS.forEach(k => { body += `<td class="sumcol" rowspan="3">${fmt1(s[k])}</td>`; });
+      if (si === 0 && !attFilter.summaryCollapsed) SUM_KEYS.forEach(k => { body += `<td class="sumcol" rowspan="3" data-summary-emp="${e.id}" data-summary-key="${k}">${fmt1(s[k])}</td>`; });
       body += "</tr>";
     });
   });
 
   wrap.innerHTML = `<table class="att-table"><thead><tr>${h1}</tr><tr>${h2}</tr></thead><tbody>${body}</tbody></table>`;
+  wrap.querySelectorAll("td.cell").forEach(cell => {
+    attendanceCellIndex.set(cellIndexKey(cell.dataset.emp, cell.dataset.day, cell.dataset.shift), cell);
+  });
+  wrap.querySelectorAll("[data-summary-emp]").forEach(cell => {
+    attendanceSummaryIndex.set(summaryIndexKey(cell.dataset.summaryEmp, cell.dataset.summaryKey), cell);
+  });
 
   // 启用列宽拖拽：固定列逐列、日期列与汇总列分别"整组统一"调；同步 sticky 偏移
   const table = wrap.querySelector("table");
@@ -285,6 +312,23 @@ function fmt1(number) {
 
 // #region 单格交互与区域选择
 
+function refreshAttendanceCellAndSummary(month, empId, day, shift) {
+  const record = state.data.attendance.find(item => item.month === month && item.empId === empId);
+  const value = record?.rec?.[day]?.[shift] || "";
+  const cell = attendanceCellIndex.get(cellIndexKey(empId, day, shift));
+  if (cell) {
+    const parts = attendanceCellParts(month, Number(day), shift, value);
+    cell.className = parts.className;
+    cell.style.background = parts.background;
+    cell.style.color = parts.foreground;
+    cell.innerHTML = parts.content;
+  }
+  SUM_KEYS.forEach(key => {
+    const summaryCell = attendanceSummaryIndex.get(summaryIndexKey(empId, key));
+    if (summaryCell) summaryCell.textContent = fmt1(record?.summary?.[key] || 0);
+  });
+}
+
 // 单元格点击：点格子循环切换状态；点「时长」角标打开时长编辑（不切换状态）
 function onCellClick(td, ev) {
   const empId = td.dataset.emp, day = td.dataset.day, shift = td.dataset.shift;
@@ -343,7 +387,8 @@ function onCellClick(td, ev) {
   if (st.enforceRestBalance === false && balanceBefore >= 0 && balanceAfter < 0) {
     showToast(`${emp.name} 调休余额已透支 ${Math.abs(balanceAfter / 60).toFixed(1)} 小时`);
   }
-  requestRefresh("attendance", "roster", "dashboard", "today");
+  refreshAttendanceCellAndSummary(month, empId, day, shift);
+  requestRefresh("roster", "dashboard", "today");
 }
 
 // ---------- 拖拽框选 + 批量应用 ----------
@@ -615,7 +660,8 @@ function openDurationEditor(empId, day, shift) {
     r[day] = c;
     saveAtt(month, empId, r);
     closeModal();
-    requestRefresh("attendance", "roster", "dashboard", "today");
+    refreshAttendanceCellAndSummary(month, empId, day, shift);
+    requestRefresh("roster", "dashboard", "today");
   };
 }
 
