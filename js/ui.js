@@ -22,6 +22,63 @@ export function openModal(html) {
 export function closeModal() {
   document.getElementById("modalMask").classList.remove("show");
 }
+
+// 统一文本输入弹窗。用户输入始终通过 value/textContent 进入 DOM，validate 返回
+// 错误文字或空字符串；Promise 的 null 表示取消，字符串表示通过校验的结果。
+export function requestText({ title, label, initialValue = "", placeholder = "", maxLength = 100, validate }) {
+  return new Promise(resolve => {
+    const modal = document.getElementById("modal");
+    const hadParentModal = document.getElementById("modalMask").classList.contains("show");
+    const parentClassName = modal.className;
+    const parentContent = document.createDocumentFragment();
+    if (hadParentModal) parentContent.append(...modal.childNodes);
+    openModal(`
+      <h3 id="textPromptTitle"></h3>
+      <div class="field"><label id="textPromptLabel"></label>
+        <input id="textPromptInput">
+        <div class="hint" id="textPromptError" role="alert"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="textPromptCancel">取消</button>
+        <button class="btn btn-primary" id="textPromptSave">确定</button>
+      </div>`);
+    const input = document.getElementById("textPromptInput");
+    const errorBox = document.getElementById("textPromptError");
+    document.getElementById("textPromptTitle").textContent = title;
+    document.getElementById("textPromptLabel").textContent = label;
+    input.value = initialValue;
+    input.placeholder = placeholder;
+    input.maxLength = maxLength;
+    const finish = value => {
+      document.removeEventListener("keydown", cancelOnEscape, true);
+      if (hadParentModal) {
+        modal.className = parentClassName;
+        modal.replaceChildren(parentContent);
+      } else {
+        closeModal();
+      }
+      resolve(value);
+    };
+    const cancelOnEscape = event => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      finish(null);
+    };
+    document.addEventListener("keydown", cancelOnEscape, true);
+    document.getElementById("textPromptCancel").addEventListener("click", () => {
+      finish(null);
+    });
+    document.getElementById("textPromptSave").addEventListener("click", () => {
+      const value = input.value.trim();
+      const error = validate ? validate(value) : "";
+      if (error) { errorBox.textContent = error; input.focus(); return; }
+      finish(value);
+    });
+    input.focus();
+    input.select();
+  });
+}
 // 点击弹窗外的灰色遮罩也能关闭
 export function bindModalMask() {
   const mask = document.getElementById("modalMask");

@@ -12,7 +12,7 @@
 
 import { state, persist, getDepartments, computeRestMinutes, loadPreference, savePreference, removePreference } from "./store.js";
 import { STATUSES, STATUS_LABEL, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026, SUM_KEYS, HALF_DAY_MINUTES } from "./config.js";
-import { openModal, closeModal, showToast, enableColResize, requestRefresh } from "./ui.js";
+import { openModal, closeModal, showToast, enableColResize, requestRefresh, requestText } from "./ui.js";
 import { escapeHtml, isEmployeeActiveInMonth, summarizeAttendance } from "./domain.js";
 
 // #region 时长与单元格显示
@@ -650,8 +650,14 @@ function openHolidayModal() {
   document.querySelectorAll("[data-work]").forEach(b => b.addEventListener("click", () => setHoliday(b.dataset.work, "workday")));
   document.querySelectorAll("[data-clear]").forEach(b => b.addEventListener("click", () => clearHoliday(b.dataset.clear)));
 }
-function setHoliday(date, type) {
-  const name = prompt("节假日名称（可留空）", "") || (type === "holiday" ? "放假" : "调休上班");
+async function setHoliday(date, type) {
+  const defaultName = type === "holiday" ? "放假" : "调休上班";
+  const name = await requestText({
+    title: type === "holiday" ? "设置放假日" : "设置调休上班日",
+    label: `${date} 名称`, initialValue: defaultName, maxLength: 100,
+    validate: value => value ? "" : "请输入名称"
+  });
+  if (name == null) return;
   state.data.holidays = state.data.holidays || {};
   state.data.holidays[date] = { name, type };
   persist(); closeModal(); requestRefresh("attendance", "dashboard", "today");

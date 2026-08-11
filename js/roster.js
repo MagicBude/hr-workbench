@@ -12,7 +12,7 @@
 
 import { state, persist, getDepartments, addDepartment, computeRestMinutes, loadPreference, savePreference, removePreference, createSnapshot } from "./store.js";
 import { HALF_DAY_MINUTES } from "./config.js";
-import { fmtMoney, openModal, closeModal, enableColResize, requestRefresh } from "./ui.js";
+import { fmtMoney, openModal, closeModal, enableColResize, requestRefresh, requestText } from "./ui.js";
 import { escapeHtml, EMPLOYMENT_STATUS, requireNonNegativeNumber } from "./domain.js";
 
 // #region 调休显示、列宽与筛选状态
@@ -69,13 +69,16 @@ function deptOptionsHtml(selected, withNew) {
 }
 // 给某个部门下拉绑定「新增部门」逻辑：选到「➕ 新增部门」时弹窗输入并写入组织级部门列表
 function wireNewDept(selEl) {
-  selEl.addEventListener("change", () => {
+  selEl.addEventListener("change", async () => {
     if (selEl.value !== "__new__") return;
-    const name = prompt("输入新部门名称：");
-    if (name && name.trim()) {
+    const name = await requestText({
+      title: "新增部门", label: "部门名称", placeholder: "例如：销售部", maxLength: 100,
+      validate: value => !value ? "请输入部门名称" : (getDepartments().includes(value) ? "该部门已经存在" : "")
+    });
+    if (name) {
       addDepartment(name);                       // 写入 settings.departments 并保存
-      selEl.innerHTML = deptOptionsHtml(name.trim());
-      selEl.value = name.trim();
+      selEl.innerHTML = deptOptionsHtml(name);
+      selEl.value = name;
     } else {
       selEl.innerHTML = deptOptionsHtml("");
       selEl.value = "";
