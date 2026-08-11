@@ -297,6 +297,7 @@ body.compact-tables table{ font-size:12px; }
 .rest-duration-grid label{ display:flex; align-items:center; gap:5px; color:var(--muted); font-size:12px; }
 .rest-duration-grid label span{ white-space:nowrap; flex:0 0 auto; }
 .rest-duration-grid input{ min-width:0; text-align:right; }
+.employee-edit-form > .field > label{ color:var(--text); font-size:15px; font-weight:600; }
 
 /* #endregion 弹窗与组织设置 */
 

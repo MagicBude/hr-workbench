@@ -315,28 +315,31 @@ function openEditModal(id) {
   const earnedUsedMinutes = computeRestMinutes(e.id) - seedMinutes;
   openModal(`
     <h3>编辑员工</h3>
-    <div class="field"><label>姓名</label><input id="emName" value="${escapeHtml(e.name)}"></div>
-    <div class="field"><label>部门</label><select id="emDept">${deptOptionsHtml(e.dept)}</select></div>
-    <div class="field"><label>入职日期</label><input id="emHire" type="date" value="${e.hireDate || ""}"></div>
-    <div class="field"><label>在职状态</label><select id="emStatus">${Object.entries(EMPLOYMENT_STATUS).map(([v,l]) => `<option value="${v}" ${e.employmentStatus === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
-    <div class="field"><label>离职日期</label><input id="emLeave" type="date" value="${e.leaveDate || ""}"></div>
-    <div class="field"><label>基本月薪 (¥)</label><input id="emSalary" type="number" min="0" value="${e.baseSalary || 0}"></div>
-    <div class="field"><label>初始可调休余额</label>
-      <div class="rest-duration-grid">
-        <label><input id="emRestDays" type="number" min="0" step="1" value="${restDays}"><span>天</span></label>
-        <label><input id="emRestHours" type="number" min="0" step="1" value="${restHours}"><span>小时</span></label>
-        <label><input id="emRestMins" type="number" min="0" max="59" step="1" value="${restMins}"><span>分钟</span></label>
+    <div class="employee-edit-form">
+      <div class="field"><label>姓名</label><input id="emName" value="${escapeHtml(e.name)}"></div>
+      <div class="field"><label>部门</label><select id="emDept">${deptOptionsHtml(e.dept)}</select></div>
+      <div class="field"><label>入职日期</label><input id="emHire" type="date" value="${e.hireDate || ""}"></div>
+      <div class="field"><label>在职状态</label><select id="emStatus">${Object.entries(EMPLOYMENT_STATUS).map(([v,l]) => `<option value="${v}" ${e.employmentStatus === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <div class="field"><label>离职日期</label><input id="emLeave" type="date" value="${e.leaveDate || ""}"></div>
+      <div class="field"><label>基本月薪 (¥)</label><input id="emSalary" type="number" min="0" value="${e.baseSalary || 0}"></div>
+      <div class="field"><label>初始可调休余额</label>
+        <div class="rest-duration-grid">
+          <label><input id="emRestDays" type="number" min="0" step="1" value="${restDays}"><span>天</span></label>
+          <label><input id="emRestHours" type="number" min="0" step="1" value="${restHours}"><span>小时</span></label>
+          <label><input id="emRestMins" type="number" min="0" max="59" step="1" value="${restMins}"><span>分钟</span></label>
+        </div>
+        <div class="rest-balance-summary" id="emRestHint">
+          <span><small>录入换算</small><strong id="emRestInputSummary"></strong></span>
+          <span><small>保存后可用</small><strong id="emRestAvailableSummary"></strong></span>
+        </div>
       </div>
-      <div class="rest-balance-summary" id="emRestHint">
-        <span><small>录入换算</small><strong id="emRestInputSummary"></strong></span>
-        <span><small>保存后可用</small><strong id="emRestAvailableSummary"></strong></span>
+      <div class="field"><label>社保基数 (¥，留空=用基本月薪)</label><input id="emIns" type="number" min="0" value="${e.insuranceBase ?? ""}"></div>
+      <div class="modal-actions">
+        <button class="btn" id="emCancel">取消</button>
+        <button class="btn btn-primary" id="emSave">保存</button>
       </div>
     </div>
-    <div class="field"><label>社保基数 (¥，留空=用基本月薪)</label><input id="emIns" type="number" min="0" value="${e.insuranceBase ?? ""}"></div>
-    <div class="modal-actions">
-      <button class="btn" id="emCancel">取消</button>
-      <button class="btn btn-primary" id="emSave">保存</button>
-    </div>`);
+  `);
   document.getElementById("emCancel").addEventListener("click", closeModal);
   const readRestMinutes = () => {
     const days = Math.max(0, Math.floor(+document.getElementById("emRestDays").value || 0));
