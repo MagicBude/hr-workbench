@@ -12,7 +12,7 @@
 
 import { state, persist, getDepartments, addDepartment, computeRestMinutes, loadPreference, savePreference, removePreference, createSnapshot } from "./store.js";
 import { HALF_DAY_MINUTES } from "./config.js";
-import { fmtMoney, openModal, closeModal, enableColResize, requestRefresh, requestText } from "./ui.js";
+import { fmtMoney, openModal, closeModal, enableColResize, requestRefresh, requestText, requestConfirm } from "./ui.js";
 import { escapeHtml, EMPLOYMENT_STATUS, requireNonNegativeNumber } from "./domain.js";
 
 // #region 调休显示、列宽与筛选状态
@@ -228,8 +228,8 @@ export function renderRoster() {
 
   // 给每行“删除”按钮绑定事件
   tb.querySelectorAll("[data-del]").forEach(b => {
-    b.addEventListener("click", () => {
-      if (!confirm("确认将该员工移入回收站？历史考勤和薪资会保留，可在设置中心恢复。")) return;
+    b.addEventListener("click", async () => {
+      if (!await requestConfirm({ title: "回收员工", message: "该员工将从当前列表隐藏，历史考勤和薪资保留，可在设置中心恢复。", confirmText: "移入回收站", danger: true })) return;
       createSnapshot("员工移入回收站前");
       const emp = state.data.employees.find(x => x.id === b.dataset.del);
       if (emp) emp.deletedAt = new Date().toISOString();
@@ -237,8 +237,8 @@ export function renderRoster() {
       requestRefresh("roster", "attendance", "payroll", "dashboard", "today");
     });
   });
-  tb.querySelectorAll("[data-depart]").forEach(b => b.addEventListener("click", () => {
-    if (!confirm("确认将该员工标记为离职并保留全部历史记录？")) return;
+  tb.querySelectorAll("[data-depart]").forEach(b => b.addEventListener("click", async () => {
+    if (!await requestConfirm({ title: "员工离职归档", message: "员工将标记为离职，全部历史考勤和薪资继续保留。", confirmText: "确认离职", danger: true })) return;
     const emp = state.data.employees.find(x => x.id === b.dataset.depart);
     if (!emp) return;
     emp.employmentStatus = "departed";

@@ -11,7 +11,7 @@
 
 import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg, createSnapshot, createSnapshotForOrg, prepareImportedData, selectImportedOrg } from "./store.js";
 import { buildSample } from "./sample.js";
-import { openModal, closeModal, downloadFile, curMonth, curDay, showHelp, showToast } from "./ui.js";
+import { openModal, closeModal, downloadFile, curMonth, curDay, showHelp, showToast, requestConfirm } from "./ui.js";
 import { initRoster, renderRoster, resetEmpColWidths } from "./roster.js";
 import { initAttendance, renderAttendance, resetAttColWidths } from "./attendance.js";
 import { initPayroll, renderPayroll } from "./payroll.js";
@@ -193,7 +193,7 @@ function bindTopbar() {
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const obj = JSON.parse(reader.result);
         if (typeof obj !== "object" || !obj || !obj.data) throw new Error("文件格式不对：缺少 data 字段");
@@ -207,7 +207,7 @@ function bindTopbar() {
           org = state.orgs.find(o => o.id === obj.org.id) || { id: obj.org.id, name: obj.org.name || obj.org.id };
           targetName = org.name;
         }
-        if (!confirm("导入将覆盖组织「" + (targetName || getCurrentOrgId()) + "」的全部数据，确认继续？")) return;
+        if (!await requestConfirm({ title: "覆盖组织数据", message: "导入将覆盖组织「" + (targetName || getCurrentOrgId()) + "」的全部数据。", confirmText: "覆盖并导入", danger: true })) return;
         createSnapshotForOrg(org?.id || state.current, "导入数据前自动备份");
         if (org) {
           selectImportedOrg(org);
@@ -225,8 +225,8 @@ function bindTopbar() {
   });
 
   // 清空示例数据（二次确认，防误删）
-  document.getElementById("clearBtn").addEventListener("click", () => {
-    if (!confirm("确认清空当前组织全部数据（员工/考勤/薪资）？清空前会自动创建可恢复快照。")) return;
+  document.getElementById("clearBtn").addEventListener("click", async () => {
+    if (!await requestConfirm({ title: "清空当前组织", message: "将清空全部员工、考勤和薪资数据；操作前会自动创建恢复快照。", confirmText: "清空数据", danger: true })) return;
     createSnapshot("清空组织数据前自动备份");
     state.data = emptyData();
     persist();

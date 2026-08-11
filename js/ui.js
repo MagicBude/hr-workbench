@@ -79,6 +79,42 @@ export function requestText({ title, label, initialValue = "", placeholder = "",
     input.select();
   });
 }
+
+// 统一确认弹窗，danger=true 时用危险按钮强调不可逆操作。与 requestText 一样，
+// 若从现有弹窗内打开，会暂存并恢复父弹窗节点及其事件监听器。
+export function requestConfirm({ title, message, confirmText = "确认", danger = false }) {
+  return new Promise(resolve => {
+    const modal = document.getElementById("modal");
+    const hadParentModal = document.getElementById("modalMask").classList.contains("show");
+    const parentClassName = modal.className;
+    const parentContent = document.createDocumentFragment();
+    if (hadParentModal) parentContent.append(...modal.childNodes);
+    openModal(`
+      <h3 id="confirmTitle"></h3>
+      <p id="confirmMessage"></p>
+      <div class="modal-actions">
+        <button class="btn" id="confirmCancel">取消</button>
+        <button class="btn ${danger ? "btn-danger" : "btn-primary"}" id="confirmOk"></button>
+      </div>`);
+    document.getElementById("confirmTitle").textContent = title;
+    document.getElementById("confirmMessage").textContent = message;
+    document.getElementById("confirmOk").textContent = confirmText;
+    const finish = value => {
+      document.removeEventListener("keydown", cancelOnEscape, true);
+      if (hadParentModal) { modal.className = parentClassName; modal.replaceChildren(parentContent); }
+      else closeModal();
+      resolve(value);
+    };
+    const cancelOnEscape = event => {
+      if (event.key !== "Escape") return;
+      event.preventDefault(); event.stopImmediatePropagation(); finish(false);
+    };
+    document.addEventListener("keydown", cancelOnEscape, true);
+    document.getElementById("confirmCancel").addEventListener("click", () => finish(false));
+    document.getElementById("confirmOk").addEventListener("click", () => finish(true));
+    document.getElementById("confirmOk").focus();
+  });
+}
 // 点击弹窗外的灰色遮罩也能关闭
 export function bindModalMask() {
   const mask = document.getElementById("modalMask");

@@ -11,7 +11,7 @@
 
 import { state, persist, getCurrentOrg, removePreference, createSnapshot, listSnapshots, restoreSnapshot, deleteSnapshot, clearSnapshots, getStorageUsage } from "./store.js";
 import { DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
-import { openModal, closeModal, curMonth, showToast, requestRefresh } from "./ui.js";
+import { openModal, closeModal, curMonth, showToast, requestRefresh, requestConfirm } from "./ui.js";
 import { escapeHtml } from "./domain.js";
 
 // #region 设置字段与模板工具
@@ -135,8 +135,8 @@ export function openSettings(section = "attendance") {
     requestRefresh("roster", "attendance");
     showToast("已清除当前组织的列宽记忆");
   });
-  document.getElementById("settingsReset").addEventListener("click", () => {
-    if (!confirm("确认将当前组织的全部设置恢复默认？员工和业务数据不会受影响。")) return;
+  document.getElementById("settingsReset").addEventListener("click", async () => {
+    if (!await requestConfirm({ title: "恢复默认设置", message: "当前组织的规则与界面设置会恢复默认，员工和业务数据不受影响。", confirmText: "恢复默认", danger: true })) return;
     const departments = state.data.settings.departments || [];
     state.data.settings = { ...clone(DEFAULT_SETTINGS), departments, insuranceRatio: clone(INSURANCE_RATIO), bigSickness: BIG_SICKNESS };
     persist();
@@ -152,20 +152,20 @@ export function openSettings(section = "attendance") {
     openSettings("safety");
     showToast("数据快照已创建");
   });
-  document.querySelectorAll("[data-restore-snapshot]").forEach(button => button.addEventListener("click", () => {
-    if (!confirm("恢复后当前数据会先自动备份。确认继续？")) return;
+  document.querySelectorAll("[data-restore-snapshot]").forEach(button => button.addEventListener("click", async () => {
+    if (!await requestConfirm({ title: "恢复数据快照", message: "当前数据会先自动备份，然后替换为所选快照。", confirmText: "恢复快照", danger: true })) return;
     restoreSnapshot(button.dataset.restoreSnapshot);
     closeModal();
     requestRefresh("today", "roster", "attendance", "payroll", "dashboard");
     showToast("快照已恢复");
   }));
-  document.querySelectorAll("[data-delete-snapshot]").forEach(button => button.addEventListener("click", () => {
-    if (!confirm("确认删除这份快照？删除后无法恢复。")) return;
+  document.querySelectorAll("[data-delete-snapshot]").forEach(button => button.addEventListener("click", async () => {
+    if (!await requestConfirm({ title: "删除数据快照", message: "这份快照删除后无法恢复。", confirmText: "删除快照", danger: true })) return;
     deleteSnapshot(button.dataset.deleteSnapshot);
     closeModal(); openSettings("safety"); showToast("快照已删除");
   }));
-  document.getElementById("clearSnapshotsBtn").addEventListener("click", () => {
-    if (!confirm("确认清空当前组织的全部快照？此操作无法撤销。")) return;
+  document.getElementById("clearSnapshotsBtn").addEventListener("click", async () => {
+    if (!await requestConfirm({ title: "清空全部快照", message: "当前组织的全部快照都会删除，此操作无法撤销。", confirmText: "清空快照", danger: true })) return;
     clearSnapshots();
     closeModal(); openSettings("safety"); showToast("快照已清空");
   });

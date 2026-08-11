@@ -10,7 +10,7 @@
  */
 
 import { state, persist } from "./store.js";
-import { fmtMoney, downloadFile, requestRefresh, showToast } from "./ui.js";
+import { fmtMoney, downloadFile, requestRefresh, showToast, requestConfirm } from "./ui.js";
 import { INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 import { openSettings } from "./settings.js";
 import { estimateTax, escapeHtml, PAYROLL_STATUS, isEmployeeActiveInMonth, buildPayrollRecord, requireNonNegativeNumber } from "./domain.js";
@@ -212,9 +212,9 @@ export function renderPayroll() {
       requestRefresh("payroll", "dashboard", "today");
     });
   });
-  tableBody.querySelectorAll(".p-status").forEach(sel => sel.addEventListener("change", () => {
+  tableBody.querySelectorAll(".p-status").forEach(sel => sel.addEventListener("change", async () => {
     const p = getOrCreatePay(month, sel.dataset.id);
-    if (p.status !== "draft" && sel.value === "draft" && !confirm("解锁会允许重新编辑薪资，确认改回草稿？")) { sel.value = p.status; return; }
+    if (p.status !== "draft" && sel.value === "draft" && !await requestConfirm({ title: "解锁薪资记录", message: "改回草稿后可以重新编辑并按当前参数计算。", confirmText: "解锁为草稿", danger: true })) { sel.value = p.status; return; }
     p.status = sel.value;
     persist();
     requestRefresh("payroll", "dashboard", "today");
