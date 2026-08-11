@@ -13,7 +13,7 @@
 import { state, persist, getDepartments, addDepartment, computeRestMinutes, loadPreference, savePreference, removePreference, createSnapshot } from "./store.js";
 import { HALF_DAY_MINUTES } from "./config.js";
 import { fmtMoney, openModal, closeModal, enableColResize, requestRefresh } from "./ui.js";
-import { escapeHtml, EMPLOYMENT_STATUS } from "./domain.js";
+import { escapeHtml, EMPLOYMENT_STATUS, requireNonNegativeNumber } from "./domain.js";
 
 // #region 调休显示、列宽与筛选状态
 // 列宽持久化（按组织）：存在 localStorage 的 wb_hr_{org}_colw_{tag}
@@ -136,6 +136,13 @@ export function initRoster() {
   document.getElementById("addEmpBtn").addEventListener("click", () => {
     const name = document.getElementById("empName").value.trim();
     if (!name) { alert("请输入姓名"); return; }
+    let baseSalary;
+    try {
+      baseSalary = requireNonNegativeNumber(document.getElementById("empSalary").value || 0, "基本月薪");
+    } catch (error) {
+      alert(error.message);
+      return;
+    }
 
     // 往员工数组里追加一条新记录（新增员工默认无调休余额、社保基数用月薪）
     state.data.employees.push({
@@ -143,7 +150,7 @@ export function initRoster() {
       name,
       dept: document.getElementById("empDept").value.trim(),
       hireDate: document.getElementById("empHire").value,
-      baseSalary: +document.getElementById("empSalary").value || 0,
+      baseSalary,
       restSeedMinutes: 0,     // 初始可调休余额（分钟），新增默认 0；可用=初始+加班−调休 动态算
       insuranceBase: null    // 社保基数，null = 用基本月薪
       ,employmentStatus: "active", leaveDate: "", deletedAt: null
@@ -338,17 +345,25 @@ function openEditModal(id) {
   ["emRestDays", "emRestHours", "emRestMins"].forEach(id => document.getElementById(id).addEventListener("input", updateRestHint));
   updateRestHint();
   document.getElementById("emSave").addEventListener("click", () => {
+    let baseSalary, insuranceBase;
+    try {
+      baseSalary = requireNonNegativeNumber(document.getElementById("emSalary").value, "基本月薪");
+      const insuranceInput = document.getElementById("emIns").value.trim();
+      insuranceBase = insuranceInput === "" ? null : requireNonNegativeNumber(insuranceInput, "社保基数");
+    } catch (error) {
+      alert(error.message);
+      return;
+    }
     e.name = document.getElementById("emName").value.trim() || e.name;
     e.dept = document.getElementById("emDept").value.trim();
     e.hireDate = document.getElementById("emHire").value;
     e.employmentStatus = document.getElementById("emStatus").value;
     e.leaveDate = document.getElementById("emLeave").value;
-    e.baseSalary = +document.getElementById("emSalary").value || 0;
+    e.baseSalary = baseSalary;
     // 可调休初始余额：天 / 小时 / 分钟 → 分钟；可用余额仍由考勤动态计算
     e.restSeedMinutes = readRestMinutes();
     // 社保基数：空 → null（用基本月薪）；否则取数字
-    const ins = document.getElementById("emIns").value.trim();
-    e.insuranceBase = ins === "" ? null : (+ins || 0);
+    e.insuranceBase = insuranceBase;
     persist();
     closeModal();
     requestRefresh("roster", "attendance", "payroll", "dashboard", "today");

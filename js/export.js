@@ -13,6 +13,7 @@
 import { state, computeRestMinutes } from "./store.js";
 import { WEEK_LABEL, SUM_KEYS } from "./config.js";
 import { EMPLOYMENT_STATUS, PAYROLL_STATUS, isEmployeeActiveInMonth } from "./domain.js";
+import { safeSpreadsheetRows } from "./spreadsheet.js";
 
 // #region 日期辅助
 // 该月实际天数
@@ -120,7 +121,8 @@ function round1(n) { return Math.round((n || 0) * 10) / 10; }
 // 用 SheetJS 生成并触发下载
 function writeBook(aoa, sheetName, filename) {
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // 明确把用户文本保持为字符串；公式前缀加单引号后，SheetJS 不会生成公式单元格。
+  const ws = XLSX.utils.aoa_to_sheet(safeSpreadsheetRows(aoa));
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
   XLSX.writeFile(wb, filename);
 }

@@ -13,7 +13,8 @@ import { state, persist } from "./store.js";
 import { fmtMoney, downloadFile, requestRefresh, showToast } from "./ui.js";
 import { INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 import { openSettings } from "./settings.js";
-import { estimateTax, escapeHtml, PAYROLL_STATUS, isEmployeeActiveInMonth, buildPayrollRecord } from "./domain.js";
+import { estimateTax, escapeHtml, PAYROLL_STATUS, isEmployeeActiveInMonth, buildPayrollRecord, requireNonNegativeNumber } from "./domain.js";
+import { rowsToCsv } from "./spreadsheet.js";
 
 // #region 核算字段与领域辅助
 
@@ -35,9 +36,10 @@ function getOrCreatePay(month, empId) {
 // 社保基数：员工设置了 insuranceBase 就用它，否则用薪资的基本月薪
 function baseOf(payrollRecord) {
   const employee = state.data.employees.find(item => item.id === payrollRecord.empId);
-  return (employee && employee.insuranceBase != null)
+  const value = (employee && employee.insuranceBase != null)
     ? employee.insuranceBase
     : payrollRecord.baseSalary;
+  return requireNonNegativeNumber(value, "社保基数");
 }
 // 组织比例（settings 里没有就用 config 默认）
 function ratioOf() {
@@ -192,11 +194,19 @@ export function renderPayroll() {
   tableBody.querySelectorAll("input").forEach(inp => {
     inp.addEventListener("change", () => {
       const p = getOrCreatePay(month, inp.dataset.id);
-      if (inp.classList.contains("p-base")) p.baseSalary = +inp.value || 0;
-      else if (inp.classList.contains("p-travel")) p.travel = +inp.value || 0;
-      else if (inp.classList.contains("p-bonus")) p.bonus = +inp.value || 0;
-      else if (inp.classList.contains("p-ot")) p.overtime = +inp.value || 0;
-      else if (inp.classList.contains("p-tax")) { p.tax = +inp.value || 0; p.taxManual = true; }
+      let amount;
+      try {
+        amount = requireNonNegativeNumber(inp.value, "金额");
+      } catch (error) {
+        alert(error.message);
+        requestRefresh("payroll");
+        return;
+      }
+      if (inp.classList.contains("p-base")) p.baseSalary = amount;
+      else if (inp.classList.contains("p-travel")) p.travel = amount;
+      else if (inp.classList.contains("p-bonus")) p.bonus = amount;
+      else if (inp.classList.contains("p-ot")) p.overtime = amount;
+      else if (inp.classList.contains("p-tax")) { p.tax = amount; p.taxManual = true; }
       recompute(p);
       persist();
       requestRefresh("payroll", "dashboard", "today");
@@ -215,8 +225,8 @@ export function renderPayroll() {
 
 // #region CSV 导出
 
-// 带 UTF-8 BOM 可让常见 Windows Excel 正确识别中文。
-// 当前字段转义和公式前缀防护仍需按审查计划补齐，不能把此导出用于不可信文本流转。
+// UTF-8 BOM 让常见 Windows Excel 正确识别中文；rowsToCsv 同时处理逗号、引号、
+// 换行和公式前缀，不能退回 row.join(",") 的手工拼接。
 function exportCSV() {
   const month = document.getElementById("payMonth").value || "2026-08";
   const head = ["姓名", "部门", "基本月薪", "出差补贴", "奖金", "加班费", "本月应发",
@@ -232,7 +242,7 @@ function exportCSV() {
       ...PERS_KEYS.map(k => round2(p.pers[k])),
       round2(p.tax), round2(p.net), PAYROLL_STATUS[p.status || "draft"]]);
   });
-  const csv = "﻿" + rows.map(r => r.join(",")).join("\n");
+  const csv = "﻿" + rowsToCsv(rows);
   downloadFile(csv, "薪资_" + month + ".csv", "text/csv");
 }
 

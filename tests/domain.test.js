@@ -8,7 +8,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { attendanceMetrics, buildPayrollRecord, escapeHtml, estimateTax, isEmployeeActiveInMonth, isEmployeeActiveOn, isWorkdayDate, summarizeAttendance, validateImportPayload } from "../js/domain.js";
+import { attendanceMetrics, buildPayrollRecord, escapeHtml, estimateTax, isEmployeeActiveInMonth, isEmployeeActiveOn, isWorkdayDate, requireNonNegativeNumber, summarizeAttendance, validateImportPayload } from "../js/domain.js";
 
 // #region 员工与工作日边界
 
@@ -82,6 +82,13 @@ test("导入数据拒绝异形字段", () => {
   assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1", name: 123 }], attendance: [], payroll: [] } }), /name/);
   assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1", name: "甲" }, { id: "e1", name: "乙" }], attendance: [], payroll: [] } }), /重复 id/);
   assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1", name: "甲", employmentStatus: "unknown" }], attendance: [], payroll: [] } }), /employmentStatus/);
+});
+
+test("金额校验拒绝负数、无穷值和非数字", () => {
+  assert.equal(requireNonNegativeNumber("100.5", "金额"), 100.5);
+  for (const value of [-1, Infinity, "abc"]) {
+    assert.throws(() => requireNonNegativeNumber(value, "金额"), /大于或等于 0/);
+  }
 });
 
 test("导入数据校验日期、金额、组织 ID 和必填字段", () => {

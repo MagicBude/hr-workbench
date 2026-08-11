@@ -126,6 +126,14 @@ export function estimateTax(gross, personalTotal, threshold = TAX_THRESHOLD, rat
   return Math.max(0, Number(gross || 0) - Number(personalTotal || 0) - threshold) * rate;
 }
 
+// min="0" 只是浏览器输入提示，脚本赋值和旧数据仍可绕过，因此保存和计算层
+// 都必须执行同一校验。空字符串是否允许由调用方在调用前决定。
+export function requireNonNegativeNumber(value, label = "金额") {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) throw new Error(`${label}必须是大于或等于 0 的有限数字`);
+  return number;
+}
+
 // 上午和下午每格各计 0.5 天；加班位于独立 ot 时段，按次数统计。
 export function summarizeAttendance(rec = {}) {
   const summary = { 出勤: 0, 事假: 0, 病假: 0, 缺勤: 0, 调休: 0, 年假: 0, 加班: 0, 迟到: 0, 早退: 0 };
