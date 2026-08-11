@@ -171,6 +171,10 @@ body.col-resizing, body.col-resizing *{ cursor:col-resize !important; user-selec
 /* ---------- 8. 考勤表（真 <table>，标准布局：序号|姓名|部门|时段|日期|汇总） ---------- */
 /* 用 border-collapse:separate + border-spacing:0，配合 sticky 固定列时线条也能对齐 */
 .att-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:#fff; }
+.att-pagination{ display:flex; align-items:center; gap:6px; margin-left:auto; white-space:nowrap; }
+.att-pagination label{ color:var(--muted); font-size:13px; }
+.att-pagination select{ width:auto; min-width:76px; padding:6px 26px 6px 8px; font-size:13px; }
+.att-pagination .btn{ min-width:auto; }
 /* 宽度自适应：容器够宽时表格占满 100%，日期列均分剩余空间；内容超出容器时 .att-wrap 出现水平滚动条 */
 .att-table{ border-collapse:separate; border-spacing:0; width:max-content; min-width:100%; table-layout:fixed; font-size:13px; }
 .att-table th,.att-table td{

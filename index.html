@@ -144,6 +144,17 @@
           <input id="attFilterName" placeholder="搜索姓名…" style="min-width:180px;">
           <select id="attFilterDept"><option value="">全部部门</option></select>
           <span class="hint" id="attFilterCount"></span>
+          <div class="att-pagination" aria-label="考勤分页">
+            <label for="attPageSize">每页</label>
+            <select id="attPageSize" aria-label="每页显示人数">
+              <option value="25">25 人</option>
+              <option value="50" selected>50 人</option>
+              <option value="100">100 人</option>
+            </select>
+            <button class="btn btn-sm" id="attPrevPage" type="button">上一页</button>
+            <span class="hint" id="attPageInfo" aria-live="polite"></span>
+            <button class="btn btn-sm" id="attNextPage" type="button">下一页</button>
+          </div>
           <button class="btn btn-sm" id="resetAttColBtn" title="清除列宽记忆，恢复默认宽度">恢复默认列宽</button>
           <button class="btn btn-sm" id="toggleAttSummaryBtn">收起汇总列</button>
         </div>

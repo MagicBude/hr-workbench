@@ -74,7 +74,30 @@ function fmtMin(value) {
 // #region 考勤记录与日期规则
 
 // 考勤筛选（仅内存）：按姓名模糊匹配 + 按部门精确匹配
-let attFilter = { name: "", dept: "", summaryCollapsed: false };
+let attFilter = { name: "", dept: "", summaryCollapsed: false, page: 1, pageSize: 50 };
+
+// 将筛选结果切成当前页。分页只影响界面渲染，不改变考勤数据和导出范围。
+// requestedPage 超出范围时会自动夹紧，避免删除员工或缩小筛选后落在空白页。
+export function paginateAttendance(items, requestedPage, requestedPageSize) {
+  const allowedPageSizes = [25, 50, 100];
+  const parsedPageSize = Number(requestedPageSize);
+  const pageSize = allowedPageSizes.includes(parsedPageSize) ? parsedPageSize : 50;
+  const total = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const parsedPage = Math.trunc(Number(requestedPage)) || 1;
+  const page = Math.min(totalPages, Math.max(1, parsedPage));
+  const startIndex = (page - 1) * pageSize;
+
+  return {
+    items: items.slice(startIndex, startIndex + pageSize),
+    page,
+    pageSize,
+    total,
+    totalPages,
+    start: total ? startIndex + 1 : 0,
+    end: Math.min(total, startIndex + pageSize)
+  };
+}
 // 整表渲染后建立节点索引。单格修改可直接定位目标，不扫描数千个 td，也不依赖
 // 把业务 ID 拼入 CSS 选择器；下次整表重绘时清空并重建。
 const attendanceCellIndex = new Map();
@@ -131,7 +154,10 @@ export function isWorkday(month, day) {
 // #region 初始化与表格渲染
 
 export function initAttendance() {
-  document.getElementById("attMonth").addEventListener("change", renderAttendance);
+  document.getElementById("attMonth").addEventListener("change", () => {
+    attFilter.page = 1;
+    renderAttendance();
+  });
   document.getElementById("holidayBtn").addEventListener("click", openHolidayModal);
   // 筛选：姓名 + 部门（与花名册共享组织级部门列表）
   const nameFilter = document.getElementById("attFilterName");
@@ -140,10 +166,25 @@ export function initAttendance() {
     + getDepartments().map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
   nameFilter.addEventListener("input", () => {
     attFilter.name = nameFilter.value;
+    attFilter.page = 1;
     renderAttendance();
   });
   departmentFilter.addEventListener("change", () => {
     attFilter.dept = departmentFilter.value;
+    attFilter.page = 1;
+    renderAttendance();
+  });
+  document.getElementById("attPageSize").addEventListener("change", (event) => {
+    attFilter.pageSize = Number(event.target.value);
+    attFilter.page = 1;
+    renderAttendance();
+  });
+  document.getElementById("attPrevPage").addEventListener("click", () => {
+    attFilter.page -= 1;
+    renderAttendance();
+  });
+  document.getElementById("attNextPage").addEventListener("click", () => {
+    attFilter.page += 1;
     renderAttendance();
   });
   document.getElementById("toggleAttSummaryBtn").addEventListener("click", () => {
@@ -174,28 +215,41 @@ export function renderAttendance() {
   attendanceCellIndex.clear();
   attendanceSummaryIndex.clear();
 
-  // 应用筛选：姓名模糊匹配 + 部门精确匹配
-  const all = state.data.employees.filter(e => !e.deletedAt && isEmployeeActiveInMonth(e, month));
-  const q = attFilter.name.trim().toLowerCase();
-  const emps = all.filter(e =>
-    (!q || e.name.toLowerCase().includes(q)) &&
-    (!attFilter.dept || e.dept === attFilter.dept)
-  );
-  const cnt = document.getElementById("attFilterCount");
-  if (cnt) cnt.textContent = `共 ${emps.length} / ${all.length} 人`;
-
   // 切换组织后，原筛选的部门可能已不存在 → 自动清空，避免整表空白
   if (attFilter.dept && !getDepartments().includes(attFilter.dept)) {
     attFilter.dept = "";
-    const fd = document.getElementById("attFilterDept");
-    if (fd) fd.value = "";
+    const departmentFilter = document.getElementById("attFilterDept");
+    if (departmentFilter) departmentFilter.value = "";
   }
+
+  // 应用筛选：姓名模糊匹配 + 部门精确匹配
+  const all = state.data.employees.filter(e => !e.deletedAt && isEmployeeActiveInMonth(e, month));
+  const q = attFilter.name.trim().toLowerCase();
+  const filteredEmployees = all.filter(e =>
+    (!q || e.name.toLowerCase().includes(q)) &&
+    (!attFilter.dept || e.dept === attFilter.dept)
+  );
+  const pagination = paginateAttendance(filteredEmployees, attFilter.page, attFilter.pageSize);
+  const emps = pagination.items;
+  attFilter.page = pagination.page;
+  attFilter.pageSize = pagination.pageSize;
+
+  const cnt = document.getElementById("attFilterCount");
+  if (cnt) cnt.textContent = `匹配 ${filteredEmployees.length} / ${all.length} 人`;
+  const pageInfo = document.getElementById("attPageInfo");
+  if (pageInfo) pageInfo.textContent = `第 ${pagination.start}–${pagination.end} 人 · ${pagination.page}/${pagination.totalPages} 页`;
+  const pageSize = document.getElementById("attPageSize");
+  if (pageSize) pageSize.value = String(pagination.pageSize);
+  const prevPage = document.getElementById("attPrevPage");
+  const nextPage = document.getElementById("attNextPage");
+  if (prevPage) prevPage.disabled = pagination.page <= 1;
+  if (nextPage) nextPage.disabled = pagination.page >= pagination.totalPages;
 
   if (!all.length) {
     wrap.innerHTML = '<div class="empty" style="padding:12px;">请先在花名册添加员工</div>';
     return;
   }
-  if (!emps.length) {
+  if (!filteredEmployees.length) {
     wrap.innerHTML = '<div class="empty" style="padding:12px;">没有匹配的员工</div>';
     return;
   }
@@ -228,7 +282,7 @@ export function renderAttendance() {
     SHIFTS.forEach((sh, si) => {
       body += "<tr>";
       if (si === 0) {  // 仅"上午"行输出合并的 序号/姓名/部门 与 汇总
-        body += `<td class="st st-seq" rowspan="3">${i + 1}</td>`
+        body += `<td class="st st-seq" rowspan="3">${pagination.start + i}</td>`
           + `<td class="st st-name" rowspan="3">${escapeHtml(e.name)}</td>`
           + `<td class="st st-dept" rowspan="3">${escapeHtml(e.dept || "")}</td>`;
       }
