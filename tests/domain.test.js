@@ -84,6 +84,22 @@ test("导入数据拒绝异形字段", () => {
   assert.throws(() => validateImportPayload({ data: { employees: [{ id: "e1", name: "甲", employmentStatus: "unknown" }], attendance: [], payroll: [] } }), /employmentStatus/);
 });
 
+test("半天为空或只填加班时仍计入待补录分钟", () => {
+  const emp = { hireDate: "2026-08-03", employmentStatus: "active", leaveDate: "2026-08-03" };
+  const halfFilled = attendanceMetrics(emp, "2026-08", { rec: { 3: { am: "√", pm: "", ot: "" } } }, {}, 240, "2026-08-03");
+  const overtimeOnly = attendanceMetrics(emp, "2026-08", { rec: { 3: { am: "", pm: "", ot: "加" } } }, {}, 240, "2026-08-03");
+  assert.equal(halfFilled.missingMinutes, 240);
+  assert.equal(overtimeOnly.missingMinutes, 480);
+});
+
+test("待补录统计遵守节假日和员工入离职边界", () => {
+  const emp = { hireDate: "2026-08-04", leaveDate: "2026-08-06", employmentStatus: "departed" };
+  const holidays = { "2026-08-05": { name: "组织假期", type: "holiday" } };
+  const metrics = attendanceMetrics(emp, "2026-08", null, holidays, 240, "2026-08-10");
+  assert.equal(metrics.expectedMinutes, 2 * 480); // 只含 8 月 4 日和 6 日
+  assert.equal(metrics.missingMinutes, 2 * 480);
+});
+
 test("金额校验拒绝负数、无穷值和非数字", () => {
   assert.equal(requireNonNegativeNumber("100.5", "金额"), 100.5);
   for (const value of [-1, Infinity, "abc"]) {

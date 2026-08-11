@@ -13,13 +13,14 @@ import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCur
 import { buildSample } from "./sample.js";
 import { openModal, closeModal, downloadFile, curMonth, curDay, showHelp, showToast } from "./ui.js";
 import { initRoster, renderRoster, resetEmpColWidths } from "./roster.js";
-import { initAttendance, renderAttendance, resetAttColWidths, isWorkday } from "./attendance.js";
+import { initAttendance, renderAttendance, resetAttColWidths } from "./attendance.js";
 import { initPayroll, renderPayroll } from "./payroll.js";
 import { initDashboard, renderDashboard } from "./dashboard.js";
 import { exportRosterXlsx, exportAttendanceXlsx, exportPayrollXlsx } from "./export.js";
 import { initSettings, applyOrgSettings } from "./settings.js";
-import { escapeHtml, isEmployeeActiveOn, IMPORT_LIMITS } from "./domain.js";
+import { attendanceMetrics, escapeHtml, isEmployeeActiveInMonth, isEmployeeActiveOn, IMPORT_LIMITS } from "./domain.js";
 import { StorageError, storageErrorMessage } from "./storage.js";
+import { HALF_DAY_MINUTES } from "./config.js";
 
 // #region 全局存储错误反馈
 
@@ -73,22 +74,24 @@ function renderToday() {
   const today = curDay();
   const items = [];
 
-  // 考勤逾期检查
-  state.data.employees.filter(e => isEmployeeActiveOn(e, `${month}-${String(today).padStart(2, "0")}`)).forEach(e => {
-    const a = state.data.attendance.find(x => x.month === month && x.empId === e.id);
-    const rec = a ? a.rec : {};
-    let missing = 0;
-    for (let d = 1; d < today; d++) {
-      if (!isWorkday(month, d)) continue;   // 周末 / 节假日放假 不算逾期（已在考勤表标“休”）
-      const c = rec[d];
-      // 兼容新旧结构：新结构某天只要有任一时段非空即算“已填”
-      const filled = c && typeof c === "object" ? !!(c.am || c.pm || c.ot) : !!c;
-      if (!filled) missing++;
-    }
-    if (missing > 0) {
-      items.push({ danger: true, text: `<b>${escapeHtml(e.name)}</b> ${month} 考勤待补录（逾期 ${missing} 天）`, tab: "attendance" });
-    }
-  });
+  // 待办只统计今天之前的应出勤时段。复用领域层的任职、节假日和半天口径，
+  // 避免“只填上午”或“只填加班”被页面误判为整天已完成。
+  if (today > 1) {
+    const cutoff = `${month}-${String(today - 1).padStart(2, "0")}`;
+    const halfDayMinutes = state.data.settings.halfDayMinutes || HALF_DAY_MINUTES;
+    state.data.employees.filter(employee => isEmployeeActiveInMonth(employee, month)).forEach(employee => {
+      const attendance = state.data.attendance.find(item => item.month === month && item.empId === employee.id);
+      const metrics = attendanceMetrics(employee, month, attendance, state.data.holidays, halfDayMinutes, cutoff);
+      const missingShifts = metrics.missingMinutes / halfDayMinutes;
+      if (missingShifts > 0) {
+        items.push({
+          danger: true,
+          text: `<b>${escapeHtml(employee.name)}</b> ${month} 考勤待补录（缺 ${missingShifts} 个时段）`,
+          tab: "attendance"
+        });
+      }
+    });
+  }
 
   // 薪资待核算检查：本月一条薪资记录都没有
   const activeEmployees = state.data.employees.filter(e => isEmployeeActiveOn(e, `${month}-${String(today).padStart(2, "0")}`));
