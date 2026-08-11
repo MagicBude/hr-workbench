@@ -10,17 +10,7 @@
  * 不能再维护一份容易漂移的“当前余额”。
  */
 
-import {
-  state,
-  persist,
-  getDepartments,
-  addDepartment,
-  computeRestMinutes,
-  loadPreference,
-  savePreference,
-  removePreference,
-  createSnapshot,
-} from "./store.js";
+import { state, persist, getDepartments, addDepartment, computeRestMinutes, loadPreference, savePreference, removePreference, createSnapshot } from "./store.js";
 import { HALF_DAY_MINUTES } from "./config.js";
 import { fmtMoney, openModal, closeModal, enableColResize, requestRefresh } from "./ui.js";
 import { escapeHtml, EMPLOYMENT_STATUS } from "./domain.js";
@@ -35,12 +25,9 @@ function workdayMinutes() {
   return half * 2;
 }
 function shortDecimal(n, digits = 2) {
-  return String(Math.round(n * 10 ** digits) / 10 ** digits);
+  return String(Math.round(n * (10 ** digits)) / (10 ** digits));
 }
-function formatRestMinutes(
-  minutes,
-  mode = (state.data.settings && state.data.settings.restBalanceDisplay) || "smart",
-) {
+function formatRestMinutes(minutes, mode = (state.data.settings && state.data.settings.restBalanceDisplay) || "smart") {
   const value = Math.round(minutes || 0);
   const sign = value < 0 ? "−" : "";
   const abs = Math.abs(value);
@@ -52,9 +39,7 @@ function formatRestMinutes(
   const rest = abs - days * dayMin;
   const hours = Math.floor(rest / 60);
   const mins = rest % 60;
-  return (
-    sign + (days ? days + "天" : "") + (hours ? hours + "小时" : "") + (mins ? mins + "分钟" : "")
-  );
+  return sign + (days ? days + "天" : "") + (hours ? hours + "小时" : "") + (mins ? mins + "分钟" : "");
 }
 
 // 恢复默认列宽：清除记忆并刷新
@@ -75,7 +60,7 @@ let rosterFilter = { name: "", dept: "", status: "current" };
 function deptOptionsHtml(selected, withNew) {
   const depts = getDepartments();
   let html = '<option value="">（无部门）</option>';
-  depts.forEach((d) => {
+  depts.forEach(d => {
     const sel = d === selected ? " selected" : "";
     html += `<option value="${escapeHtml(d)}"${sel}>${escapeHtml(d)}</option>`;
   });
@@ -88,27 +73,24 @@ function wireNewDept(selEl) {
     if (selEl.value !== "__new__") return;
     const name = prompt("输入新部门名称：");
     if (name && name.trim()) {
-      addDepartment(name); // 写入 settings.departments 并保存
+      addDepartment(name);                       // 写入 settings.departments 并保存
       selEl.innerHTML = deptOptionsHtml(name.trim());
       selEl.value = name.trim();
     } else {
       selEl.innerHTML = deptOptionsHtml("");
       selEl.value = "";
     }
-    refreshDeptSelects(); // 同步刷新筛选下拉
+    refreshDeptSelects();                         // 同步刷新筛选下拉
   });
 }
 // 重新填充所有「筛选用」部门下拉（新增部门后调用，保留当前选择）
 function refreshDeptSelects() {
-  ["empFilterDept", "attFilterDept"].forEach((id) => {
+  ["empFilterDept", "attFilterDept"].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
     const cur = sel.value;
-    sel.innerHTML =
-      '<option value="">全部部门</option>' +
-      getDepartments()
-        .map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`)
-        .join("");
+    sel.innerHTML = '<option value="">全部部门</option>'
+      + getDepartments().map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
     sel.value = cur;
   });
 }
@@ -117,7 +99,7 @@ function syncAddDeptSelect() {
   const sel = document.getElementById("empDept");
   if (!sel) return;
   const depts = getDepartments();
-  const want = depts.length + 2; // （无部门） + 各部门 + ➕新增部门
+  const want = depts.length + 2;   // （无部门） + 各部门 + ➕新增部门
   if (sel.options.length !== want) {
     const cur = sel.value;
     sel.innerHTML = deptOptionsHtml(cur === "__new__" ? "" : cur);
@@ -134,9 +116,7 @@ export function initRoster() {
   document.getElementById("toggleAddEmpBtn").addEventListener("click", () => {
     const form = document.getElementById("addEmployeeForm");
     form.hidden = !form.hidden;
-    document.getElementById("toggleAddEmpBtn").textContent = form.hidden
-      ? "＋ 新增员工"
-      : "收起新增表单";
+    document.getElementById("toggleAddEmpBtn").textContent = form.hidden ? "＋ 新增员工" : "收起新增表单";
     if (!form.hidden) document.getElementById("empName").focus();
   });
   // 部门下拉：用组织级部门列表填充（新增表单）
@@ -147,43 +127,26 @@ export function initRoster() {
   // 筛选下拉：姓名 + 部门
   const fn = document.getElementById("empFilterName");
   const fd = document.getElementById("empFilterDept");
-  fd.innerHTML =
-    '<option value="">全部部门</option>' +
-    getDepartments()
-      .map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`)
-      .join("");
-  fn.addEventListener("input", () => {
-    rosterFilter.name = fn.value;
-    renderRoster();
-  });
-  fd.addEventListener("change", () => {
-    rosterFilter.dept = fd.value;
-    renderRoster();
-  });
-  document.getElementById("empFilterStatus").addEventListener("change", (ev) => {
-    rosterFilter.status = ev.target.value;
-    renderRoster();
-  });
+  fd.innerHTML = '<option value="">全部部门</option>'
+    + getDepartments().map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
+  fn.addEventListener("input", () => { rosterFilter.name = fn.value; renderRoster(); });
+  fd.addEventListener("change", () => { rosterFilter.dept = fd.value; renderRoster(); });
+  document.getElementById("empFilterStatus").addEventListener("change", ev => { rosterFilter.status = ev.target.value; renderRoster(); });
 
   document.getElementById("addEmpBtn").addEventListener("click", () => {
     const name = document.getElementById("empName").value.trim();
-    if (!name) {
-      alert("请输入姓名");
-      return;
-    }
+    if (!name) { alert("请输入姓名"); return; }
 
     // 往员工数组里追加一条新记录（新增员工默认无调休余额、社保基数用月薪）
     state.data.employees.push({
-      id: "e_" + Date.now(), // 用时间戳保证 id 不重复
+      id: "e_" + Date.now(),                       // 用时间戳保证 id 不重复
       name,
       dept: document.getElementById("empDept").value.trim(),
       hireDate: document.getElementById("empHire").value,
       baseSalary: +document.getElementById("empSalary").value || 0,
-      restSeedMinutes: 0, // 初始可调休余额（分钟），新增默认 0；可用=初始+加班−调休 动态算
-      insuranceBase: null, // 社保基数，null = 用基本月薪
-      employmentStatus: "active",
-      leaveDate: "",
-      deletedAt: null,
+      restSeedMinutes: 0,     // 初始可调休余额（分钟），新增默认 0；可用=初始+加班−调休 动态算
+      insuranceBase: null    // 社保基数，null = 用基本月薪
+      ,employmentStatus: "active", leaveDate: "", deletedAt: null
     });
 
     // 清空输入框，方便继续添加
@@ -192,7 +155,7 @@ export function initRoster() {
     document.getElementById("empHire").value = "";
     document.getElementById("empSalary").value = "";
 
-    persist(); // 保存到存储
+    persist();              // 保存到存储
     requestRefresh("roster", "attendance", "payroll", "dashboard", "today");
   });
 }
@@ -205,30 +168,25 @@ export function initRoster() {
 export function renderRoster() {
   const tb = document.querySelector("#empTable tbody");
   tb.innerHTML = "";
-  syncAddDeptSelect(); // 切换组织后同步部门下拉
-  refreshDeptSelects(); // 同步筛选用部门下拉（保留当前选择）
+  syncAddDeptSelect();      // 切换组织后同步部门下拉
+  refreshDeptSelects();    // 同步筛选用部门下拉（保留当前选择）
 
-  if (!state.data.employees.filter((e) => !e.deletedAt).length) {
+  if (!state.data.employees.filter(e => !e.deletedAt).length) {
     tb.innerHTML = '<tr><td colspan="8" class="empty">暂无员工，添加一条试试。</td></tr>';
     return;
   }
 
   // 应用筛选：姓名模糊匹配 + 部门精确匹配
   const q = rosterFilter.name.trim().toLowerCase();
-  const list = state.data.employees.filter(
-    (e) =>
-      !e.deletedAt &&
-      (!q || e.name.toLowerCase().includes(q)) &&
-      (!rosterFilter.dept || e.dept === rosterFilter.dept) &&
-      (rosterFilter.status === "all" ||
-        (rosterFilter.status === "current"
-          ? ["active", "probation", "suspended"].includes(e.employmentStatus || "active")
-          : (e.employmentStatus || "active") === rosterFilter.status)),
+  const list = state.data.employees.filter(e =>
+    !e.deletedAt &&
+    (!q || e.name.toLowerCase().includes(q)) &&
+    (!rosterFilter.dept || e.dept === rosterFilter.dept) &&
+    (rosterFilter.status === "all" || (rosterFilter.status === "current" ? ["active", "probation", "suspended"].includes(e.employmentStatus || "active") : (e.employmentStatus || "active") === rosterFilter.status))
   );
   // 更新筛选计数提示
   const cnt = document.getElementById("empFilterCount");
-  if (cnt)
-    cnt.textContent = `共 ${list.length} / ${state.data.employees.filter((e) => !e.deletedAt).length} 人`;
+  if (cnt) cnt.textContent = `共 ${list.length} / ${state.data.employees.filter(e => !e.deletedAt).length} 人`;
 
   if (!list.length) {
     tb.innerHTML = '<tr><td colspan="8" class="empty">没有匹配的员工</td></tr>';
@@ -237,8 +195,8 @@ export function renderRoster() {
 
   list.forEach((e, i) => {
     const tr = document.createElement("tr");
-    tr.draggable = true; // 允许整行被拖拽
-    tr.dataset.id = e.id; // 记员工 id（拖拽时按 id 定位，兼容筛选后的顺序）
+    tr.draggable = true;                 // 允许整行被拖拽
+    tr.dataset.id = e.id;                // 记员工 id（拖拽时按 id 定位，兼容筛选后的顺序）
     const restMinutes = computeRestMinutes(e.id);
     tr.innerHTML = `
       <td class="seq">${i + 1}</td>
@@ -256,32 +214,29 @@ export function renderRoster() {
     tb.appendChild(tr);
   });
 
-  bindDnD(tb); // 绑定拖拽交换
+  bindDnD(tb);   // 绑定拖拽交换
 
   // 给每行“删除”按钮绑定事件
-  tb.querySelectorAll("[data-del]").forEach((b) => {
+  tb.querySelectorAll("[data-del]").forEach(b => {
     b.addEventListener("click", () => {
       if (!confirm("确认将该员工移入回收站？历史考勤和薪资会保留，可在设置中心恢复。")) return;
       createSnapshot("员工移入回收站前");
-      const emp = state.data.employees.find((x) => x.id === b.dataset.del);
+      const emp = state.data.employees.find(x => x.id === b.dataset.del);
       if (emp) emp.deletedAt = new Date().toISOString();
       persist();
       requestRefresh("roster", "attendance", "payroll", "dashboard", "today");
     });
   });
-  tb.querySelectorAll("[data-depart]").forEach((b) =>
-    b.addEventListener("click", () => {
-      if (!confirm("确认将该员工标记为离职并保留全部历史记录？")) return;
-      const emp = state.data.employees.find((x) => x.id === b.dataset.depart);
-      if (!emp) return;
-      emp.employmentStatus = "departed";
-      emp.leaveDate ||= new Date().toISOString().slice(0, 10);
-      persist();
-      requestRefresh("roster", "attendance", "payroll", "dashboard", "today");
-    }),
-  );
+  tb.querySelectorAll("[data-depart]").forEach(b => b.addEventListener("click", () => {
+    if (!confirm("确认将该员工标记为离职并保留全部历史记录？")) return;
+    const emp = state.data.employees.find(x => x.id === b.dataset.depart);
+    if (!emp) return;
+    emp.employmentStatus = "departed";
+    emp.leaveDate ||= new Date().toISOString().slice(0, 10);
+    persist(); requestRefresh("roster", "attendance", "payroll", "dashboard", "today");
+  }));
   // 给每行“编辑”按钮绑定事件
-  tb.querySelectorAll("[data-edit]").forEach((b) => {
+  tb.querySelectorAll("[data-edit]").forEach(b => {
     b.addEventListener("click", () => openEditModal(b.dataset.edit));
   });
 
@@ -290,7 +245,7 @@ export function renderRoster() {
     table: document.getElementById("empTable"),
     widths: loadPreference("colw_emp") || EMP_DEF_W.slice(),
     onCommit: (w) => savePreference("colw_emp", w),
-    min: 40,
+    min: 40
   });
 }
 
@@ -300,8 +255,8 @@ export function renderRoster() {
 
 // 拖拽排序：拖起一行 → 放到另一行 → 交换两行在数组里的位置
 function bindDnD(tb) {
-  let dragId = null; // 当前被拖拽的员工 id（用 id 而非行号，兼容筛选后的顺序）
-  tb.querySelectorAll("tr").forEach((tr) => {
+  let dragId = null;   // 当前被拖拽的员工 id（用 id 而非行号，兼容筛选后的顺序）
+  tb.querySelectorAll("tr").forEach(tr => {
     // 拖拽开始：记住起点 + 加半透明样式
     tr.addEventListener("dragstart", (ev) => {
       dragId = tr.dataset.id;
@@ -309,21 +264,18 @@ function bindDnD(tb) {
       ev.dataTransfer.effectAllowed = "move";
     });
     // 拖拽经过：必须 preventDefault 才允许“放下”
-    tr.addEventListener("dragover", (ev) => {
-      ev.preventDefault();
-      ev.dataTransfer.dropEffect = "move";
-    });
+    tr.addEventListener("dragover", (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; });
     // 放下：与目标行交换位置
     tr.addEventListener("drop", (ev) => {
       ev.preventDefault();
       const overId = tr.dataset.id;
       if (overId !== dragId && dragId !== null) {
         const arr = state.data.employees;
-        const from = arr.findIndex((x) => x.id === dragId);
-        const to = arr.findIndex((x) => x.id === overId);
+        const from = arr.findIndex(x => x.id === dragId);
+        const to = arr.findIndex(x => x.id === overId);
         if (from !== -1 && to !== -1) {
-          const [moved] = arr.splice(from, 1); // 取出被拖的行
-          arr.splice(to, 0, moved); // 插入到目标位置
+          const [moved] = arr.splice(from, 1);  // 取出被拖的行
+          arr.splice(to, 0, moved);             // 插入到目标位置
           persist();
           requestRefresh("roster");
         }
@@ -341,7 +293,7 @@ function bindDnD(tb) {
 
 // 编辑弹窗：修改员工全部字段（含可调休余额、社保基数）
 function openEditModal(id) {
-  const e = state.data.employees.find((x) => x.id === id);
+  const e = state.data.employees.find(x => x.id === id);
   if (!e) return;
   const seedMinutes = Math.max(0, e.restSeedMinutes || 0);
   const dayMinutes = workdayMinutes();
@@ -355,14 +307,7 @@ function openEditModal(id) {
     <div class="field"><label>姓名</label><input id="emName" value="${escapeHtml(e.name)}"></div>
     <div class="field"><label>部门</label><select id="emDept">${deptOptionsHtml(e.dept)}</select></div>
     <div class="field"><label>入职日期</label><input id="emHire" type="date" value="${e.hireDate || ""}"></div>
-    <div class="field"><label>在职状态</label><select id="emStatus">${Object.entries(
-      EMPLOYMENT_STATUS,
-    )
-      .map(
-        ([v, l]) =>
-          `<option value="${v}" ${e.employmentStatus === v ? "selected" : ""}>${l}</option>`,
-      )
-      .join("")}</select></div>
+    <div class="field"><label>在职状态</label><select id="emStatus">${Object.entries(EMPLOYMENT_STATUS).map(([v,l]) => `<option value="${v}" ${e.employmentStatus === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     <div class="field"><label>离职日期</label><input id="emLeave" type="date" value="${e.leaveDate || ""}"></div>
     <div class="field"><label>基本月薪 (¥)</label><input id="emSalary" type="number" min="0" value="${e.baseSalary || 0}"></div>
     <div class="field"><label>初始可调休余额</label>
@@ -382,21 +327,15 @@ function openEditModal(id) {
   const readRestMinutes = () => {
     const days = Math.max(0, Math.floor(+document.getElementById("emRestDays").value || 0));
     const hours = Math.max(0, Math.floor(+document.getElementById("emRestHours").value || 0));
-    const mins = Math.max(
-      0,
-      Math.min(59, Math.floor(+document.getElementById("emRestMins").value || 0)),
-    );
+    const mins = Math.max(0, Math.min(59, Math.floor(+document.getElementById("emRestMins").value || 0)));
     return days * dayMinutes + hours * 60 + mins;
   };
   const updateRestHint = () => {
     const inputMinutes = readRestMinutes();
     const available = inputMinutes + earnedUsedMinutes;
-    document.getElementById("emRestHint").innerHTML =
-      `录入：<b>${formatRestMinutes(inputMinutes, "smart")}</b> = ${shortDecimal(inputMinutes / 60)} 小时；保存后可用：<b>${formatRestMinutes(available, "smart")}</b>`;
+    document.getElementById("emRestHint").innerHTML = `录入：<b>${formatRestMinutes(inputMinutes, "smart")}</b> = ${shortDecimal(inputMinutes / 60)} 小时；保存后可用：<b>${formatRestMinutes(available, "smart")}</b>`;
   };
-  ["emRestDays", "emRestHours", "emRestMins"].forEach((id) =>
-    document.getElementById(id).addEventListener("input", updateRestHint),
-  );
+  ["emRestDays", "emRestHours", "emRestMins"].forEach(id => document.getElementById(id).addEventListener("input", updateRestHint));
   updateRestHint();
   document.getElementById("emSave").addEventListener("click", () => {
     e.name = document.getElementById("emName").value.trim() || e.name;
@@ -409,7 +348,7 @@ function openEditModal(id) {
     e.restSeedMinutes = readRestMinutes();
     // 社保基数：空 → null（用基本月薪）；否则取数字
     const ins = document.getElementById("emIns").value.trim();
-    e.insuranceBase = ins === "" ? null : +ins || 0;
+    e.insuranceBase = ins === "" ? null : (+ins || 0);
     persist();
     closeModal();
     requestRefresh("roster", "attendance", "payroll", "dashboard", "today");

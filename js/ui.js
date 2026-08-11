@@ -34,12 +34,11 @@ export function bindModalMask() {
 // content: 文件内容字符串；filename: 文件名；type: MIME 类型
 export function downloadFile(content, filename, type) {
   const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob); // 生成一个临时本地地址
+  const url = URL.createObjectURL(blob);   // 生成一个临时本地地址
   const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click(); // 模拟点击“下载”
-  URL.revokeObjectURL(url); // 用完释放，避免内存泄漏
+  a.href = url; a.download = filename;
+  a.click();                                // 模拟点击“下载”
+  URL.revokeObjectURL(url);                 // 用完释放，避免内存泄漏
 }
 
 // #endregion 弹窗与文件下载
@@ -64,7 +63,7 @@ export function curDay() {
 // 帮助弹窗：显示一组说明文字（计算规则 / 口径说明）
 // title: 标题；lines: 字符串数组（可用 <b> 等行内标签）
 export function showHelp(title, lines) {
-  openModal(`<h3>${title}</h3><ul class="help-list">${lines.map((l) => `<li>${l}</li>`).join("")}</ul>
+  openModal(`<h3>${title}</h3><ul class="help-list">${lines.map(l => `<li>${l}</li>`).join("")}</ul>
     <div class="modal-actions"><button class="btn btn-primary" id="helpOk">知道了</button></div>`);
   document.getElementById("helpOk").addEventListener("click", closeModal);
 }
@@ -74,15 +73,14 @@ export function showHelp(title, lines) {
 let __toastTimer = null;
 export function showToast(msg) {
   let t = document.getElementById("toast");
-  if (!t) {
-    // 第一次用时才创建这个 DOM 节点
+  if (!t) {                       // 第一次用时才创建这个 DOM 节点
     t = document.createElement("div");
     t.id = "toast";
     document.body.appendChild(t);
   }
   t.textContent = msg;
-  t.classList.add("show"); // 触发淡入
-  clearTimeout(__toastTimer); // 连续提示时重置计时，避免提前消失
+  t.classList.add("show");        // 触发淡入
+  clearTimeout(__toastTimer);     // 连续提示时重置计时，避免提前消失
   __toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
 }
 
@@ -120,51 +118,33 @@ export function enableColResize(opts) {
   // 收集表头单元格，并用 data-col 确定列序号（考勤双行表头同一列会有两个 th，取其一测量）
   const ths = [...table.querySelectorAll("thead th")];
   const byCol = {};
-  ths.forEach((th) => {
-    const i = +th.dataset.col;
-    if (!isNaN(i)) byCol[i] = th;
-  });
-  const ncols = Object.keys(byCol).length
-    ? Math.max(...Object.keys(byCol).map(Number)) + 1
-    : ths.length;
+  ths.forEach(th => { const i = +th.dataset.col; if (!isNaN(i)) byCol[i] = th; });
+  const ncols = Object.keys(byCol).length ? Math.max(...Object.keys(byCol).map(Number)) + 1 : ths.length;
 
   // 建立 colgroup 控制列宽
   let cg = table.querySelector("colgroup");
-  if (!cg) {
-    cg = document.createElement("colgroup");
-    table.insertBefore(cg, table.firstChild);
-  }
+  if (!cg) { cg = document.createElement("colgroup"); table.insertBefore(cg, table.firstChild); }
   cg.innerHTML = "";
   const cols = [];
   for (let i = 0; i < ncols; i++) {
     const c = document.createElement("col");
     let w = widths ? widths[i] : null;
     if (w == null && byCol[i]) w = Math.round(byCol[i].getBoundingClientRect().width);
-    if (w) {
-      c.style.width = w + "px";
-      if (widths) widths[i] = w;
-    }
+    if (w) { c.style.width = w + "px"; if (widths) widths[i] = w; }
     cg.appendChild(c);
     cols.push(c);
   }
-  if (!widths)
-    widths = cols.map(
-      (c, i) =>
-        parseFloat(c.style.width) ||
-        (byCol[i] ? Math.round(byCol[i].getBoundingClientRect().width) : min),
-    );
+  if (!widths) widths = cols.map((c, i) => parseFloat(c.style.width) || (byCol[i] ? Math.round(byCol[i].getBoundingClientRect().width) : min));
 
   // 每次重建 colgroup 后同步重建手柄。花名册的 thead 会复用，如果沿用旧手柄，
   // 其事件闭包仍指向已被 cg.innerHTML 清掉的旧 col，拖动就不会作用于当前表格。
-  ths.forEach((th) => {
+  ths.forEach(th => {
     const oldHandle = th.querySelector(".col-resize");
     if (oldHandle) oldHandle.remove();
     const h = document.createElement("span");
     h.className = "col-resize";
     th.appendChild(h);
-    h.addEventListener("mousedown", (e) =>
-      startResize(e, th, cols, widths, group, onCommit, onResized, min),
-    );
+    h.addEventListener("mousedown", (e) => startResize(e, th, cols, widths, group, onCommit, onResized, min));
   });
 }
 
@@ -176,9 +156,7 @@ function startResize(e, th, cols, widths, group, onCommit, onResized, min) {
   const same = (i) => (group ? group(i) : i) === g;
   const startX = e.clientX;
   const starts = {};
-  cols.forEach((c, i) => {
-    if (same(i)) starts[i] = parseFloat(c.style.width) || 0;
-  });
+  cols.forEach((c, i) => { if (same(i)) starts[i] = parseFloat(c.style.width) || 0; });
   function move(ev) {
     const dx = ev.clientX - startX;
     cols.forEach((c, i) => {
@@ -188,7 +166,7 @@ function startResize(e, th, cols, widths, group, onCommit, onResized, min) {
         widths[i] = w;
       }
     });
-    if (onResized) onResized(g); // 通知调用方（如重算 sticky 偏移）
+    if (onResized) onResized(g);   // 通知调用方（如重算 sticky 偏移）
   }
   function up() {
     document.removeEventListener("mousemove", move);

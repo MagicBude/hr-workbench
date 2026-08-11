@@ -10,26 +10,8 @@
  * 节假日覆盖普通周末规则。批量操作必须与单格操作遵守相同的状态和余额约束。
  */
 
-import {
-  state,
-  persist,
-  getDepartments,
-  computeRestMinutes,
-  loadPreference,
-  savePreference,
-  removePreference,
-} from "./store.js";
-import {
-  STATUSES,
-  STATUS_LABEL,
-  STATUS_COLOR,
-  SHIFTS,
-  SHIFT_LABEL,
-  WEEK_LABEL,
-  HOLIDAYS_2026,
-  SUM_KEYS,
-  HALF_DAY_MINUTES,
-} from "./config.js";
+import { state, persist, getDepartments, computeRestMinutes, loadPreference, savePreference, removePreference } from "./store.js";
+import { STATUSES, STATUS_LABEL, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026, SUM_KEYS, HALF_DAY_MINUTES } from "./config.js";
 import { openModal, closeModal, showToast, enableColResize, requestRefresh } from "./ui.js";
 import { escapeHtml, isEmployeeActiveInMonth, summarizeAttendance } from "./domain.js";
 
@@ -51,8 +33,8 @@ function defaultMinFor(status) {
 }
 // 把单元格值（字符串 或 {s,min}）解析成展示所需 {s,min,color}
 function cellView(value) {
-  const status = value && typeof value === "object" ? value.s : value;
-  const minutes = value && typeof value === "object" && value.min != null ? value.min : null;
+  const status = (value && typeof value === "object") ? value.s : value;
+  const minutes = (value && typeof value === "object" && value.min != null) ? value.min : null;
   const color = status ? STATUS_COLOR[status] : null;
   return { s: status || "", min: minutes, color };
 }
@@ -60,7 +42,7 @@ function cellView(value) {
 function fmtMin(value) {
   const minutes = Math.round(value || 0);
   if (minutes <= 0) return "0m";
-  if (minutes % 60 === 0) return minutes / 60 + "h";
+  if (minutes % 60 === 0) return (minutes / 60) + "h";
   if (minutes < 60) return minutes + "m";
   return Math.floor(minutes / 60) + "h" + (minutes % 60) + "m";
 }
@@ -74,27 +56,19 @@ let attFilter = { name: "", dept: "", summaryCollapsed: false };
 
 // 取某员工某月考勤 rec（{day:{am,pm,ot}}），没有则返回空对象
 function getAtt(month, empId) {
-  const attendanceRecord = state.data.attendance.find(
-    (item) => item.month === month && item.empId === empId,
-  );
+  const attendanceRecord = state.data.attendance.find(item => item.month === month && item.empId === empId);
   return attendanceRecord ? attendanceRecord.rec : {};
 }
 
 // 保存某员工某月考勤：存在则更新，不存在则新建；同时重算汇总
 function saveAtt(month, empId, rec) {
   const summary = summarizeAttendance(rec);
-  const exist = state.data.attendance.find((x) => x.month === month && x.empId === empId);
+  const exist = state.data.attendance.find(x => x.month === month && x.empId === empId);
   if (exist) {
     exist.rec = rec;
     exist.summary = summary;
   } else {
-    state.data.attendance.push({
-      id: "a_" + month + "_" + empId,
-      month,
-      empId,
-      rec,
-      summary,
-    });
+    state.data.attendance.push({ id: "a_" + month + "_" + empId, month, empId, rec, summary });
   }
   persist();
 }
@@ -134,11 +108,8 @@ export function initAttendance() {
   // 筛选：姓名 + 部门（与花名册共享组织级部门列表）
   const nameFilter = document.getElementById("attFilterName");
   const departmentFilter = document.getElementById("attFilterDept");
-  departmentFilter.innerHTML =
-    '<option value="">全部部门</option>' +
-    getDepartments()
-      .map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`)
-      .join("");
+  departmentFilter.innerHTML = '<option value="">全部部门</option>'
+    + getDepartments().map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
   nameFilter.addEventListener("input", () => {
     attFilter.name = nameFilter.value;
     renderAttendance();
@@ -149,9 +120,7 @@ export function initAttendance() {
   });
   document.getElementById("toggleAttSummaryBtn").addEventListener("click", () => {
     attFilter.summaryCollapsed = !attFilter.summaryCollapsed;
-    document.getElementById("toggleAttSummaryBtn").textContent = attFilter.summaryCollapsed
-      ? "展开汇总列"
-      : "收起汇总列";
+    document.getElementById("toggleAttSummaryBtn").textContent = attFilter.summaryCollapsed ? "展开汇总列" : "收起汇总列";
     renderAttendance();
   });
   // 事件委托：单击循环切换 + 拖拽框选批量应用 + 时长角标
@@ -165,7 +134,7 @@ export function initAttendance() {
     if (!td) return;
     const rec = getAtt(document.getElementById("attMonth").value || "2026-08", td.dataset.emp);
     const cur = (rec[td.dataset.day] && rec[td.dataset.day][td.dataset.shift]) || "";
-    const curS = typeof cur === "object" ? cur.s : cur;
+    const curS = (typeof cur === "object") ? cur.s : cur;
     if (curS) openDurationEditor(td.dataset.emp, td.dataset.day, td.dataset.shift);
   });
 }
@@ -176,11 +145,11 @@ export function renderAttendance() {
   const N = daysInMonth(month);
 
   // 应用筛选：姓名模糊匹配 + 部门精确匹配
-  const all = state.data.employees.filter((e) => !e.deletedAt && isEmployeeActiveInMonth(e, month));
+  const all = state.data.employees.filter(e => !e.deletedAt && isEmployeeActiveInMonth(e, month));
   const q = attFilter.name.trim().toLowerCase();
-  const emps = all.filter(
-    (e) =>
-      (!q || e.name.toLowerCase().includes(q)) && (!attFilter.dept || e.dept === attFilter.dept),
+  const emps = all.filter(e =>
+    (!q || e.name.toLowerCase().includes(q)) &&
+    (!attFilter.dept || e.dept === attFilter.dept)
   );
   const cnt = document.getElementById("attFilterCount");
   if (cnt) cnt.textContent = `共 ${emps.length} / ${all.length} 人`;
@@ -202,80 +171,54 @@ export function renderAttendance() {
   }
 
   // ---------- 表头第 1 行：日期 ----------
-  let h1 =
-    '<th class="st st-seq" rowspan="2" data-col="0">序号</th>' +
-    '<th class="st st-name" rowspan="2" data-col="1">姓名</th>' +
-    '<th class="st st-dept" rowspan="2" data-col="2">部门</th>' +
-    '<th class="st st-shift" rowspan="2" data-col="3">时段</th>';
+  let h1 = '<th class="st st-seq" rowspan="2" data-col="0">序号</th>'
+    + '<th class="st st-name" rowspan="2" data-col="1">姓名</th>'
+    + '<th class="st st-dept" rowspan="2" data-col="2">部门</th>'
+    + '<th class="st st-shift" rowspan="2" data-col="3">时段</th>';
   // ---------- 表头第 2 行：星期 ----------
   let h2 = "";
   for (let d = 1; d <= N; d++) {
     const hol = holidayOf(month, d);
     const wd = weekdayOf(month, d);
-    const isWk = wd === 0 || wd === 6;
-    const cls = hol
-      ? hol.type === "holiday"
-        ? "hd-holiday"
-        : "hd-workday"
-      : isWk
-        ? "hd-weekend"
-        : "";
+    const isWk = (wd === 0 || wd === 6);
+    const cls = hol ? (hol.type === "holiday" ? "hd-holiday" : "hd-workday") : (isWk ? "hd-weekend" : "");
     const title = hol ? ` title="${escapeHtml(hol.name)}"` : "";
-    const dc = 3 + d; // 日期列序号：4..(4+N-1)
-    h1 += `<th class="date ${cls}" data-col="${dc}"${title}>${d}</th>`; // 日期数字
+    const dc = 3 + d;   // 日期列序号：4..(4+N-1)
+    h1 += `<th class="date ${cls}" data-col="${dc}"${title}>${d}</th>`;                 // 日期数字
     h2 += `<th class="wk ${cls}" data-col="${dc}"${title}>${hol ? (hol.type === "holiday" ? "休" : "班") : WEEK_LABEL[wd]}</th>`; // 星期/休/班
   }
   // 汇总列表头（跨两行）
-  if (!attFilter.summaryCollapsed)
-    SUM_KEYS.forEach((k, j) => {
-      h1 += `<th class="sumcol" rowspan="2" data-col="${4 + N + j}">${k}</th>`;
-    });
+  if (!attFilter.summaryCollapsed) SUM_KEYS.forEach((k, j) => { h1 += `<th class="sumcol" rowspan="2" data-col="${4 + N + j}">${k}</th>`; });
 
   // ---------- 表体：每员工 3 行 ----------
   let body = "";
   emps.forEach((e, i) => {
     const rec = getAtt(month, e.id);
-    const s =
-      (state.data.attendance.find((x) => x.month === month && x.empId === e.id) || {}).summary ||
-      summarizeAttendance();
+    const s = (state.data.attendance.find(x => x.month === month && x.empId === e.id) || {}).summary || summarizeAttendance();
     SHIFTS.forEach((sh, si) => {
       body += "<tr>";
-      if (si === 0) {
-        // 仅"上午"行输出合并的 序号/姓名/部门 与 汇总
-        body +=
-          `<td class="st st-seq" rowspan="3">${i + 1}</td>` +
-          `<td class="st st-name" rowspan="3">${escapeHtml(e.name)}</td>` +
-          `<td class="st st-dept" rowspan="3">${escapeHtml(e.dept || "")}</td>`;
+      if (si === 0) {  // 仅"上午"行输出合并的 序号/姓名/部门 与 汇总
+        body += `<td class="st st-seq" rowspan="3">${i + 1}</td>`
+          + `<td class="st st-name" rowspan="3">${escapeHtml(e.name)}</td>`
+          + `<td class="st st-dept" rowspan="3">${escapeHtml(e.dept || "")}</td>`;
       }
-      body += `<td class="st st-shift">${SHIFT_LABEL[sh]}</td>`; // 时段列：上午/下午/加班
-      for (let d = 1; d <= N; d++) {
-        // 各日期格
+      body += `<td class="st st-shift">${SHIFT_LABEL[sh]}</td>`;      // 时段列：上午/下午/加班
+      for (let d = 1; d <= N; d++) {                                   // 各日期格
         const hol = holidayOf(month, d);
-        const v = rec[d] ? rec[d][sh] || "" : "";
+        const v = rec[d] ? (rec[d][sh] || "") : "";
         const { s, min, color } = cellView(v);
         const bg = color ? ` style="background:${color.bg};color:${color.fg}"` : "";
         // 休息日（周末/节假日放假）且为空 → 显示灰色“休”占位，提示“这格不用填”；点击仍可改为出勤/加班等
         const isRest = !isWorkday(month, d);
-        const isEmptyRest = !s && isRest && sh !== "ot"; // 加班行不加“休”（加班可选，空即无加班）
+        const isEmptyRest = !s && isRest && sh !== "ot";   // 加班行不加“休”（加班可选，空即无加班）
         // 时长角标：可带时长的状态都显示（整段请假 4h，加班 1h，迟到 30m）；休息占位格不显示
-        const showMin =
-          !isEmptyRest && min != null
-            ? min
-            : !isEmptyRest && isDurationStatus(s)
-              ? defaultMinFor(s)
-              : null;
-        const badge =
-          showMin != null ? `<span class="dur" title="点此设置时长">${fmtMin(showMin)}</span>` : "";
+        const showMin = (!isEmptyRest && min != null) ? min : ((!isEmptyRest && isDurationStatus(s)) ? defaultMinFor(s) : null);
+        const badge = showMin != null ? `<span class="dur" title="点此设置时长">${fmtMin(showMin)}</span>` : "";
         const cls = "cell" + (hol ? " cell-holiday" : "") + (isEmptyRest ? " cell-rest" : "");
-        const content = isEmptyRest
-          ? `<span class="rest-tag" title="休息日（无需填写，点击可改）">休</span>`
-          : s + badge;
+        const content = isEmptyRest ? `<span class="rest-tag" title="休息日（无需填写，点击可改）">休</span>` : s + badge;
         body += `<td class="${cls}" data-emp="${e.id}" data-day="${d}" data-shift="${sh}" data-ei="${i}" data-di="${d}" data-si="${si}"${bg}>${content}</td>`;
       }
-      if (si === 0 && !attFilter.summaryCollapsed)
-        SUM_KEYS.forEach((k) => {
-          body += `<td class="sumcol" rowspan="3">${fmt1(s[k])}</td>`;
-        });
+      if (si === 0 && !attFilter.summaryCollapsed) SUM_KEYS.forEach(k => { body += `<td class="sumcol" rowspan="3">${fmt1(s[k])}</td>`; });
       body += "</tr>";
     });
   });
@@ -287,12 +230,12 @@ export function renderAttendance() {
   enableColResize({
     table,
     widths: attWidths(N).slice(0, 4 + N + (attFilter.summaryCollapsed ? 0 : SUM_KEYS.length)),
-    group: (i) => (i < 4 ? "f" + i : i < 4 + N ? "date" : "sum"),
+    group: (i) => i < 4 ? "f" + i : (i < 4 + N ? "date" : "sum"),
     onCommit: (w) => saveAttWidths(w, N),
     onResized: () => syncAttSticky(table),
-    min: 26,
+    min: 26
   });
-  syncAttSticky(table); // 初次渲染也要按实际列宽定位 sticky 列
+  syncAttSticky(table);   // 初次渲染也要按实际列宽定位 sticky 列
 }
 
 // #endregion 初始化与表格渲染
@@ -308,7 +251,7 @@ export function resetAttColWidths() {
 // 由存储的 {fixed,date,sum} 展开成每列宽度数组（长度 = 4 + N + 7）
 function attWidths(N) {
   const s = loadPreference("colw_att") || {};
-  const fixed = s.fixed && s.fixed.length === 4 ? s.fixed : [36, 70, 70, 44];
+  const fixed = (s.fixed && s.fixed.length === 4) ? s.fixed : [36, 70, 70, 44];
   const date = s.date || 32;
   const sum = s.sum || 34;
   const arr = [];
@@ -318,29 +261,23 @@ function attWidths(N) {
   return arr;
 }
 function saveAttWidths(w, N) {
-  savePreference("colw_att", {
-    fixed: [w[0], w[1], w[2], w[3]],
-    date: w[4],
-    sum: w[4 + N] || 50,
-  });
+  savePreference("colw_att", { fixed: [w[0], w[1], w[2], w[3]], date: w[4], sum: w[4 + N] || 50 });
 }
 // 重算左侧 sticky 固定列的 left 偏移（按"实际渲染宽度"累加，兼容表格整体 100% 拉伸）
 function syncAttSticky(table) {
   const classes = ["st-seq", "st-name", "st-dept", "st-shift"];
   let left = 0;
-  classes.forEach((cls) => {
+  classes.forEach(cls => {
     const cell = table.querySelector("thead ." + cls);
     const w = cell ? cell.getBoundingClientRect().width : 0;
-    table.querySelectorAll("." + cls).forEach((el) => {
-      el.style.left = left + "px";
-    });
+    table.querySelectorAll("." + cls).forEach(el => { el.style.left = left + "px"; });
     left += w;
   });
 }
 
 // 半天数显示：整数不带小数点，0.5 显示为 0.5
 function fmt1(number) {
-  return number % 1 === 0 ? String(number) : number.toFixed(1);
+  return (number % 1 === 0) ? String(number) : number.toFixed(1);
 }
 
 // #endregion 列宽与固定列
@@ -349,22 +286,17 @@ function fmt1(number) {
 
 // 单元格点击：点格子循环切换状态；点「时长」角标打开时长编辑（不切换状态）
 function onCellClick(td, ev) {
-  const empId = td.dataset.emp,
-    day = td.dataset.day,
-    shift = td.dataset.shift;
+  const empId = td.dataset.emp, day = td.dataset.day, shift = td.dataset.shift;
   const month = document.getElementById("attMonth").value || "2026-08";
-  const emp = state.data.employees.find((x) => x.id === empId);
+  const emp = state.data.employees.find(x => x.id === empId);
   if (!emp) return;
   // 点「时长」角标 → 打开时长编辑，不切换状态
-  if (ev && ev.target.closest(".dur")) {
-    openDurationEditor(empId, day, shift);
-    return;
-  }
+  if (ev && ev.target.closest(".dur")) { openDurationEditor(empId, day, shift); return; }
 
   const rec = { ...getAtt(month, empId) };
   const cell = { ...(rec[day] || { am: "", pm: "", ot: "" }) };
   const cur = cell[shift] || "";
-  const curS = typeof cur === "object" ? cur.s : cur;
+  const curS = (typeof cur === "object") ? cur.s : cur;
 
   // 根据时段与日期类型决定可循环状态：
   //   - 加班行（ot）只能「加 / 空」切换；
@@ -373,11 +305,10 @@ function onCellClick(td, ev) {
   const d = Number(day);
   const wd = weekdayOf(month, d);
   const hol = holidayOf(month, d);
-  const isRestDay = wd === 0 || wd === 6 || (hol && hol.type === "holiday");
+  const isRestDay = (wd === 0 || wd === 6) || (hol && hol.type === "holiday");
   const isOt = shift === "ot";
   const st = state.data.settings || {};
-  const enabledStatuses =
-    st.enableLateEarly === false ? STATUSES.filter((s) => s !== "迟" && s !== "退") : STATUSES;
+  const enabledStatuses = st.enableLateEarly === false ? STATUSES.filter(s => s !== "迟" && s !== "退") : STATUSES;
   const cycle = isOt
     ? ["加", ""]
     : isRestDay
@@ -390,22 +321,10 @@ function onCellClick(td, ev) {
   const half = st.halfDayMinutes || HALF_DAY_MINUTES;
   if (!isOt && next === "调" && st.enforceRestBalance !== false) {
     // 当前格子若已占「调」，先把这部分释放再判断可用
-    const curMin =
-      typeof cur === "object" && cur.s === "调" && cur.min != null
-        ? cur.min
-        : curS === "调"
-          ? half
-          : 0;
+    const curMin = (typeof cur === "object" && cur.s === "调" && cur.min != null) ? cur.min : (curS === "调" ? half : 0);
     const avail = computeRestMinutes(empId) + curMin;
     if (avail < half) {
-      showToast(
-        emp.name +
-          " 可调休余额不足（可用 " +
-          (avail / 60).toFixed(1) +
-          " 小时，需 " +
-          half / 60 +
-          " 小时），已跳过「调休」",
-      );
+      showToast(emp.name + " 可调休余额不足（可用 " + (avail / 60).toFixed(1) + " 小时，需 " + (half / 60) + " 小时），已跳过「调休」");
       idx = (idx + 1) % cycle.length;
       next = cycle[idx];
     }
@@ -413,8 +332,7 @@ function onCellClick(td, ev) {
 
   // 存储：加/迟/退 存为带时长的对象（默认 1h / 30m），其余状态存为纯字符串（整段=半天）
   if (next === "") cell[shift] = "";
-  else if (next === "加" || next === "迟" || next === "退")
-    cell[shift] = { s: next, min: defaultMinFor(next) };
+  else if (next === "加" || next === "迟" || next === "退") cell[shift] = { s: next, min: defaultMinFor(next) };
   else cell[shift] = next;
 
   rec[day] = cell;
@@ -425,18 +343,9 @@ function onCellClick(td, ev) {
 // ---------- 拖拽框选 + 批量应用 ----------
 // 设计：在单元格上按下并拖动 → 高亮一个矩形区域；松手弹出工具条，点某状态即应用给区域内所有格。
 //       加班行只接受“加/清除”；若只是单击（未拖动），保持原“循环切换”手感。
-let selStart = null,
-  selMoved = false,
-  dragging = false;
+let selStart = null, selMoved = false, dragging = false;
 function cellCoord(td) {
-  return {
-    ei: +td.dataset.ei,
-    di: +td.dataset.di,
-    si: +td.dataset.si,
-    empId: td.dataset.emp,
-    day: td.dataset.day,
-    shift: td.dataset.shift,
-  };
+  return { ei: +td.dataset.ei, di: +td.dataset.di, si: +td.dataset.si, empId: td.dataset.emp, day: td.dataset.day, shift: td.dataset.shift };
 }
 function onGridMouseDown(ev) {
   // 点击「时长」角标：直接用 mousedown 打开编辑器（比 click 更稳，不会被后续逻辑吞掉）
@@ -448,11 +357,10 @@ function onGridMouseDown(ev) {
   }
   const td = ev.target.closest("td.cell");
   if (!td) return;
-  closeBulkBar(); // 任何新的按下先关掉上一次工具条
+  closeBulkBar();                 // 任何新的按下先关掉上一次工具条
   selStart = cellCoord(td);
-  dragging = true;
-  selMoved = false;
-  ev.preventDefault(); // 避免拖拽时选中页面文字
+  dragging = true; selMoved = false;
+  ev.preventDefault();             // 避免拖拽时选中页面文字
 }
 function onGridMouseMove(ev) {
   if (!dragging || !selStart) return;
@@ -468,29 +376,22 @@ function onGridMouseUp(ev) {
   dragging = false;
   const td = ev.target.closest("td.cell");
   if (selMoved && td) {
-    showBulkBar(ev); // 框选完成 → 弹工具条
+    showBulkBar(ev);              // 框选完成 → 弹工具条
   } else if (selStart && td) {
-    const cell = ev.target.closest("td.cell"); // 未拖动：等同单击 → 循环切换（或点时长角标）
+    const cell = ev.target.closest("td.cell");   // 未拖动：等同单击 → 循环切换（或点时长角标）
     if (cell) onCellClick(cell, ev);
   } else {
-    document.querySelectorAll("#attGrid td.cell.sel").forEach((x) => x.classList.remove("sel")); // 表格外松开：清高亮
+    document.querySelectorAll("#attGrid td.cell.sel").forEach(x => x.classList.remove("sel")); // 表格外松开：清高亮
   }
-  selStart = null;
-  selMoved = false;
+  selStart = null; selMoved = false;
 }
 function highlightRange(cur) {
-  const minEi = Math.min(selStart.ei, cur.ei),
-    maxEi = Math.max(selStart.ei, cur.ei);
-  const minDi = Math.min(selStart.di, cur.di),
-    maxDi = Math.max(selStart.di, cur.di);
-  const minSi = Math.min(selStart.si, cur.si),
-    maxSi = Math.max(selStart.si, cur.si);
-  document.querySelectorAll("#attGrid td.cell").forEach((td) => {
-    const te = +td.dataset.ei,
-      td_ = +td.dataset.di,
-      ts = +td.dataset.si;
-    const inRange =
-      te >= minEi && te <= maxEi && td_ >= minDi && td_ <= maxDi && ts >= minSi && ts <= maxSi;
+  const minEi = Math.min(selStart.ei, cur.ei), maxEi = Math.max(selStart.ei, cur.ei);
+  const minDi = Math.min(selStart.di, cur.di), maxDi = Math.max(selStart.di, cur.di);
+  const minSi = Math.min(selStart.si, cur.si), maxSi = Math.max(selStart.si, cur.si);
+  document.querySelectorAll("#attGrid td.cell").forEach(td => {
+    const te = +td.dataset.ei, td_ = +td.dataset.di, ts = +td.dataset.si;
+    const inRange = te >= minEi && te <= maxEi && td_ >= minDi && td_ <= maxDi && ts >= minSi && ts <= maxSi;
     td.classList.toggle("sel", inRange);
   });
 }
@@ -505,41 +406,18 @@ function showBulkBar(ev) {
   const bar = document.createElement("div");
   bar.id = "bulkBar";
   bar.className = "att-bulk-bar";
-  let items = [
-    ["√", "出勤"],
-    ["事", "事假"],
-    ["病", "病假"],
-    ["缺", "缺勤"],
-    ["调", "调休"],
-    ["年", "年假"],
-    ["加", "加班"],
-    ["迟", "迟到"],
-    ["退", "早退"],
-    ["清除", "清除/重置"],
-  ];
-  if (state.data.settings.enableLateEarly === false)
-    items = items.filter(([s]) => s !== "迟" && s !== "退");
-  bar.innerHTML =
-    `<span class="ttl">批量（${cells.length} 格）</span>` +
-    items
-      .map(
-        ([s, t]) =>
-          `<button class="bk" data-s="${s}" title="${t}">${s === "清除" ? "✕" : s}</button>`,
-      )
-      .join("") +
-    `<button class="bk close" data-close="1" title="关闭">×</button>`;
+  let items = [["√", "出勤"], ["事", "事假"], ["病", "病假"], ["缺", "缺勤"], ["调", "调休"], ["年", "年假"], ["加", "加班"], ["迟", "迟到"], ["退", "早退"], ["清除", "清除/重置"]];
+  if (state.data.settings.enableLateEarly === false) items = items.filter(([s]) => s !== "迟" && s !== "退");
+  bar.innerHTML = `<span class="ttl">批量（${cells.length} 格）</span>`
+    + items.map(([s, t]) => `<button class="bk" data-s="${s}" title="${t}">${s === "清除" ? "✕" : s}</button>`).join("")
+    + `<button class="bk close" data-close="1" title="关闭">×</button>`;
   document.body.appendChild(bar);
-  const bw = 420,
-    bh = 50;
-  let x = ev.clientX,
-    y = ev.clientY + 14;
+  const bw = 420, bh = 50;
+  let x = ev.clientX, y = ev.clientY + 14;
   x = Math.max(8, Math.min(x, window.innerWidth - bw - 8));
   y = Math.max(8, Math.min(y, window.innerHeight - bh - 8));
-  bar.style.left = x + "px";
-  bar.style.top = y + "px";
-  bar
-    .querySelectorAll(".bk[data-s]")
-    .forEach((b) => (b.onclick = () => applyBulk(cells, b.dataset.s)));
+  bar.style.left = x + "px"; bar.style.top = y + "px";
+  bar.querySelectorAll(".bk[data-s]").forEach(b => b.onclick = () => applyBulk(cells, b.dataset.s));
   bar.querySelector("[data-close]").onclick = closeBulkBar;
   setTimeout(() => document.addEventListener("mousedown", outsideClose, true), 0);
 }
@@ -550,32 +428,27 @@ function outsideClose(e) {
 function closeBulkBar() {
   const bar = document.getElementById("bulkBar");
   if (bar) bar.remove();
-  document.querySelectorAll("#attGrid td.cell.sel").forEach((td) => td.classList.remove("sel"));
+  document.querySelectorAll("#attGrid td.cell.sel").forEach(td => td.classList.remove("sel"));
   document.removeEventListener("mousedown", outsideClose, true);
 }
 // 批量应用：按员工分组，每人一次 saveAtt；调休做余额校验（批量内不超额）
 function applyBulk(cells, status) {
   const month = document.getElementById("attMonth").value || "2026-08";
   const byEmp = {};
-  cells.forEach((td) => {
+  cells.forEach(td => {
     const c = cellCoord(td);
-    (byEmp[c.empId] = byEmp[c.empId] || {})[c.day + "|" + c.shift] = {
-      day: c.day,
-      shift: c.shift,
-    };
+    (byEmp[c.empId] = byEmp[c.empId] || {})[c.day + "|" + c.shift] = { day: c.day, shift: c.shift };
   });
-  let applied = 0,
-    skipped = 0;
+  let applied = 0, skipped = 0;
   for (const empId in byEmp) {
-    const emp = state.data.employees.find((x) => x.id === empId);
+    const emp = state.data.employees.find(x => x.id === empId);
     if (!emp) continue;
     const rec = { ...getAtt(month, empId) };
-    let avail = computeRestMinutes(empId); // 当前可用余额（用于调休校验，批量内递减/递增）
+    let avail = computeRestMinutes(empId);   // 当前可用余额（用于调休校验，批量内递减/递增）
     for (const key in byEmp[empId]) {
       const { day, shift } = byEmp[empId][key];
       const ok = setCellStatus(emp, rec, day, shift, status, avail);
-      if (ok.applied) applied++;
-      else skipped++;
+      if (ok.applied) applied++; else skipped++;
       avail = ok.avail;
     }
     saveAtt(month, empId, rec);
@@ -605,41 +478,29 @@ function setCellStatus(emp, rec, day, shift, status, avail) {
     rec[day] = c;
     return { applied: true, avail };
   }
-  if (isOt) {
-    // 加班行：只能 加 / 清除
+  if (isOt) {                                   // 加班行：只能 加 / 清除
     if (status !== "加") return { applied: false, avail };
     const min = defaultMinFor("加");
     if (st.overtimeToRest) avail += min * ratio;
-    const c = { ...(rec[day] || blank) };
-    c[shift] = { s: "加", min };
-    rec[day] = c;
+    const c = { ...(rec[day] || blank) }; c[shift] = { s: "加", min }; rec[day] = c;
     return { applied: true, avail };
   }
-  if (status === "加") {
-    // 上午/下午加班：仅休息日允许
+  if (status === "加") {                         // 上午/下午加班：仅休息日允许
     if (!isRestDay) return { applied: false, avail };
     const min = defaultMinFor("加");
     if (st.overtimeToRest) avail += min * ratio;
-    const c = { ...(rec[day] || blank) };
-    c[shift] = { s: "加", min };
-    rec[day] = c;
+    const c = { ...(rec[day] || blank) }; c[shift] = { s: "加", min }; rec[day] = c;
     return { applied: true, avail };
   }
-  if (status === "调") {
-    // 调休：做余额校验
+  if (status === "调") {                         // 调休：做余额校验
     const cur = (rec[day] && rec[day][shift]) || "";
-    const curMin =
-      typeof cur === "object" && cur.s === "调" && cur.min != null
-        ? cur.min
-        : cur === "调"
-          ? half
-          : 0;
-    const newMin = typeof cur === "object" && cur.s === "调" && cur.min != null ? cur.min : half;
-    const canUse = avail + curMin; // 先把本格已占的调休释放
+    const curMin = (typeof cur === "object" && cur.s === "调" && cur.min != null) ? cur.min : (cur === "调" ? half : 0);
+    const newMin = (typeof cur === "object" && cur.s === "调" && cur.min != null) ? cur.min : half;
+    const canUse = avail + curMin;              // 先把本格已占的调休释放
     if (st.enforceRestBalance !== false && canUse < newMin) return { applied: false, avail };
     avail = canUse - newMin;
     const c = { ...(rec[day] || blank) };
-    c[shift] = typeof cur === "object" && cur.s === "调" ? cur : "调";
+    c[shift] = (typeof cur === "object" && cur.s === "调") ? cur : "调";
     rec[day] = c;
     return { applied: true, avail };
   }
@@ -654,29 +515,27 @@ function setCellStatus(emp, rec, day, shift, status, avail) {
 // 时长编辑弹窗（点单元格里的「时长」角标触发）：步进器设小时/分钟 + 快捷档
 function openDurationEditor(empId, day, shift) {
   const month = document.getElementById("attMonth").value || "2026-08";
-  const emp = state.data.employees.find((x) => x.id === empId);
+  const emp = state.data.employees.find(x => x.id === empId);
   if (!emp) return;
   const rec = getAtt(month, empId);
   const cell = rec[day] || {};
   const cur = cell[shift] || "";
-  const curS = typeof cur === "object" ? cur.s : cur;
-  if (!curS) return; // 无状态不弹（角标只在有状态时出现）
+  const curS = (typeof cur === "object") ? cur.s : cur;
+  if (!curS) return;                       // 无状态不弹（角标只在有状态时出现）
   const label = STATUS_LABEL[curS] || curS;
-  const total = typeof cur === "object" && cur.min != null ? cur.min : defaultMinFor(curS);
-  let h = Math.floor(total / 60),
-    m = total % 60;
+  const total = (typeof cur === "object" && cur.min != null) ? cur.min : defaultMinFor(curS);
+  let h = Math.floor(total / 60), m = total % 60;
   const st = state.data.settings || {};
   const ratio = st.overtimeToRestRatio ?? 1;
-  const durationHint =
-    curS === "调"
-      ? st.enforceRestBalance === false
-        ? "将从「可调休」余额中扣除此时长；当前允许余额为负数。"
-        : "将从「可调休」余额中扣除此时长；余额不足将阻止保存。"
-      : curS === "加" && st.overtimeToRest
-        ? `将按实际加班时长 × ${ratio} 计入「可调休」余额。`
-        : curS === "加"
-          ? "当前未开启「加班转调休」，该时长仅记录。"
-          : "该时长仅记录，不影响可调休余额。";
+  const durationHint = curS === "调"
+    ? (st.enforceRestBalance === false
+      ? "将从「可调休」余额中扣除此时长；当前允许余额为负数。"
+      : "将从「可调休」余额中扣除此时长；余额不足将阻止保存。")
+    : curS === "加" && st.overtimeToRest
+      ? `将按实际加班时长 × ${ratio} 计入「可调休」余额。`
+      : curS === "加"
+        ? "当前未开启「加班转调休」，该时长仅记录。"
+        : "该时长仅记录，不影响可调休余额。";
 
   openModal(`
     <h3>设置时长 · ${label}</h3>
@@ -710,11 +569,11 @@ function openDurationEditor(empId, day, shift) {
     hoursElement.textContent = h;
     minutesElement.textContent = m;
   };
-  const setHours = (value) => {
+  const setHours = value => {
     h = Math.max(0, Math.min(23, value));
     updateDurationDisplay();
   };
-  const setMinutes = (value) => {
+  const setMinutes = value => {
     m = Math.max(0, Math.min(59, value));
     updateDurationDisplay();
   };
@@ -722,27 +581,21 @@ function openDurationEditor(empId, day, shift) {
   document.getElementById("dHinc").onclick = () => setHours(h + 1);
   document.getElementById("dMdec").onclick = () => setMinutes(m - 1);
   document.getElementById("dMinc").onclick = () => setMinutes(m + 1);
-  document.querySelectorAll("[data-chip]").forEach(
-    (button) =>
-      (button.onclick = () => {
-        const presetMinutes = +button.dataset.chip;
-        setHours(Math.floor(presetMinutes / 60));
-        setMinutes(presetMinutes % 60);
-      }),
-  );
+  document.querySelectorAll("[data-chip]").forEach(button => button.onclick = () => {
+    const presetMinutes = +button.dataset.chip;
+    setHours(Math.floor(presetMinutes / 60));
+    setMinutes(presetMinutes % 60);
+  });
   document.getElementById("dCancel").onclick = closeModal;
   document.getElementById("dOk").onclick = () => {
     const min = h * 60 + m;
     if (curS === "调" && (state.data.settings || {}).enforceRestBalance !== false) {
       // 余额检查：把当前格子已占的「调」释放后再判断能否负担新时长
-      const curMin = typeof cur === "object" && cur.min != null ? cur.min : defaultMinFor("调");
+      const curMin = (typeof cur === "object" && cur.min != null) ? cur.min : defaultMinFor("调");
       const avail = computeRestMinutes(empId) + curMin;
       if (min > avail) {
-        showToast(
-          emp.name + " 可调休余额不足（可用 " + (avail / 60).toFixed(1) + " 小时），已取消",
-        );
-        closeModal();
-        return;
+        showToast(emp.name + " 可调休余额不足（可用 " + (avail / 60).toFixed(1) + " 小时），已取消");
+        closeModal(); return;
       }
     }
     const r = { ...getAtt(month, empId) };
@@ -791,33 +644,21 @@ function openHolidayModal() {
   document.getElementById("holClose").addEventListener("click", closeModal);
   document.getElementById("resetHol").addEventListener("click", () => {
     state.data.holidays = { ...HOLIDAYS_2026 };
-    persist();
-    closeModal();
-    requestRefresh("attendance", "dashboard", "today");
+    persist(); closeModal(); requestRefresh("attendance", "dashboard", "today");
   });
-  document
-    .querySelectorAll("[data-hol]")
-    .forEach((b) => b.addEventListener("click", () => setHoliday(b.dataset.hol, "holiday")));
-  document
-    .querySelectorAll("[data-work]")
-    .forEach((b) => b.addEventListener("click", () => setHoliday(b.dataset.work, "workday")));
-  document
-    .querySelectorAll("[data-clear]")
-    .forEach((b) => b.addEventListener("click", () => clearHoliday(b.dataset.clear)));
+  document.querySelectorAll("[data-hol]").forEach(b => b.addEventListener("click", () => setHoliday(b.dataset.hol, "holiday")));
+  document.querySelectorAll("[data-work]").forEach(b => b.addEventListener("click", () => setHoliday(b.dataset.work, "workday")));
+  document.querySelectorAll("[data-clear]").forEach(b => b.addEventListener("click", () => clearHoliday(b.dataset.clear)));
 }
 function setHoliday(date, type) {
   const name = prompt("节假日名称（可留空）", "") || (type === "holiday" ? "放假" : "调休上班");
   state.data.holidays = state.data.holidays || {};
   state.data.holidays[date] = { name, type };
-  persist();
-  closeModal();
-  requestRefresh("attendance", "dashboard", "today");
+  persist(); closeModal(); requestRefresh("attendance", "dashboard", "today");
 }
 function clearHoliday(date) {
   delete state.data.holidays[date];
-  persist();
-  closeModal();
-  requestRefresh("attendance", "dashboard", "today");
+  persist(); closeModal(); requestRefresh("attendance", "dashboard", "today");
 }
 
 // #endregion 节假日设置

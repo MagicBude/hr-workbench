@@ -13,13 +13,7 @@ import { state, persist } from "./store.js";
 import { fmtMoney, downloadFile, requestRefresh, showToast } from "./ui.js";
 import { INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 import { openSettings } from "./settings.js";
-import {
-  estimateTax,
-  escapeHtml,
-  PAYROLL_STATUS,
-  isEmployeeActiveInMonth,
-  buildPayrollRecord,
-} from "./domain.js";
+import { estimateTax, escapeHtml, PAYROLL_STATUS, isEmployeeActiveInMonth, buildPayrollRecord } from "./domain.js";
 
 // #region 核算字段与领域辅助
 
@@ -29,11 +23,9 @@ const PERS_KEYS = ["养老", "医疗", "失业", "公积金", "大病医疗"];
 
 // 取某员工某月工资记录；没有就按基本月薪新建一条（方便后续编辑）
 function getOrCreatePay(month, empId) {
-  let payrollRecord = state.data.payroll.find(
-    (item) => item.month === month && item.empId === empId,
-  );
+  let payrollRecord = state.data.payroll.find(item => item.month === month && item.empId === empId);
   if (!payrollRecord) {
-    const employee = state.data.employees.find((item) => item.id === empId);
+    const employee = state.data.employees.find(item => item.id === empId);
     payrollRecord = buildPayrollRecord(month, empId, employee ? employee.baseSalary : 0);
     state.data.payroll.push(payrollRecord);
   }
@@ -42,8 +34,8 @@ function getOrCreatePay(month, empId) {
 
 // 社保基数：员工设置了 insuranceBase 就用它，否则用薪资的基本月薪
 function baseOf(payrollRecord) {
-  const employee = state.data.employees.find((item) => item.id === payrollRecord.empId);
-  return employee && employee.insuranceBase != null
+  const employee = state.data.employees.find(item => item.id === payrollRecord.empId);
+  return (employee && employee.insuranceBase != null)
     ? employee.insuranceBase
     : payrollRecord.baseSalary;
 }
@@ -54,7 +46,7 @@ function ratioOf() {
 // 大病医疗固定额（settings 里可改，否则用默认）
 function bigSickness() {
   const settings = state.data.settings;
-  return settings && settings.bigSickness != null ? settings.bigSickness : BIG_SICKNESS;
+  return (settings && settings.bigSickness != null) ? settings.bigSickness : BIG_SICKNESS;
 }
 
 // 按当前员工基数和组织比例重算草稿。人工覆盖税额时保留用户输入，
@@ -70,19 +62,19 @@ function recompute(payrollRecord) {
     工伤: insuranceBase * companyRatio.工伤,
     失业: insuranceBase * companyRatio.失业,
     生育: insuranceBase * companyRatio.生育,
-    公积金: insuranceBase * companyRatio.公积金,
+    公积金: insuranceBase * companyRatio.公积金
   };
   payrollRecord.pers = {
     养老: insuranceBase * personalRatio.养老,
     医疗: insuranceBase * personalRatio.医疗,
     失业: insuranceBase * personalRatio.失业,
     公积金: insuranceBase * personalRatio.公积金,
-    大病医疗: bigSickness(),
+    大病医疗: bigSickness()
   };
   payrollRecord.compTotal = COMP_KEYS.reduce((sum, key) => sum + payrollRecord.comp[key], 0);
   payrollRecord.persTotal = PERS_KEYS.reduce((sum, key) => sum + payrollRecord.pers[key], 0);
-  payrollRecord.gross =
-    payrollRecord.baseSalary + payrollRecord.travel + payrollRecord.bonus + payrollRecord.overtime;
+  payrollRecord.gross = payrollRecord.baseSalary + payrollRecord.travel
+    + payrollRecord.bonus + payrollRecord.overtime;
   if (!payrollRecord.taxManual) {
     payrollRecord.tax = estimateTax(payrollRecord.gross, payrollRecord.persTotal);
   }
@@ -92,7 +84,7 @@ function round2(number) {
   return Math.round(number * 100) / 100;
 }
 function employeesForMonth(month) {
-  return state.data.employees.filter((e) => !e.deletedAt && isEmployeeActiveInMonth(e, month));
+  return state.data.employees.filter(e => !e.deletedAt && isEmployeeActiveInMonth(e, month));
 }
 function recomputeDraft(payrollRecord) {
   if ((payrollRecord.status || "draft") === "draft") {
@@ -101,19 +93,12 @@ function recomputeDraft(payrollRecord) {
   }
   payrollRecord.comp ||= {};
   payrollRecord.pers ||= {};
-  payrollRecord.compTotal = COMP_KEYS.reduce(
-    (sum, key) => sum + Number(payrollRecord.comp[key] || 0),
-    0,
-  );
-  payrollRecord.persTotal = PERS_KEYS.reduce(
-    (sum, key) => sum + Number(payrollRecord.pers[key] || 0),
-    0,
-  );
-  payrollRecord.gross ??=
-    Number(payrollRecord.baseSalary || 0) +
-    Number(payrollRecord.travel || 0) +
-    Number(payrollRecord.bonus || 0) +
-    Number(payrollRecord.overtime || 0);
+  payrollRecord.compTotal = COMP_KEYS.reduce((sum, key) => sum + Number(payrollRecord.comp[key] || 0), 0);
+  payrollRecord.persTotal = PERS_KEYS.reduce((sum, key) => sum + Number(payrollRecord.pers[key] || 0), 0);
+  payrollRecord.gross ??= Number(payrollRecord.baseSalary || 0)
+    + Number(payrollRecord.travel || 0)
+    + Number(payrollRecord.bonus || 0)
+    + Number(payrollRecord.overtime || 0);
   payrollRecord.tax ??= 0;
   payrollRecord.net ??= payrollRecord.gross - payrollRecord.persTotal - payrollRecord.tax;
 }
@@ -127,10 +112,8 @@ export function initPayroll() {
   document.getElementById("genPayBtn").addEventListener("click", () => {
     const month = document.getElementById("payMonth").value || "2026-08";
     const employees = employeesForMonth(month);
-    employees.forEach((employee) => {
-      let payrollRecord = state.data.payroll.find(
-        (item) => item.month === month && item.empId === employee.id,
-      );
+    employees.forEach(employee => {
+      let payrollRecord = state.data.payroll.find(item => item.month === month && item.empId === employee.id);
       if (!payrollRecord) {
         payrollRecord = buildPayrollRecord(month, employee.id, employee.baseSalary);
         state.data.payroll.push(payrollRecord);
@@ -167,26 +150,12 @@ export function renderPayroll() {
   }
 
   // 合计容器
-  const totals = {
-    gross: 0,
-    compTotal: 0,
-    persTotal: 0,
-    tax: 0,
-    net: 0,
-    comp: {},
-    pers: {},
-  };
-  COMP_KEYS.forEach((key) => {
-    totals.comp[key] = 0;
-  });
-  PERS_KEYS.forEach((key) => {
-    totals.pers[key] = 0;
-  });
+  const totals = { gross: 0, compTotal: 0, persTotal: 0, tax: 0, net: 0, comp: {}, pers: {} };
+  COMP_KEYS.forEach(key => { totals.comp[key] = 0; });
+  PERS_KEYS.forEach(key => { totals.pers[key] = 0; });
 
-  employees.forEach((employee) => {
-    let payrollRecord = state.data.payroll.find(
-      (item) => item.month === month && item.empId === employee.id,
-    );
+  employees.forEach(employee => {
+    let payrollRecord = state.data.payroll.find(item => item.month === month && item.empId === employee.id);
     if (!payrollRecord) payrollRecord = buildPayrollRecord(month, employee.id, employee.baseSalary);
     recomputeDraft(payrollRecord); // 已确认/已发放记录保持核算时的金额快照
     totals.gross += payrollRecord.gross;
@@ -194,19 +163,11 @@ export function renderPayroll() {
     totals.persTotal += payrollRecord.persTotal;
     totals.tax += payrollRecord.tax;
     totals.net += payrollRecord.net;
-    COMP_KEYS.forEach((key) => {
-      totals.comp[key] += payrollRecord.comp[key];
-    });
-    PERS_KEYS.forEach((key) => {
-      totals.pers[key] += payrollRecord.pers[key];
-    });
+    COMP_KEYS.forEach(key => { totals.comp[key] += payrollRecord.comp[key]; });
+    PERS_KEYS.forEach(key => { totals.pers[key] += payrollRecord.pers[key]; });
 
-    const companyCells = COMP_KEYS.map(
-      (key) => `<td class="num mono">${fmtMoney(payrollRecord.comp[key])}</td>`,
-    ).join("");
-    const personalCells = PERS_KEYS.map(
-      (key) => `<td class="num mono">${fmtMoney(payrollRecord.pers[key])}</td>`,
-    ).join("");
+    const companyCells = COMP_KEYS.map(key => `<td class="num mono">${fmtMoney(payrollRecord.comp[key])}</td>`).join("");
+    const personalCells = PERS_KEYS.map(key => `<td class="num mono">${fmtMoney(payrollRecord.pers[key])}</td>`).join("");
     const row = document.createElement("tr");
     row.innerHTML = `
       <td>${escapeHtml(employee.name)}</td><td>${escapeHtml(employee.dept)}</td>
@@ -218,57 +179,36 @@ export function renderPayroll() {
       ${companyCells}${personalCells}
       <td class="num"><input class="p-tax" type="number" min="0" value="${round2(payrollRecord.tax)}" data-id="${employee.id}" ${payrollRecord.status !== "draft" ? "disabled" : ""} title="${payrollRecord.taxManual ? "人工覆盖" : "演示估算"}"></td>
       <td class="num mono" style="color:var(--ok)">${fmtMoney(payrollRecord.net)}</td>
-      <td><select class="p-status" data-id="${employee.id}">${Object.entries(PAYROLL_STATUS)
-        .map(
-          ([value, label]) =>
-            `<option value="${value}" ${payrollRecord.status === value ? "selected" : ""}>${label}</option>`,
-        )
-        .join("")}</select></td>`;
+      <td><select class="p-status" data-id="${employee.id}">${Object.entries(PAYROLL_STATUS).map(([value, label]) => `<option value="${value}" ${payrollRecord.status === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>`;
     tableBody.appendChild(row);
   });
 
   // 合计行
-  const totalCompanyCells = COMP_KEYS.map(
-    (key) => `<td class="num mono">${fmtMoney(totals.comp[key])}</td>`,
-  ).join("");
-  const totalPersonalCells = PERS_KEYS.map(
-    (key) => `<td class="num mono">${fmtMoney(totals.pers[key])}</td>`,
-  ).join("");
+  const totalCompanyCells = COMP_KEYS.map(key => `<td class="num mono">${fmtMoney(totals.comp[key])}</td>`).join("");
+  const totalPersonalCells = PERS_KEYS.map(key => `<td class="num mono">${fmtMoney(totals.pers[key])}</td>`).join("");
   tableFoot.innerHTML = `<tr style="font-weight:500;"><td colspan="6">合计</td><td class="num mono">${fmtMoney(totals.gross)}</td>${totalCompanyCells}${totalPersonalCells}<td class="num mono">${fmtMoney(totals.tax)}</td><td class="num mono" style="color:var(--ok)">${fmtMoney(totals.net)}</td><td></td></tr>`;
 
   // 给每个输入框绑定"修改即重算"
-  tableBody.querySelectorAll("input").forEach((inp) => {
+  tableBody.querySelectorAll("input").forEach(inp => {
     inp.addEventListener("change", () => {
       const p = getOrCreatePay(month, inp.dataset.id);
       if (inp.classList.contains("p-base")) p.baseSalary = +inp.value || 0;
       else if (inp.classList.contains("p-travel")) p.travel = +inp.value || 0;
       else if (inp.classList.contains("p-bonus")) p.bonus = +inp.value || 0;
       else if (inp.classList.contains("p-ot")) p.overtime = +inp.value || 0;
-      else if (inp.classList.contains("p-tax")) {
-        p.tax = +inp.value || 0;
-        p.taxManual = true;
-      }
+      else if (inp.classList.contains("p-tax")) { p.tax = +inp.value || 0; p.taxManual = true; }
       recompute(p);
       persist();
       requestRefresh("payroll", "dashboard", "today");
     });
   });
-  tableBody.querySelectorAll(".p-status").forEach((sel) =>
-    sel.addEventListener("change", () => {
-      const p = getOrCreatePay(month, sel.dataset.id);
-      if (
-        p.status !== "draft" &&
-        sel.value === "draft" &&
-        !confirm("解锁会允许重新编辑薪资，确认改回草稿？")
-      ) {
-        sel.value = p.status;
-        return;
-      }
-      p.status = sel.value;
-      persist();
-      requestRefresh("payroll", "dashboard", "today");
-    }),
-  );
+  tableBody.querySelectorAll(".p-status").forEach(sel => sel.addEventListener("change", () => {
+    const p = getOrCreatePay(month, sel.dataset.id);
+    if (p.status !== "draft" && sel.value === "draft" && !confirm("解锁会允许重新编辑薪资，确认改回草稿？")) { sel.value = p.status; return; }
+    p.status = sel.value;
+    persist();
+    requestRefresh("payroll", "dashboard", "today");
+  }));
 }
 
 // #endregion 薪资表渲染与编辑
@@ -279,50 +219,20 @@ export function renderPayroll() {
 // 当前字段转义和公式前缀防护仍需按审查计划补齐，不能把此导出用于不可信文本流转。
 function exportCSV() {
   const month = document.getElementById("payMonth").value || "2026-08";
-  const head = [
-    "姓名",
-    "部门",
-    "基本月薪",
-    "出差补贴",
-    "奖金",
-    "加班费",
-    "本月应发",
-    "公司养老",
-    "公司医疗",
-    "公司工伤",
-    "公司失业",
-    "公司生育",
-    "公司公积金",
-    "个人养老",
-    "个人医疗",
-    "个人失业",
-    "个人公积金",
-    "大病医疗",
-    "个税",
-    "实发薪资",
-    "核算状态",
-  ];
+  const head = ["姓名", "部门", "基本月薪", "出差补贴", "奖金", "加班费", "本月应发",
+    "公司养老", "公司医疗", "公司工伤", "公司失业", "公司生育", "公司公积金",
+    "个人养老", "个人医疗", "个人失业", "个人公积金", "大病医疗", "个税", "实发薪资", "核算状态"];
   const rows = [head];
-  employeesForMonth(month).forEach((e) => {
-    let p = state.data.payroll.find((x) => x.month === month && x.empId === e.id);
+  employeesForMonth(month).forEach(e => {
+    let p = state.data.payroll.find(x => x.month === month && x.empId === e.id);
     if (!p) p = buildPayrollRecord(month, e.id, e.baseSalary);
     recomputeDraft(p);
-    rows.push([
-      e.name,
-      e.dept,
-      p.baseSalary,
-      p.travel,
-      p.bonus,
-      p.overtime,
-      round2(p.gross),
-      ...COMP_KEYS.map((k) => round2(p.comp[k])),
-      ...PERS_KEYS.map((k) => round2(p.pers[k])),
-      round2(p.tax),
-      round2(p.net),
-      PAYROLL_STATUS[p.status || "draft"],
-    ]);
+    rows.push([e.name, e.dept, p.baseSalary, p.travel, p.bonus, p.overtime, round2(p.gross),
+      ...COMP_KEYS.map(k => round2(p.comp[k])),
+      ...PERS_KEYS.map(k => round2(p.pers[k])),
+      round2(p.tax), round2(p.net), PAYROLL_STATUS[p.status || "draft"]]);
   });
-  const csv = "﻿" + rows.map((r) => r.join(",")).join("\n");
+  const csv = "﻿" + rows.map(r => r.join(",")).join("\n");
   downloadFile(csv, "薪资_" + month + ".csv", "text/csv");
 }
 

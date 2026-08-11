@@ -9,16 +9,7 @@
  * DEFAULT_SETTINGS、迁移逻辑和依赖模块，保存后也要刷新所有使用该设置的视图。
  */
 
-import {
-  state,
-  persist,
-  getCurrentOrg,
-  removePreference,
-  createSnapshot,
-  listSnapshots,
-  restoreSnapshot,
-  getStorageUsage,
-} from "./store.js";
+import { state, persist, getCurrentOrg, removePreference, createSnapshot, listSnapshots, restoreSnapshot, getStorageUsage } from "./store.js";
 import { DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
 import { openModal, closeModal, curMonth, showToast, requestRefresh } from "./ui.js";
 import { escapeHtml } from "./domain.js";
@@ -38,12 +29,7 @@ function checked(value) {
 }
 
 function ratioInputs(cls, keys, values) {
-  return keys
-    .map(
-      (key) =>
-        `<div class="field"><label>${key}</label><input class="${cls}" data-k="${key}" type="number" step="0.001" min="0" max="1" value="${values[key] ?? 0}"></div>`,
-    )
-    .join("");
+  return keys.map(key => `<div class="field"><label>${key}</label><input class="${cls}" data-k="${key}" type="number" step="0.001" min="0" max="1" value="${values[key] ?? 0}"></div>`).join("");
 }
 
 // #endregion 设置字段与模板工具
@@ -59,7 +45,7 @@ export function applyOrgSettings(resetMonths = false) {
   if (today) today.hidden = settings.showTodayTodos === false;
   if (resetMonths) {
     const month = settings.defaultMonth || curMonth();
-    ["attMonth", "payMonth", "dashMonth"].forEach((id) => {
+    ["attMonth", "payMonth", "dashMonth"].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = month;
     });
@@ -119,24 +105,9 @@ export function openSettings(section = "attendance") {
       <div class="settings-row"><div><b>本地存储占用</b><div class="hint">当前浏览器内全部组织与快照</div></div><span>${(getStorageUsage() / 1024).toFixed(1)} KB</span></div>
       <div class="settings-row"><div><b>数据快照</b><div class="hint">最多保留最近 10 份，导入、清空、回收前会自动创建</div></div><button class="btn" id="createSnapshotBtn">立即备份</button></div>
       <div class="grp-title">最近快照</div>
-      <div class="snapshot-list">${
-        listSnapshots()
-          .map(
-            (s) =>
-              `<div class="settings-row"><div><b>${new Date(s.createdAt).toLocaleString()}</b><div class="hint">${escapeHtml(s.reason)}</div></div><button class="btn btn-sm" data-restore-snapshot="${s.id}">恢复</button></div>`,
-          )
-          .join("") || '<div class="empty">暂无快照</div>'
-      }</div>
+      <div class="snapshot-list">${listSnapshots().map(s => `<div class="settings-row"><div><b>${new Date(s.createdAt).toLocaleString()}</b><div class="hint">${escapeHtml(s.reason)}</div></div><button class="btn btn-sm" data-restore-snapshot="${s.id}">恢复</button></div>`).join("") || '<div class="empty">暂无快照</div>'}</div>
       <div class="grp-title">员工回收站</div>
-      <div class="snapshot-list">${
-        state.data.employees
-          .filter((e) => e.deletedAt)
-          .map(
-            (e) =>
-              `<div class="settings-row"><div><b>${escapeHtml(e.name)}</b><div class="hint">${escapeHtml(e.dept || "无部门")}</div></div><button class="btn btn-sm" data-restore-emp="${e.id}">恢复</button></div>`,
-          )
-          .join("") || '<div class="empty">回收站为空</div>'
-      }</div>
+      <div class="snapshot-list">${state.data.employees.filter(e => e.deletedAt).map(e => `<div class="settings-row"><div><b>${escapeHtml(e.name)}</b><div class="hint">${escapeHtml(e.dept || "无部门")}</div></div><button class="btn btn-sm" data-restore-emp="${e.id}">恢复</button></div>`).join("") || '<div class="empty">回收站为空</div>'}</div>
     </div>
     <div class="modal-actions settings-actions">
       <button class="btn" id="settingsCancel">取消</button>
@@ -145,15 +116,15 @@ export function openSettings(section = "attendance") {
     </div>`);
   document.getElementById("modal").classList.add("modal-wide");
 
-  const activate = (name) => {
-    document.querySelectorAll("[data-settings-tab]").forEach((button) => {
+  const activate = name => {
+    document.querySelectorAll("[data-settings-tab]").forEach(button => {
       button.classList.toggle("active", button.dataset.settingsTab === name);
     });
-    document.querySelectorAll("[data-settings-page]").forEach((page) => {
+    document.querySelectorAll("[data-settings-page]").forEach(page => {
       page.classList.toggle("active", page.dataset.settingsPage === name);
     });
   };
-  document.querySelectorAll("[data-settings-tab]").forEach((button) => {
+  document.querySelectorAll("[data-settings-tab]").forEach(button => {
     button.addEventListener("click", () => activate(button.dataset.settingsTab));
   });
   activate(section);
@@ -167,12 +138,7 @@ export function openSettings(section = "attendance") {
   document.getElementById("settingsReset").addEventListener("click", () => {
     if (!confirm("确认将当前组织的全部设置恢复默认？员工和业务数据不会受影响。")) return;
     const departments = state.data.settings.departments || [];
-    state.data.settings = {
-      ...clone(DEFAULT_SETTINGS),
-      departments,
-      insuranceRatio: clone(INSURANCE_RATIO),
-      bigSickness: BIG_SICKNESS,
-    };
+    state.data.settings = { ...clone(DEFAULT_SETTINGS), departments, insuranceRatio: clone(INSURANCE_RATIO), bigSickness: BIG_SICKNESS };
     persist();
     closeModal();
     applyOrgSettings(true);
@@ -186,26 +152,22 @@ export function openSettings(section = "attendance") {
     openSettings("safety");
     showToast("数据快照已创建");
   });
-  document.querySelectorAll("[data-restore-snapshot]").forEach((button) =>
-    button.addEventListener("click", () => {
-      if (!confirm("恢复后当前数据会先自动备份。确认继续？")) return;
-      restoreSnapshot(button.dataset.restoreSnapshot);
-      closeModal();
-      requestRefresh("today", "roster", "attendance", "payroll", "dashboard");
-      showToast("快照已恢复");
-    }),
-  );
-  document.querySelectorAll("[data-restore-emp]").forEach((button) =>
-    button.addEventListener("click", () => {
-      const employee = state.data.employees.find((item) => item.id === button.dataset.restoreEmp);
-      if (!employee) return;
-      employee.deletedAt = null;
-      persist();
-      closeModal();
-      requestRefresh("today", "roster", "attendance", "payroll", "dashboard");
-      showToast("员工已恢复");
-    }),
-  );
+  document.querySelectorAll("[data-restore-snapshot]").forEach(button => button.addEventListener("click", () => {
+    if (!confirm("恢复后当前数据会先自动备份。确认继续？")) return;
+    restoreSnapshot(button.dataset.restoreSnapshot);
+    closeModal();
+    requestRefresh("today", "roster", "attendance", "payroll", "dashboard");
+    showToast("快照已恢复");
+  }));
+  document.querySelectorAll("[data-restore-emp]").forEach(button => button.addEventListener("click", () => {
+    const employee = state.data.employees.find(item => item.id === button.dataset.restoreEmp);
+    if (!employee) return;
+    employee.deletedAt = null;
+    persist();
+    closeModal();
+    requestRefresh("today", "roster", "attendance", "payroll", "dashboard");
+    showToast("员工已恢复");
+  }));
 }
 
 // 所有设置在校验通过后一次性写回，避免表单只保存一半。
@@ -233,10 +195,10 @@ function saveSettings() {
   settings.restBalanceDisplay = document.getElementById("setRestDisplay").value;
 
   const insuranceRatio = { company: {}, personal: {} };
-  document.querySelectorAll(".src").forEach((input) => {
+  document.querySelectorAll(".src").forEach(input => {
     insuranceRatio.company[input.dataset.k] = Math.max(0, Number(input.value) || 0);
   });
-  document.querySelectorAll(".srp").forEach((input) => {
+  document.querySelectorAll(".srp").forEach(input => {
     insuranceRatio.personal[input.dataset.k] = Math.max(0, Number(input.value) || 0);
   });
   settings.insuranceRatio = insuranceRatio;

@@ -43,12 +43,8 @@ HR Workbench 是一个零框架、零构建、可离线运行的原生 HTML/CSS/
 每次修改后至少运行：
 
 ```powershell
-npm.cmd run format
 npm.cmd run verify
 ```
-
-`format` 使用固定版本的 Prettier 统一自有 HTML/CSS/JavaScript 排版；`.prettierignore`
-会排除第三方 `vendor/`、文档和静态资源。不要手工压缩源码，也不要格式化第三方压缩文件。
 
 涉及 DOM、localStorage、文件导入导出、拖拽或响应式布局时，还必须在本地服务器中做浏览器回归。测试通过不代表注释天然正确；交付前需要再检查注释是否与当前实现一致。
 
@@ -57,3 +53,4 @@ npm.cmd run verify
 - 使用 Conventional Commits，例如 `docs: 增加教材型注释规范`、`refactor(domain): 提升领域代码可读性`。
 - 每次提交只包含一组相关改动，避免把功能修改、格式化和无关重构混在一起。
 - 不覆盖用户已有的无关改动，不修改 `vendor/` 压缩文件。
+

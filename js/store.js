@@ -9,28 +9,20 @@
  * 调用链，不能只把 setItem 替换成 fetch。
  */
 
-import {
-  STORAGE_PREFIX,
-  SCHEMA_VERSION,
-  HOLIDAYS_2026,
-  DEFAULT_SETTINGS,
-  INSURANCE_RATIO,
-  BIG_SICKNESS,
-  HALF_DAY_MINUTES,
-} from "./config.js";
+import { STORAGE_PREFIX, SCHEMA_VERSION, HOLIDAYS_2026, DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS, HALF_DAY_MINUTES } from "./config.js";
 import { summarizeAttendance, validateImportPayload } from "./domain.js";
 
 // #region 状态与存储键
 // ---------- 内存中的运行时状态（整个应用共享这一份） ----------
 export const state = {
-  orgs: [], // 组织（公司）列表：[{ id, name }]
+  orgs: [],      // 组织（公司）列表：[{ id, name }]
   current: null, // 当前选中的组织 id
-  data: null, // 当前组织的数据：{ employees, attendance, payroll }
+  data: null     // 当前组织的数据：{ employees, attendance, payroll }
 };
 
 // ---------- 存储键名拼接 ----------
-const KEY_ORGS = STORAGE_PREFIX + "orgs"; // 组织列表
-const KEY_CURRENT = STORAGE_PREFIX + "current"; // 当前组织 id
+const KEY_ORGS = STORAGE_PREFIX + "orgs";        // 组织列表
+const KEY_CURRENT = STORAGE_PREFIX + "current";  // 当前组织 id
 const dataKey = (id) => STORAGE_PREFIX + id + "_data"; // 某组织的数据
 const snapshotKey = (id) => STORAGE_PREFIX + id + "_snapshots";
 const preferenceKey = (name) => STORAGE_PREFIX + state.current + "_pref_" + name;
@@ -42,11 +34,8 @@ const preferenceKey = (name) => STORAGE_PREFIX + state.current + "_pref_" + name
 // ---------- 最底层的读写小工具 ----------
 // 读取并解析 JSON；出错或没有时返回 fallback（默认值）
 function readJSON(key, fallback) {
-  try {
-    return JSON.parse(localStorage.getItem(key)) ?? fallback;
-  } catch (e) {
-    return fallback;
-  }
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+  catch (e) { return fallback; }
 }
 // 写入并序列化为 JSON
 function writeJSON(key, value) {
@@ -57,15 +46,8 @@ function writeJSON(key, value) {
 export function emptyData() {
   return {
     schemaVersion: SCHEMA_VERSION,
-    employees: [],
-    attendance: [],
-    payroll: [],
-    settings: {
-      ...DEFAULT_SETTINGS,
-      departments: [],
-      insuranceRatio: JSON.parse(JSON.stringify(INSURANCE_RATIO)),
-      bigSickness: BIG_SICKNESS,
-    },
+    employees: [], attendance: [], payroll: [],
+    settings: { ...DEFAULT_SETTINGS, departments: [], insuranceRatio: JSON.parse(JSON.stringify(INSURANCE_RATIO)), bigSickness: BIG_SICKNESS }
   };
 }
 
@@ -79,27 +61,23 @@ export function emptyData() {
 function migrate(data) {
   if (!data) return data;
   // 1) 员工补新字段
-  data.employees = (data.employees || []).map((e) => ({
+  data.employees = (data.employees || []).map(e => ({
     employmentStatus: "active",
     leaveDate: "",
     deletedAt: null,
-    restMinutes: 0, // 兼容旧字段（新逻辑改用 restSeedMinutes + 动态计算）
-    restSeedMinutes: e.restSeedMinutes != null ? e.restSeedMinutes : e.restMinutes || 0, // 初始可调休余额（分钟）
+    restMinutes: 0,      // 兼容旧字段（新逻辑改用 restSeedMinutes + 动态计算）
+    restSeedMinutes: (e.restSeedMinutes != null) ? e.restSeedMinutes : (e.restMinutes || 0), // 初始可调休余额（分钟）
     insuranceBase: null, // 社保基数，null 表示用基本月薪
-    ...e, // 展开原对象，保留已有字段（新字段仅在缺失时生效）
+    ...e                 // 展开原对象，保留已有字段（新字段仅在缺失时生效）
   }));
-  data.payroll = (data.payroll || []).map((p) => ({
-    status: "draft",
-    taxManual: false,
-    ...p,
-  }));
+  data.payroll = (data.payroll || []).map(p => ({ status: "draft", taxManual: false, ...p }));
   data.schemaVersion = SCHEMA_VERSION;
   // 2) 考勤旧结构升级：{day:"√"} → {day:{am:"√",pm:"√",ot:""}}（上午/下午沿用旧值，加班留空）
-  data.attendance = (data.attendance || []).map((a) => {
+  data.attendance = (data.attendance || []).map(a => {
     const rec = {};
-    for (const day in a.rec || {}) {
+    for (const day in (a.rec || {})) {
       const v = a.rec[day];
-      rec[day] = v && typeof v === "object" ? v : { am: v || "", pm: v || "", ot: "" };
+      rec[day] = (v && typeof v === "object") ? v : { am: v || "", pm: v || "", ot: "" };
     }
     return { ...a, rec, summary: summarizeAttendance(rec) };
   });
@@ -108,15 +86,12 @@ function migrate(data) {
   // 4) 组织设置：缺省用默认值（加班转调休开关、半天分钟数等）
   data.settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
   // 5) 社保比例 / 大病医疗：缺省用全局默认，可在组织设置中覆盖
-  if (!data.settings.insuranceRatio)
-    data.settings.insuranceRatio = JSON.parse(JSON.stringify(INSURANCE_RATIO));
+  if (!data.settings.insuranceRatio) data.settings.insuranceRatio = JSON.parse(JSON.stringify(INSURANCE_RATIO));
   if (data.settings.bigSickness == null) data.settings.bigSickness = BIG_SICKNESS;
   // 6) 部门列表：缺省从现有员工的部门汇总（去重），避免手输拼出幽灵部门
   if (!Array.isArray(data.settings.departments)) {
     const set = new Set();
-    (data.employees || []).forEach((e) => {
-      if (e.dept) set.add(e.dept);
-    });
+    (data.employees || []).forEach(e => { if (e.dept) set.add(e.dept); });
     data.settings.departments = [...set];
   }
   return data;
@@ -141,7 +116,7 @@ export function ensureSeed(buildSample) {
     writeJSON(dataKey("demo"), buildSample()); // 调用示例生成函数
   }
   // 当前组织 id 失效（比如数据被手动清过）→ 回退到第一个组织
-  if (!state.current || !state.orgs.find((o) => o.id === state.current)) {
+  if (!state.current || !state.orgs.find(o => o.id === state.current)) {
     state.current = state.orgs[0].id;
     localStorage.setItem(KEY_CURRENT, state.current);
   }
@@ -165,15 +140,9 @@ export function persist() {
   writeJSON(dataKey(state.current), state.data);
 }
 
-export function loadPreference(name, fallback = null) {
-  return readJSON(preferenceKey(name), fallback);
-}
-export function savePreference(name, value) {
-  writeJSON(preferenceKey(name), value);
-}
-export function removePreference(name) {
-  localStorage.removeItem(preferenceKey(name));
-}
+export function loadPreference(name, fallback = null) { return readJSON(preferenceKey(name), fallback); }
+export function savePreference(name, value) { writeJSON(preferenceKey(name), value); }
+export function removePreference(name) { localStorage.removeItem(preferenceKey(name)); }
 
 export function createSnapshot(reason = "手动快照") {
   return createSnapshotForOrg(state.current, reason, state.data);
@@ -182,20 +151,13 @@ export function createSnapshotForOrg(orgId, reason, sourceData = null) {
   const data = sourceData || readJSON(dataKey(orgId), null);
   if (!data) return null;
   const snapshots = readJSON(snapshotKey(orgId), []);
-  snapshots.unshift({
-    id: `snap_${Date.now()}`,
-    createdAt: new Date().toISOString(),
-    reason,
-    data: structuredClone(data),
-  });
+  snapshots.unshift({ id: `snap_${Date.now()}`, createdAt: new Date().toISOString(), reason, data: structuredClone(data) });
   writeJSON(snapshotKey(orgId), snapshots.slice(0, 10));
   return snapshots[0];
 }
-export function listSnapshots() {
-  return readJSON(snapshotKey(state.current), []);
-}
+export function listSnapshots() { return readJSON(snapshotKey(state.current), []); }
 export function restoreSnapshot(id) {
-  const item = listSnapshots().find((x) => x.id === id);
+  const item = listSnapshots().find(x => x.id === id);
   if (!item) throw new Error("快照不存在或已被清理");
   createSnapshot("恢复快照前自动备份");
   state.data = migrate(structuredClone(item.data));
@@ -205,29 +167,20 @@ export function getStorageUsage() {
   let bytes = 0;
   for (let i = 0; i < localStorage.length; i += 1) {
     const key = localStorage.key(i);
-    if (key?.startsWith(STORAGE_PREFIX))
-      bytes += (key.length + (localStorage.getItem(key) || "").length) * 2;
+    if (key?.startsWith(STORAGE_PREFIX)) bytes += (key.length + (localStorage.getItem(key) || "").length) * 2;
   }
   return bytes;
 }
-export function prepareImportedData(input) {
-  return migrate(structuredClone(validateImportPayload(input)));
-}
+export function prepareImportedData(input) { return migrate(structuredClone(validateImportPayload(input))); }
 
 // #endregion 持久化、偏好与快照
 
 // #region 组织与部门
 
 // ---------- 组织（公司）相关 ----------
-export function getOrgs() {
-  return state.orgs;
-}
-export function getCurrentOrgId() {
-  return state.current;
-}
-export function getCurrentOrg() {
-  return state.orgs.find((o) => o.id === state.current);
-}
+export function getOrgs() { return state.orgs; }
+export function getCurrentOrgId() { return state.current; }
+export function getCurrentOrg() { return state.orgs.find(o => o.id === state.current); }
 
 // 切换当前组织
 export function setCurrentOrg(id) {
@@ -238,7 +191,7 @@ export function setCurrentOrg(id) {
 
 // 新建一个组织（初始无数据）
 export function addOrg(name) {
-  const id = "org_" + Date.now(); // 用时间戳保证 id 唯一
+  const id = "org_" + Date.now();           // 用时间戳保证 id 唯一
   state.orgs.push({ id, name });
   writeJSON(KEY_ORGS, state.orgs);
   state.current = id;
@@ -247,7 +200,7 @@ export function addOrg(name) {
   state.data = emptyData();
 }
 export function selectImportedOrg(org) {
-  if (!state.orgs.some((o) => o.id === org.id)) {
+  if (!state.orgs.some(o => o.id === org.id)) {
     state.orgs.push({ id: org.id, name: org.name || org.id });
     writeJSON(KEY_ORGS, state.orgs);
   }
@@ -257,18 +210,13 @@ export function selectImportedOrg(org) {
 
 // ---------- 部门（组织级选项） ----------
 // 返回当前组织的部门列表（数组），新增/编辑员工时作为下拉选项
-export function getDepartments() {
-  return state.data.settings.departments || [];
-}
+export function getDepartments() { return state.data.settings.departments || []; }
 // 新增一个部门（已存在则忽略），立即保存
 export function addDepartment(name) {
   const n = (name || "").trim();
   if (!n) return;
   const list = state.data.settings.departments || (state.data.settings.departments = []);
-  if (!list.includes(n)) {
-    list.push(n);
-    persist();
-  }
+  if (!list.includes(n)) { list.push(n); persist(); }
 }
 
 // #endregion 组织与部门
@@ -281,10 +229,9 @@ export function addDepartment(name) {
 export function computeRestMinutes(empId) {
   const st = (state.data && state.data.settings) || {};
   const half = st.halfDayMinutes || HALF_DAY_MINUTES; // 整段请假默认按半天(240 分钟)计
-  const otDefault = 60; // 加班未设时长时默认 1 小时
+  const otDefault = 60;                                // 加班未设时长时默认 1 小时
   const ratio = st.overtimeToRestRatio ?? 1;
-  let used = 0,
-    earned = 0;
+  let used = 0, earned = 0;
   const atts = (state.data && state.data.attendance) || [];
   for (const a of atts) {
     if (a.empId !== empId) continue;
@@ -292,22 +239,22 @@ export function computeRestMinutes(empId) {
     for (const day in rec) {
       const cell = rec[day];
       if (!cell) continue;
-      ["am", "pm", "ot"].forEach((sh) => {
+      ["am", "pm", "ot"].forEach(sh => {
         const v = cell[sh];
         if (!v) return;
-        const s = typeof v === "object" ? v.s : v;
+        const s = (typeof v === "object") ? v.s : v;
         if (s === "调" && sh !== "ot") {
-          const m = typeof v === "object" && v.min != null ? v.min : half;
+          const m = (typeof v === "object" && v.min != null) ? v.min : half;
           used += m;
         }
         if (s === "加" && st.overtimeToRest) {
-          const m = typeof v === "object" && v.min != null ? v.min : otDefault;
+          const m = (typeof v === "object" && v.min != null) ? v.min : otDefault;
           earned += m * ratio;
         }
       });
     }
   }
-  const emp = ((state.data && state.data.employees) || []).find((x) => x.id === empId);
+  const emp = (state.data && state.data.employees || []).find(x => x.id === empId);
   const seed = (emp && emp.restSeedMinutes) || 0;
   return Math.round(seed + earned - used);
 }
