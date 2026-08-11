@@ -357,13 +357,13 @@ td.ops{ white-space:nowrap; }
 .rest-overdrawn{ color:var(--danger); font-weight:600; }
 .overdrawn-label{ display:block; margin-top:2px; font-size:10px; font-weight:500; }
 .rest-balance-summary{
-  display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; padding:10px;
-  border:1px solid #cfe0ef; border-radius:9px; background:#f5f9fd;
+  display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:5px; padding:0 2px;
+  color:var(--muted); font-size:12px;
 }
-.rest-balance-summary span{ min-width:0; }
-.rest-balance-summary span + span{ padding-left:10px; border-left:1px solid #cfe0ef; }
-.rest-balance-summary small{ display:block; color:var(--muted); font-size:12px; }
-.rest-balance-summary strong{ display:block; margin-top:2px; color:var(--blue); font-size:14px; }
+.rest-balance-summary span{ display:inline-flex; align-items:baseline; gap:5px; min-width:0; }
+.rest-balance-summary span + span::before{ content:"·"; margin-right:3px; color:#a6adb7; }
+.rest-balance-summary small{ color:var(--muted); font-size:12px; }
+.rest-balance-summary strong{ color:var(--text); font-size:12px; font-weight:500; }
 .bulk-warning{ color:var(--danger); font-size:11px; font-weight:600; }
 
 @media (min-width:769px){
