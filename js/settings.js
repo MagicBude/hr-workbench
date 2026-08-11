@@ -11,8 +11,9 @@
 
 import { state, persist, getCurrentOrg, removePreference, createSnapshot, listSnapshots, restoreSnapshot, deleteSnapshot, clearSnapshots, getStorageUsage } from "./store.js";
 import { DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
-import { openModal, closeModal, curMonth, showToast, requestRefresh, requestConfirm } from "./ui.js";
+import { openModal, closeModal, curMonth, showToast, requestRefresh, requestConfirm, downloadFile } from "./ui.js";
 import { escapeHtml } from "./domain.js";
+import { getDiagnostics } from "./diagnostics.js";
 
 // #region 设置字段与模板工具
 
@@ -104,6 +105,7 @@ export function openSettings(section = "attendance") {
     <div class="settings-page" data-settings-page="safety">
       <div class="settings-row"><div><b>本地存储占用</b><div class="hint">当前浏览器内全部组织与快照</div></div><span>${(getStorageUsage() / 1024).toFixed(1)} KB</span></div>
       <div class="settings-row"><div><b>数据快照</b><div class="hint">最多保留最近 10 份，导入、清空、回收前会自动创建</div></div><button class="btn" id="createSnapshotBtn">立即备份</button></div>
+      <div class="settings-row"><div><b>诊断信息</b><div class="hint">仅含错误类别和操作位置，不含员工、薪资与考勤内容</div></div><button class="btn" id="exportDiagnosticsBtn">导出诊断</button></div>
       <div class="grp-title">最近快照 <button class="btn btn-sm" id="clearSnapshotsBtn">清空快照</button></div>
       <div class="snapshot-list">${listSnapshots().map(s => `<div class="settings-row"><div><b>${new Date(s.createdAt).toLocaleString()}</b><div class="hint">${escapeHtml(s.reason)}</div></div><div><button class="btn btn-sm" data-restore-snapshot="${s.id}">恢复</button><button class="btn btn-sm btn-quiet-danger" data-delete-snapshot="${s.id}">删除</button></div></div>`).join("") || '<div class="empty">暂无快照</div>'}</div>
       <div class="grp-title">员工回收站</div>
@@ -168,6 +170,10 @@ export function openSettings(section = "attendance") {
     if (!await requestConfirm({ title: "清空全部快照", message: "当前组织的全部快照都会删除，此操作无法撤销。", confirmText: "清空快照", danger: true })) return;
     clearSnapshots();
     closeModal(); openSettings("safety"); showToast("快照已清空");
+  });
+  document.getElementById("exportDiagnosticsBtn").addEventListener("click", () => {
+    downloadFile(JSON.stringify(getDiagnostics(), null, 2), "hr-workbench-diagnostics.json", "application/json");
+    showToast("诊断信息已导出");
   });
   document.querySelectorAll("[data-restore-emp]").forEach(button => button.addEventListener("click", () => {
     const employee = state.data.employees.find(item => item.id === button.dataset.restoreEmp);

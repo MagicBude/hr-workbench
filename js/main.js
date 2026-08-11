@@ -21,19 +21,26 @@ import { initSettings, applyOrgSettings } from "./settings.js";
 import { attendanceMetrics, escapeHtml, isEmployeeActiveInMonth, isEmployeeActiveOn, IMPORT_LIMITS } from "./domain.js";
 import { StorageError, storageErrorMessage } from "./storage.js";
 import { HALF_DAY_MINUTES } from "./config.js";
+import { reportError } from "./diagnostics.js";
 
 // #region 全局存储错误反馈
 
 // 普通点击中的存储异常会冒泡到 window。统一提示后阻止浏览器重复打印未处理异常；
 // 不展示存储键、原始数据或异常堆栈，避免诊断信息泄露 HR 内容。
 window.addEventListener("error", event => {
-  if (!(event.error instanceof StorageError)) return;
-  event.preventDefault();
-  renderAll();
-  showToast(storageErrorMessage(event.error.kind));
+  reportError(event.error, { module: "window", operation: "error" });
+  if (event.error instanceof StorageError) {
+    event.preventDefault();
+    renderAll();
+    showToast(storageErrorMessage(event.error.kind));
+  }
+});
+window.addEventListener("unhandledrejection", event => {
+  reportError(event.reason, { module: "window", operation: "unhandledrejection" });
 });
 
 function showStartupError(error) {
+  reportError(error, { module: "main", operation: "startup" });
   const message = error instanceof StorageError
     ? storageErrorMessage(error.kind)
     : "应用初始化失败，请刷新页面后重试。";
