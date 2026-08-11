@@ -12,7 +12,7 @@
 
 import { state, persist, getDepartments, addDepartment, computeRestMinutes, loadPreference, savePreference, removePreference, createSnapshot } from "./store.js";
 import { HALF_DAY_MINUTES } from "./config.js";
-import { fmtMoney, openModal, closeModal, enableColResize, requestRefresh, requestText, requestConfirm } from "./ui.js";
+import { fmtMoney, openModal, closeModal, enableColResize, normalizeColumnWidths, requestRefresh, requestText, requestConfirm } from "./ui.js";
 import { escapeHtml, EMPLOYMENT_STATUS, requireNonNegativeNumber } from "./domain.js";
 
 // #region 调休显示、列宽与筛选状态
@@ -253,7 +253,7 @@ export function renderRoster() {
   // 启用列宽拖拽（Excel 式），宽度按组织记忆
   enableColResize({
     table: document.getElementById("empTable"),
-    widths: loadPreference("colw_emp") || EMP_DEF_W.slice(),
+    widths: normalizeColumnWidths(loadPreference("colw_emp"), EMP_DEF_W, { min: 40 }),
     onCommit: (w) => savePreference("colw_emp", w),
     min: 40
   });

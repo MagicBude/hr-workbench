@@ -12,7 +12,7 @@
 
 import { state, persist, getDepartments, computeRestMinutes, loadPreference, savePreference, removePreference } from "./store.js";
 import { STATUSES, STATUS_LABEL, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026, SUM_KEYS, HALF_DAY_MINUTES } from "./config.js";
-import { openModal, closeModal, showToast, enableColResize, requestRefresh, requestText } from "./ui.js";
+import { openModal, closeModal, showToast, enableColResize, normalizeColumnWidths, requestRefresh, requestText } from "./ui.js";
 import { escapeHtml, isEmployeeActiveInMonth, summarizeAttendance } from "./domain.js";
 
 // #region 时长与单元格显示
@@ -232,7 +232,8 @@ export function renderAttendance() {
     widths: attWidths(N).slice(0, 4 + N + (attFilter.summaryCollapsed ? 0 : SUM_KEYS.length)),
     group: (i) => i < 4 ? "f" + i : (i < 4 + N ? "date" : "sum"),
     onCommit: (w) => saveAttWidths(w, N),
-    onResized: () => syncAttSticky(table),
+    // 日期和汇总列不会改变左侧固定列的位置，无需在拖动时重复读取布局。
+    onResized: (groupName) => { if (groupName.startsWith("f")) syncAttSticky(table); },
     min: 26
   });
   syncAttSticky(table);   // 初次渲染也要按实际列宽定位 sticky 列
@@ -251,9 +252,9 @@ export function resetAttColWidths() {
 // 由存储的 {fixed,date,sum} 展开成每列宽度数组（长度 = 4 + N + 7）
 function attWidths(N) {
   const s = loadPreference("colw_att") || {};
-  const fixed = (s.fixed && s.fixed.length === 4) ? s.fixed : [36, 70, 70, 44];
-  const date = s.date || 32;
-  const sum = s.sum || 34;
+  const fixed = normalizeColumnWidths(s.fixed, [36, 70, 70, 44], { min: 26 });
+  const date = normalizeColumnWidths([s.date], [32], { min: 26 })[0];
+  const sum = normalizeColumnWidths([s.sum], [34], { min: 26 })[0];
   const arr = [];
   for (let i = 0; i < 4; i++) arr.push(fixed[i]);
   for (let i = 0; i < N; i++) arr.push(date);

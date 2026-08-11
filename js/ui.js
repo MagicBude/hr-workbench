@@ -188,6 +188,17 @@ export function requestRefresh(...modules) {
 
 // #region 表格列宽拖拽
 
+// 持久化偏好来自 localStorage，可能被旧版本、手工修改或损坏数据污染。
+// 这里要求“数量完全一致且全部为有限数”；只要一项不合法就整体恢复默认值，
+// 避免一半使用旧偏好、一半使用默认值后形成难以理解的错位。
+export function normalizeColumnWidths(value, defaults, { min = 28, max = 600 } = {}) {
+  const valid = Array.isArray(value)
+    && value.length === defaults.length
+    && value.every(width => Number.isFinite(width));
+  const source = valid ? value : defaults;
+  return source.map(width => Math.min(max, Math.max(min, width)));
+}
+
 // ============================================================
 // enableColResize — Excel 式列宽拖拽（零依赖）
 // ------------------------------------------------------------
@@ -202,7 +213,7 @@ export function requestRefresh(...modules) {
 //   min      最小列宽(px)，缺省 28
 // ============================================================
 export function enableColResize(opts) {
-  const { table, group, onCommit, onResized, min = 28 } = opts;
+  const { table, group, onCommit, onResized, min = 28, max = 600 } = opts;
   let widths = opts.widths ? opts.widths.slice() : null;
 
   // 强制固定布局：确保 colgroup 的宽度设置生效（CSS 可能因缓存/加载顺序没赶上）
@@ -214,6 +225,11 @@ export function enableColResize(opts) {
   ths.forEach(th => { const i = +th.dataset.col; if (!isNaN(i)) byCol[i] = th; });
   const ncols = Object.keys(byCol).length ? Math.max(...Object.keys(byCol).map(Number)) + 1 : ths.length;
 
+  // 调用方通常会提供默认宽度。若偏好数量或数值异常，不能让 undefined、NaN、
+  // Infinity 进入样式；放弃整组偏好后再按实际表头测量。
+  if (widths && (widths.length !== ncols || widths.some(width => !Number.isFinite(width)))) widths = null;
+  if (widths) widths = widths.map(width => Math.min(max, Math.max(min, width)));
+
   // 建立 colgroup 控制列宽
   let cg = table.querySelector("colgroup");
   if (!cg) { cg = document.createElement("colgroup"); table.insertBefore(cg, table.firstChild); }
@@ -222,7 +238,10 @@ export function enableColResize(opts) {
   for (let i = 0; i < ncols; i++) {
     const c = document.createElement("col");
     let w = widths ? widths[i] : null;
-    if (w == null && byCol[i]) w = Math.round(byCol[i].getBoundingClientRect().width);
+    if (w == null && byCol[i]) {
+      const measured = Math.round(byCol[i].getBoundingClientRect().width);
+      w = measured > 0 ? Math.min(max, Math.max(min, measured)) : min;
+    }
     if (w) { c.style.width = w + "px"; if (widths) widths[i] = w; }
     cg.appendChild(c);
     cols.push(c);
@@ -237,34 +256,50 @@ export function enableColResize(opts) {
     const h = document.createElement("span");
     h.className = "col-resize";
     th.appendChild(h);
-    h.addEventListener("mousedown", (e) => startResize(e, th, cols, widths, group, onCommit, onResized, min));
+    h.addEventListener("mousedown", (e) => startResize(e, th, cols, widths, group, onCommit, onResized, min, max));
   });
 }
 
 // 拖拽过程：按住某列手柄，整组列同步变宽；松手回调 onCommit
-function startResize(e, th, cols, widths, group, onCommit, onResized, min) {
+function startResize(e, th, cols, widths, group, onCommit, onResized, min, max) {
   e.preventDefault();
   const ci = +th.dataset.col;
   const g = group ? group(ci) : ci;
   const same = (i) => (group ? group(i) : i) === g;
   const startX = e.clientX;
   const starts = {};
-  cols.forEach((c, i) => { if (same(i)) starts[i] = parseFloat(c.style.width) || 0; });
-  function move(ev) {
-    const dx = ev.clientX - startX;
-    cols.forEach((c, i) => {
-      if (same(i)) {
-        const w = Math.max(min, (starts[i] || 0) + dx);
-        c.style.width = w + "px";
-        widths[i] = w;
-      }
+  const targetIndexes = [];
+  cols.forEach((c, i) => {
+    if (!same(i)) return;
+    starts[i] = parseFloat(c.style.width) || min;
+    targetIndexes.push(i);
+  });
+  let pendingClientX = startX;
+  let frameId = null;
+
+  function applyPendingWidth() {
+    frameId = null;
+    const dx = pendingClientX - startX;
+    targetIndexes.forEach(i => {
+      const width = Math.min(max, Math.max(min, starts[i] + dx));
+      cols[i].style.width = width + "px";
+      widths[i] = width;
     });
-    if (onResized) onResized(g);   // 通知调用方（如重算 sticky 偏移）
+    if (onResized) onResized(g);
+  }
+  function move(ev) {
+    pendingClientX = ev.clientX;
+    if (frameId == null) frameId = requestAnimationFrame(applyPendingWidth);
   }
   function up() {
     document.removeEventListener("mousemove", move);
     document.removeEventListener("mouseup", up);
     document.body.classList.remove("col-resizing");
+    // mouseup 可能发生在浏览器执行下一帧之前；先应用最后位置，确保保存值与画面一致。
+    if (frameId != null) {
+      cancelAnimationFrame(frameId);
+      applyPendingWidth();
+    }
     if (onCommit) onCommit(widths.slice());
   }
   document.addEventListener("mousemove", move);
