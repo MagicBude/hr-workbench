@@ -308,6 +308,7 @@ function onCellClick(td, ev) {
   const isRestDay = (wd === 0 || wd === 6) || (hol && hol.type === "holiday");
   const isOt = shift === "ot";
   const st = state.data.settings || {};
+  const balanceBefore = computeRestMinutes(empId);
   const enabledStatuses = st.enableLateEarly === false ? STATUSES.filter(s => s !== "迟" && s !== "退") : STATUSES;
   const cycle = isOt
     ? ["加", ""]
@@ -337,6 +338,10 @@ function onCellClick(td, ev) {
 
   rec[day] = cell;
   saveAtt(month, empId, rec);
+  const balanceAfter = computeRestMinutes(empId);
+  if (st.enforceRestBalance === false && balanceBefore >= 0 && balanceAfter < 0) {
+    showToast(`${emp.name} 调休余额已透支 ${Math.abs(balanceAfter / 60).toFixed(1)} 小时`);
+  }
   requestRefresh("attendance", "roster", "dashboard", "today");
 }
 
@@ -409,6 +414,7 @@ function showBulkBar(ev) {
   let items = [["√", "出勤"], ["事", "事假"], ["病", "病假"], ["缺", "缺勤"], ["调", "调休"], ["年", "年假"], ["加", "加班"], ["迟", "迟到"], ["退", "早退"], ["清除", "清除/重置"]];
   if (state.data.settings.enableLateEarly === false) items = items.filter(([s]) => s !== "迟" && s !== "退");
   bar.innerHTML = `<span class="ttl">批量（${cells.length} 格）</span>`
+    + (state.data.settings.enforceRestBalance === false ? '<span class="bulk-warning">允许透支</span>' : "")
     + items.map(([s, t]) => `<button class="bk" data-s="${s}" title="${t}">${s === "清除" ? "✕" : s}</button>`).join("")
     + `<button class="bk close" data-close="1" title="关闭">×</button>`;
   document.body.appendChild(bar);
@@ -440,11 +446,13 @@ function applyBulk(cells, status) {
     (byEmp[c.empId] = byEmp[c.empId] || {})[c.day + "|" + c.shift] = { day: c.day, shift: c.shift };
   });
   let applied = 0, skipped = 0;
+  const newlyOverdrawn = [];
   for (const empId in byEmp) {
     const emp = state.data.employees.find(x => x.id === empId);
     if (!emp) continue;
     const rec = { ...getAtt(month, empId) };
     let avail = computeRestMinutes(empId);   // 当前可用余额（用于调休校验，批量内递减/递增）
+    const balanceBefore = avail;
     for (const key in byEmp[empId]) {
       const { day, shift } = byEmp[empId][key];
       const ok = setCellStatus(emp, rec, day, shift, status, avail);
@@ -452,10 +460,12 @@ function applyBulk(cells, status) {
       avail = ok.avail;
     }
     saveAtt(month, empId, rec);
+    if (state.data.settings.enforceRestBalance === false && balanceBefore >= 0 && avail < 0) newlyOverdrawn.push(emp.name);
   }
   closeBulkBar();
   requestRefresh("attendance", "roster", "dashboard", "today");
-  if (skipped) showToast(`已应用 ${applied} 格，跳过 ${skipped} 格（所选状态不适用于这些单元格）`);
+  if (newlyOverdrawn.length) showToast(`${newlyOverdrawn.join("、")} 调休余额已透支`);
+  else if (skipped) showToast(`已应用 ${applied} 格，跳过 ${skipped} 格（所选状态不适用于这些单元格）`);
   else if (applied) showToast(`已批量应用 ${applied} 格`);
 }
 

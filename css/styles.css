@@ -318,6 +318,9 @@ td.ops{ white-space:nowrap; }
 .btn-quiet-danger{ background:#fff; color:#b42318; }
 .add-employee-form{ margin-top:10px; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--bg); }
 .snapshot-list{ max-height:220px; overflow:auto; }
+.rest-overdrawn{ color:var(--danger); font-weight:600; }
+.overdrawn-label{ display:block; margin-top:2px; font-size:10px; font-weight:500; }
+.bulk-warning{ color:var(--danger); font-size:11px; font-weight:600; }
 
 @media (min-width:769px){
   body{ padding-bottom:0; }

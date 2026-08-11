@@ -215,7 +215,7 @@ export function renderRoster() {
       <td>${e.hireDate || "-"}</td>
       <td><span class="status-badge status-${e.employmentStatus || "active"}">${EMPLOYMENT_STATUS[e.employmentStatus || "active"]}</span></td>
       <td class="num">${fmtMoney(e.baseSalary)}</td>
-      <td class="num mono" title="${shortDecimal(restMinutes / 60)} 小时">${formatRestMinutes(restMinutes)}</td>
+      <td class="num mono${restMinutes < 0 ? " rest-overdrawn" : ""}" title="${shortDecimal(restMinutes / 60)} 小时">${formatRestMinutes(restMinutes)}${restMinutes < 0 ? '<span class="overdrawn-label">已透支</span>' : ""}</td>
       <td class="ops">
         <button class="btn btn-sm" data-edit="${e.id}">编辑</button>
         ${e.employmentStatus !== "departed" ? `<button class="btn btn-sm" data-depart="${e.id}">离职归档</button>` : ""}

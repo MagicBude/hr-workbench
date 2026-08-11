@@ -8,7 +8,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readJSON, writeJSON, StorageError } from "../js/storage.js";
-import { state, persist, createSnapshot, listSnapshots, deleteSnapshot, clearSnapshots } from "../js/store.js";
+import { state, persist, createSnapshot, listSnapshots, deleteSnapshot, clearSnapshots, computeRestMinutes } from "../js/store.js";
 
 function useStorageMock(methods = {}) {
   const values = new Map();
@@ -112,4 +112,13 @@ test("预计超过安全容量时在写入快照前拒绝", () => {
   state.data = { payload: "x".repeat(2.4 * 1024 * 1024) };
   assert.throws(() => createSnapshot("超大快照"), error => error.kind === "quota");
   assert.deepEqual(listSnapshots(), []);
+});
+
+test("关闭强制校验时动态调休余额允许为负", () => {
+  state.data = {
+    settings: { halfDayMinutes: 240, overtimeToRest: true, overtimeToRestRatio: 1, enforceRestBalance: false },
+    employees: [{ id: "e1", restSeedMinutes: 0 }],
+    attendance: [{ empId: "e1", rec: { 1: { am: "调", pm: "", ot: "" } } }]
+  };
+  assert.equal(computeRestMinutes("e1"), -240);
 });
