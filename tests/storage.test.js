@@ -1,0 +1,90 @@
+/*
+ * storage.test.js — 本地存储错误边界测试
+ *
+ * 使用内存 mock 模拟浏览器 localStorage，覆盖缺失值、损坏 JSON、配额和序列化失败。
+ * 测试结束后恢复全局对象，避免影响其他 Node 测试文件。
+ */
+
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readJSON, writeJSON, StorageError } from "../js/storage.js";
+import { state, persist } from "../js/store.js";
+
+function useStorageMock(methods = {}) {
+  const values = new Map();
+  globalThis.localStorage = {
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: key => values.delete(key),
+    ...methods
+  };
+  return values;
+}
+
+test.afterEach(() => {
+  delete globalThis.localStorage;
+});
+
+test("不存在的键使用默认值，合法 JSON 正常往返", () => {
+  const values = useStorageMock();
+  assert.deepEqual(readJSON("missing", []), []);
+
+  writeJSON("data", { ok: true });
+  assert.equal(values.get("data"), '{"ok":true}');
+  assert.deepEqual(readJSON("data", null), { ok: true });
+});
+
+test("损坏 JSON 不再静默回退为空数据", () => {
+  useStorageMock({ getItem: () => "{broken" });
+  assert.throws(
+    () => readJSON("data", []),
+    error => error instanceof StorageError && error.kind === "corrupt"
+  );
+});
+
+test("浏览器禁用本地存储时返回 unavailable", () => {
+  useStorageMock({ getItem: () => { throw new Error("blocked"); } });
+  assert.throws(
+    () => readJSON("data", []),
+    error => error instanceof StorageError && error.kind === "unavailable"
+  );
+});
+
+test("配额不足与序列化失败具有不同错误类别", () => {
+  const quotaError = new Error("full");
+  quotaError.name = "QuotaExceededError";
+  useStorageMock({ setItem: () => { throw quotaError; } });
+  assert.throws(
+    () => writeJSON("data", { ok: true }),
+    error => error instanceof StorageError && error.kind === "quota"
+  );
+
+  useStorageMock();
+  const circular = {};
+  circular.self = circular;
+  assert.throws(
+    () => writeJSON("data", circular),
+    error => error instanceof StorageError && error.kind === "serialize"
+  );
+});
+
+test("持久化失败时恢复最近一次成功保存的内存数据", () => {
+  let rejectWrites = false;
+  useStorageMock({
+    setItem: () => {
+      if (!rejectWrites) return;
+      const error = new Error("full");
+      error.name = "QuotaExceededError";
+      throw error;
+    }
+  });
+
+  state.current = "test";
+  state.data = { employees: [{ id: "e1", name: "保存前" }] };
+  persist();
+
+  state.data.employees[0].name = "未保存的修改";
+  rejectWrites = true;
+  assert.throws(() => persist(), error => error.kind === "quota");
+  assert.equal(state.data.employees[0].name, "保存前");
+});

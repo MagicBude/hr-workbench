@@ -11,6 +11,7 @@
 
 import { STORAGE_PREFIX, SCHEMA_VERSION, HOLIDAYS_2026, DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS, HALF_DAY_MINUTES } from "./config.js";
 import { summarizeAttendance, validateImportPayload } from "./domain.js";
+import { readJSON, writeJSON, readText, writeText, removeStoredValue } from "./storage.js";
 
 // #region 状态与存储键
 // ---------- 内存中的运行时状态（整个应用共享这一份） ----------
@@ -19,6 +20,10 @@ export const state = {
   current: null, // 当前选中的组织 id
   data: null     // 当前组织的数据：{ employees, attendance, payroll }
 };
+
+// 最近一次成功读取或写入的数据副本。业务模块通常先改 state.data 再调用 persist()；
+// 写入失败时用它恢复内存，避免界面继续展示一份实际没有保存的数据。
+let lastPersistedData = null;
 
 // ---------- 存储键名拼接 ----------
 const KEY_ORGS = STORAGE_PREFIX + "orgs";        // 组织列表
@@ -30,17 +35,6 @@ const preferenceKey = (name) => STORAGE_PREFIX + state.current + "_pref_" + name
 // #endregion 状态与存储键
 
 // #region JSON 读写与空数据
-
-// ---------- 最底层的读写小工具 ----------
-// 读取并解析 JSON；出错或没有时返回 fallback（默认值）
-function readJSON(key, fallback) {
-  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
-  catch (e) { return fallback; }
-}
-// 写入并序列化为 JSON
-function writeJSON(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
 
 // 返回一个"空数据"模板（新增组织时用）
 export function emptyData() {
@@ -105,30 +99,32 @@ export function migrateCurrent() {
 // 参数 buildSample 是一个函数（来自 sample.js），避免在数据层里 import 示例数据造成循环依赖。
 export function ensureSeed(buildSample) {
   state.orgs = readJSON(KEY_ORGS, []);
-  state.current = localStorage.getItem(KEY_CURRENT);
+  state.current = readText(KEY_CURRENT);
 
   // 一个组织都没有 → 说明是第一次打开，注入“示例科技有限公司”+ 示例数据
   if (state.orgs.length === 0) {
     state.orgs = [{ id: "demo", name: "示例科技有限公司" }];
     writeJSON(KEY_ORGS, state.orgs);
     state.current = "demo";
-    localStorage.setItem(KEY_CURRENT, "demo");
+    writeText(KEY_CURRENT, "demo");
     writeJSON(dataKey("demo"), buildSample()); // 调用示例生成函数
   }
   // 当前组织 id 失效（比如数据被手动清过）→ 回退到第一个组织
   if (!state.current || !state.orgs.find(o => o.id === state.current)) {
     state.current = state.orgs[0].id;
-    localStorage.setItem(KEY_CURRENT, state.current);
+    writeText(KEY_CURRENT, state.current);
   }
   // 把当前组织的数据读进内存（并升级到最新结构）
   state.data = readJSON(dataKey(state.current), emptyData());
   migrateCurrent();
+  lastPersistedData = structuredClone(state.data);
 }
 
 // 切换组织后，从存储重新加载该组织的数据到内存
 export function reloadCurrent() {
   state.data = readJSON(dataKey(state.current), emptyData());
   migrateCurrent(); // 升级旧数据到新结构（向后兼容）
+  lastPersistedData = structuredClone(state.data);
 }
 
 // #endregion 数据迁移与初始化
@@ -137,12 +133,18 @@ export function reloadCurrent() {
 
 // 把内存里当前组织的数据保存回存储（任何修改后都要调用）
 export function persist() {
-  writeJSON(dataKey(state.current), state.data);
+  try {
+    writeJSON(dataKey(state.current), state.data);
+    lastPersistedData = structuredClone(state.data);
+  } catch (error) {
+    if (lastPersistedData) state.data = structuredClone(lastPersistedData);
+    throw error;
+  }
 }
 
 export function loadPreference(name, fallback = null) { return readJSON(preferenceKey(name), fallback); }
 export function savePreference(name, value) { writeJSON(preferenceKey(name), value); }
-export function removePreference(name) { localStorage.removeItem(preferenceKey(name)); }
+export function removePreference(name) { removeStoredValue(preferenceKey(name)); }
 
 export function createSnapshot(reason = "手动快照") {
   return createSnapshotForOrg(state.current, reason, state.data);
@@ -167,7 +169,7 @@ export function getStorageUsage() {
   let bytes = 0;
   for (let i = 0; i < localStorage.length; i += 1) {
     const key = localStorage.key(i);
-    if (key?.startsWith(STORAGE_PREFIX)) bytes += (key.length + (localStorage.getItem(key) || "").length) * 2;
+    if (key?.startsWith(STORAGE_PREFIX)) bytes += (key.length + (readText(key, "") || "").length) * 2;
   }
   return bytes;
 }
@@ -185,7 +187,7 @@ export function getCurrentOrg() { return state.orgs.find(o => o.id === state.cur
 // 切换当前组织
 export function setCurrentOrg(id) {
   state.current = id;
-  localStorage.setItem(KEY_CURRENT, id);
+  writeText(KEY_CURRENT, id);
   reloadCurrent(); // 切换后立刻把新组织的数据载入内存
 }
 
@@ -195,9 +197,10 @@ export function addOrg(name) {
   state.orgs.push({ id, name });
   writeJSON(KEY_ORGS, state.orgs);
   state.current = id;
-  localStorage.setItem(KEY_CURRENT, id);
+  writeText(KEY_CURRENT, id);
   writeJSON(dataKey(id), emptyData());
   state.data = emptyData();
+  lastPersistedData = structuredClone(state.data);
 }
 export function selectImportedOrg(org) {
   if (!state.orgs.some(o => o.id === org.id)) {
@@ -205,7 +208,7 @@ export function selectImportedOrg(org) {
     writeJSON(KEY_ORGS, state.orgs);
   }
   state.current = org.id;
-  localStorage.setItem(KEY_CURRENT, org.id);
+  writeText(KEY_CURRENT, org.id);
 }
 
 // ---------- 部门（组织级选项） ----------

@@ -19,6 +19,37 @@ import { initDashboard, renderDashboard } from "./dashboard.js";
 import { exportRosterXlsx, exportAttendanceXlsx, exportPayrollXlsx } from "./export.js";
 import { initSettings, applyOrgSettings } from "./settings.js";
 import { escapeHtml, isEmployeeActiveOn } from "./domain.js";
+import { StorageError, storageErrorMessage } from "./storage.js";
+
+// #region 全局存储错误反馈
+
+// 普通点击中的存储异常会冒泡到 window。统一提示后阻止浏览器重复打印未处理异常；
+// 不展示存储键、原始数据或异常堆栈，避免诊断信息泄露 HR 内容。
+window.addEventListener("error", event => {
+  if (!(event.error instanceof StorageError)) return;
+  event.preventDefault();
+  renderAll();
+  showToast(storageErrorMessage(event.error.kind));
+});
+
+function showStartupError(error) {
+  const message = error instanceof StorageError
+    ? storageErrorMessage(error.kind)
+    : "应用初始化失败，请刷新页面后重试。";
+  const panel = document.createElement("div");
+  panel.className = "card";
+  panel.style.margin = "40px auto";
+  panel.style.maxWidth = "640px";
+
+  const title = document.createElement("h2");
+  title.textContent = "HR Workbench 无法安全启动";
+  const detail = document.createElement("p");
+  detail.textContent = message;
+  panel.append(title, detail);
+  document.body.replaceChildren(panel);
+}
+
+// #endregion 全局存储错误反馈
 
 // #region 组织与顶部待办渲染
 // ---------- 顶部：组织下拉框渲染 ----------
@@ -257,20 +288,24 @@ function bindHelp() {
 // ============================================================
 // 启动！
 // ============================================================
-ensureSeed(buildSample);   // 1) 数据层启动（首次注入示例）
-initRoster();              // 3) 各模块事件绑定（一次）
-initAttendance();
-initPayroll();
-initDashboard();
-initSettings();
-bindTopbar();              // 4) 顶部栏与 Tab 绑定
-document.getElementById("modalMask").addEventListener("click", (e) => { if (e.target === e.currentTarget) closeModal(); });
-bindTabs();
-bindExport();              // 4.5) 各模块"导出 Excel"按钮
-bindResetColWidths();      // 4.55) 恢复默认列宽按钮
-bindGlobalKeys();          // 4.6) 弹窗 Esc 关闭 / Enter 保存
-bindHelp();                // 4.7) 帮助按钮（规则说明）
-applyOrgSettings(true);     // 4.8) 应用当前组织的界面偏好与默认月份
-renderAll();               // 5) 首次绘制全部内容
+try {
+  ensureSeed(buildSample);   // 1) 数据层启动（首次注入示例）
+  initRoster();              // 3) 各模块事件绑定（一次）
+  initAttendance();
+  initPayroll();
+  initDashboard();
+  initSettings();
+  bindTopbar();              // 4) 顶部栏与 Tab 绑定
+  document.getElementById("modalMask").addEventListener("click", (e) => { if (e.target === e.currentTarget) closeModal(); });
+  bindTabs();
+  bindExport();              // 4.5) 各模块"导出 Excel"按钮
+  bindResetColWidths();      // 4.55) 恢复默认列宽按钮
+  bindGlobalKeys();          // 4.6) 弹窗 Esc 关闭 / Enter 保存
+  bindHelp();                // 4.7) 帮助按钮（规则说明）
+  applyOrgSettings(true);    // 4.8) 应用当前组织的界面偏好与默认月份
+  renderAll();               // 5) 首次绘制全部内容
+} catch (error) {
+  showStartupError(error);
+}
 
 // #endregion 启动顺序
