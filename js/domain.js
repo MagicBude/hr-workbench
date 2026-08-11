@@ -87,7 +87,15 @@ export function attendanceMetrics(employee, month, attendanceRecord, holidays = 
     days = Math.min(days, Number(asOf.slice(8, 10)) || days);
   }
   const dailyRecords = attendanceRecord?.rec || {};
-  const result = { expectedMinutes: 0, actualMinutes: 0, leaveMinutes: 0, absentMinutes: 0, missingMinutes: 0, lateCount: 0, earlyCount: 0 };
+  const result = {
+    expectedMinutes: 0,
+    actualMinutes: 0,
+    leaveMinutes: 0,
+    absentMinutes: 0,
+    missingMinutes: 0,
+    lateCount: 0,
+    earlyCount: 0
+  };
   for (let day = 1; day <= days; day += 1) {
     const date = `${month}-${String(day).padStart(2, "0")}`;
     if (!isWorkdayDate(date, holidays) || !isEmployeeActiveOn(employee, date)) continue;
@@ -198,7 +206,9 @@ export function validateImportPayload(input) {
       if (emp[key] != null && typeof emp[key] !== "string") throw new Error(`employees[${index}].${key} 必须是文本`);
       if (String(emp[key] || "").length > 100) throw new Error(`employees[${index}].${key} 过长`);
     }
-    if (emp.employmentStatus != null && !Object.hasOwn(EMPLOYMENT_STATUS, emp.employmentStatus)) throw new Error(`employees[${index}].employmentStatus 无效`);
+    if (emp.employmentStatus != null && !Object.hasOwn(EMPLOYMENT_STATUS, emp.employmentStatus)) {
+      throw new Error(`employees[${index}].employmentStatus 无效`);
+    }
   });
   for (const key of ["attendance", "payroll"]) {
     (data[key] || []).forEach((item, index) => {

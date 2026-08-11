@@ -11,7 +11,17 @@
  */
 
 import { state, persist, getDepartments, computeRestMinutes, loadPreference, savePreference, removePreference } from "./store.js";
-import { STATUSES, STATUS_LABEL, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026, SUM_KEYS, HALF_DAY_MINUTES } from "./config.js";
+import {
+  STATUSES,
+  STATUS_LABEL,
+  STATUS_COLOR,
+  SHIFTS,
+  SHIFT_LABEL,
+  WEEK_LABEL,
+  HOLIDAYS_2026,
+  SUM_KEYS,
+  HALF_DAY_MINUTES
+} from "./config.js";
 import { openModal, closeModal, showToast, enableColResize, requestRefresh } from "./ui.js";
 import { escapeHtml, isEmployeeActiveInMonth, summarizeAttendance } from "./domain.js";
 
@@ -188,7 +198,11 @@ export function renderAttendance() {
     h2 += `<th class="wk ${cls}" data-col="${dc}"${title}>${hol ? (hol.type === "holiday" ? "休" : "班") : WEEK_LABEL[wd]}</th>`; // 星期/休/班
   }
   // 汇总列表头（跨两行）
-  if (!attFilter.summaryCollapsed) SUM_KEYS.forEach((k, j) => { h1 += `<th class="sumcol" rowspan="2" data-col="${4 + N + j}">${k}</th>`; });
+  if (!attFilter.summaryCollapsed) {
+    SUM_KEYS.forEach((key, index) => {
+      h1 += `<th class="sumcol" rowspan="2" data-col="${4 + N + index}">${key}</th>`;
+    });
+  }
 
   // ---------- 表体：每员工 3 行 ----------
   let body = "";
@@ -345,7 +359,14 @@ function onCellClick(td, ev) {
 //       加班行只接受“加/清除”；若只是单击（未拖动），保持原“循环切换”手感。
 let selStart = null, selMoved = false, dragging = false;
 function cellCoord(td) {
-  return { ei: +td.dataset.ei, di: +td.dataset.di, si: +td.dataset.si, empId: td.dataset.emp, day: td.dataset.day, shift: td.dataset.shift };
+  return {
+    ei: +td.dataset.ei,
+    di: +td.dataset.di,
+    si: +td.dataset.si,
+    empId: td.dataset.emp,
+    day: td.dataset.day,
+    shift: td.dataset.shift
+  };
 }
 function onGridMouseDown(ev) {
   // 点击「时长」角标：直接用 mousedown 打开编辑器（比 click 更稳，不会被后续逻辑吞掉）
@@ -406,7 +427,12 @@ function showBulkBar(ev) {
   const bar = document.createElement("div");
   bar.id = "bulkBar";
   bar.className = "att-bulk-bar";
-  let items = [["√", "出勤"], ["事", "事假"], ["病", "病假"], ["缺", "缺勤"], ["调", "调休"], ["年", "年假"], ["加", "加班"], ["迟", "迟到"], ["退", "早退"], ["清除", "清除/重置"]];
+  let items = [
+    ["√", "出勤"], ["事", "事假"], ["病", "病假"],
+    ["缺", "缺勤"], ["调", "调休"], ["年", "年假"],
+    ["加", "加班"], ["迟", "迟到"], ["退", "早退"],
+    ["清除", "清除/重置"]
+  ];
   if (state.data.settings.enableLateEarly === false) items = items.filter(([s]) => s !== "迟" && s !== "退");
   bar.innerHTML = `<span class="ttl">批量（${cells.length} 格）</span>`
     + items.map(([s, t]) => `<button class="bk" data-s="${s}" title="${t}">${s === "清除" ? "✕" : s}</button>`).join("")

@@ -9,7 +9,15 @@
  * 调用链，不能只把 setItem 替换成 fetch。
  */
 
-import { STORAGE_PREFIX, SCHEMA_VERSION, HOLIDAYS_2026, DEFAULT_SETTINGS, INSURANCE_RATIO, BIG_SICKNESS, HALF_DAY_MINUTES } from "./config.js";
+import {
+  STORAGE_PREFIX,
+  SCHEMA_VERSION,
+  HOLIDAYS_2026,
+  DEFAULT_SETTINGS,
+  INSURANCE_RATIO,
+  BIG_SICKNESS,
+  HALF_DAY_MINUTES
+} from "./config.js";
 import { summarizeAttendance, validateImportPayload } from "./domain.js";
 
 // #region 状态与存储键
@@ -47,7 +55,12 @@ export function emptyData() {
   return {
     schemaVersion: SCHEMA_VERSION,
     employees: [], attendance: [], payroll: [],
-    settings: { ...DEFAULT_SETTINGS, departments: [], insuranceRatio: JSON.parse(JSON.stringify(INSURANCE_RATIO)), bigSickness: BIG_SICKNESS }
+    settings: {
+      ...DEFAULT_SETTINGS,
+      departments: [],
+      insuranceRatio: JSON.parse(JSON.stringify(INSURANCE_RATIO)),
+      bigSickness: BIG_SICKNESS
+    }
   };
 }
 

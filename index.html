@@ -99,7 +99,10 @@
     <section class="section active" id="roster">
       <div class="card">
         <h3>员工花名册</h3>
-        <div class="row roster-actions"><button class="btn btn-primary" id="toggleAddEmpBtn">＋ 新增员工</button><button class="btn" id="expRosterBtn">导出 Excel</button></div>
+        <div class="row roster-actions">
+          <button class="btn btn-primary" id="toggleAddEmpBtn">＋ 新增员工</button>
+          <button class="btn" id="expRosterBtn">导出 Excel</button>
+        </div>
         <div class="row add-employee-form" id="addEmployeeForm" hidden>
           <div class="field"><label>姓名</label><input id="empName" placeholder="如 张三"></div>
           <div class="field"><label>部门</label><select id="empDept"></select></div>
@@ -110,13 +113,31 @@
         <div class="row" style="margin-bottom:10px;align-items:center;">
           <input id="empFilterName" placeholder="搜索姓名…" style="min-width:180px;">
           <select id="empFilterDept"><option value="">全部部门</option></select>
-          <select id="empFilterStatus"><option value="current">当前员工</option><option value="probation">试用</option><option value="active">在职</option><option value="suspended">停薪</option><option value="departed">离职</option><option value="all">全部状态</option></select>
+          <select id="empFilterStatus">
+            <option value="current">当前员工</option>
+            <option value="probation">试用</option>
+            <option value="active">在职</option>
+            <option value="suspended">停薪</option>
+            <option value="departed">离职</option>
+            <option value="all">全部状态</option>
+          </select>
           <span class="hint" id="empFilterCount"></span>
           <button class="btn btn-sm" id="resetEmpColBtn" title="清除列宽记忆，恢复默认宽度">恢复默认列宽</button>
         </div>
         <div style="overflow-x:auto;">
           <table id="empTable">
-            <thead><tr><th class="seq" data-col="0">#</th><th data-col="1">姓名</th><th data-col="2">部门</th><th data-col="3">入职日期</th><th data-col="4">状态</th><th class="num" data-col="5">基本月薪</th><th class="num" data-col="6">可调休余额</th><th class="ops" data-col="7">操作</th></tr></thead>
+            <thead>
+              <tr>
+                <th class="seq" data-col="0">#</th>
+                <th data-col="1">姓名</th>
+                <th data-col="2">部门</th>
+                <th data-col="3">入职日期</th>
+                <th data-col="4">状态</th>
+                <th class="num" data-col="5">基本月薪</th>
+                <th class="num" data-col="6">可调休余额</th>
+                <th class="ops" data-col="7">操作</th>
+              </tr>
+            </thead>
             <tbody></tbody>
           </table>
         </div>
@@ -172,7 +193,12 @@
               </tr>
               <tr>
                 <th class="num">基本月薪</th><th class="num">出差补贴</th><th class="num">奖金</th><th class="num">加班费</th>
-                <th class="num">养老</th><th class="num">医疗</th><th class="num">工伤</th><th class="num">失业</th><th class="num">生育</th><th class="num">公积金</th>
+                <th class="num">养老</th>
+                <th class="num">医疗</th>
+                <th class="num">工伤</th>
+                <th class="num">失业</th>
+                <th class="num">生育</th>
+                <th class="num">公积金</th>
                 <th class="num">养老</th><th class="num">医疗</th><th class="num">失业</th><th class="num">公积金</th><th class="num">大病医疗</th>
               </tr>
             </thead>
