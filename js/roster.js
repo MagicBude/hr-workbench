@@ -10,17 +10,7 @@
  * 不能再维护一份容易漂移的“当前余额”。
  */
 
-import {
-  state,
-  persist,
-  getDepartments,
-  addDepartment,
-  computeRestMinutes,
-  loadPreference,
-  savePreference,
-  removePreference,
-  createSnapshot
-} from "./store.js";
+import { state, persist, getDepartments, addDepartment, computeRestMinutes, loadPreference, savePreference, removePreference, createSnapshot } from "./store.js";
 import { HALF_DAY_MINUTES } from "./config.js";
 import { fmtMoney, openModal, closeModal, enableColResize, requestRefresh } from "./ui.js";
 import { escapeHtml, EMPLOYMENT_STATUS } from "./domain.js";
@@ -188,17 +178,12 @@ export function renderRoster() {
 
   // 应用筛选：姓名模糊匹配 + 部门精确匹配
   const q = rosterFilter.name.trim().toLowerCase();
-  const currentStatuses = ["active", "probation", "suspended"];
-  const list = state.data.employees.filter(employee => {
-    if (employee.deletedAt) return false;
-    if (q && !employee.name.toLowerCase().includes(q)) return false;
-    if (rosterFilter.dept && employee.dept !== rosterFilter.dept) return false;
-
-    const status = employee.employmentStatus || "active";
-    if (rosterFilter.status === "all") return true;
-    if (rosterFilter.status === "current") return currentStatuses.includes(status);
-    return status === rosterFilter.status;
-  });
+  const list = state.data.employees.filter(e =>
+    !e.deletedAt &&
+    (!q || e.name.toLowerCase().includes(q)) &&
+    (!rosterFilter.dept || e.dept === rosterFilter.dept) &&
+    (rosterFilter.status === "all" || (rosterFilter.status === "current" ? ["active", "probation", "suspended"].includes(e.employmentStatus || "active") : (e.employmentStatus || "active") === rosterFilter.status))
+  );
   // 更新筛选计数提示
   const cnt = document.getElementById("empFilterCount");
   if (cnt) cnt.textContent = `共 ${list.length} / ${state.data.employees.filter(e => !e.deletedAt).length} 人`;
@@ -242,19 +227,14 @@ export function renderRoster() {
       requestRefresh("roster", "attendance", "payroll", "dashboard", "today");
     });
   });
-  tb.querySelectorAll("[data-depart]").forEach(button => {
-    button.addEventListener("click", () => {
-      if (!confirm("确认将该员工标记为离职并保留全部历史记录？")) return;
-
-      const employee = state.data.employees.find(item => item.id === button.dataset.depart);
-      if (!employee) return;
-
-      employee.employmentStatus = "departed";
-      employee.leaveDate ||= new Date().toISOString().slice(0, 10);
-      persist();
-      requestRefresh("roster", "attendance", "payroll", "dashboard", "today");
-    });
-  });
+  tb.querySelectorAll("[data-depart]").forEach(b => b.addEventListener("click", () => {
+    if (!confirm("确认将该员工标记为离职并保留全部历史记录？")) return;
+    const emp = state.data.employees.find(x => x.id === b.dataset.depart);
+    if (!emp) return;
+    emp.employmentStatus = "departed";
+    emp.leaveDate ||= new Date().toISOString().slice(0, 10);
+    persist(); requestRefresh("roster", "attendance", "payroll", "dashboard", "today");
+  }));
   // 给每行“编辑”按钮绑定事件
   tb.querySelectorAll("[data-edit]").forEach(b => {
     b.addEventListener("click", () => openEditModal(b.dataset.edit));
@@ -284,10 +264,7 @@ function bindDnD(tb) {
       ev.dataTransfer.effectAllowed = "move";
     });
     // 拖拽经过：必须 preventDefault 才允许“放下”
-    tr.addEventListener("dragover", ev => {
-      ev.preventDefault();
-      ev.dataTransfer.dropEffect = "move";
-    });
+    tr.addEventListener("dragover", (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; });
     // 放下：与目标行交换位置
     tr.addEventListener("drop", (ev) => {
       ev.preventDefault();

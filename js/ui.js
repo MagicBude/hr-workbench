@@ -134,14 +134,7 @@ export function enableColResize(opts) {
     cg.appendChild(c);
     cols.push(c);
   }
-  if (!widths) {
-    widths = cols.map((column, index) => {
-      const renderedWidth = byCol[index]
-        ? Math.round(byCol[index].getBoundingClientRect().width)
-        : min;
-      return parseFloat(column.style.width) || renderedWidth;
-    });
-  }
+  if (!widths) widths = cols.map((c, i) => parseFloat(c.style.width) || (byCol[i] ? Math.round(byCol[i].getBoundingClientRect().width) : min));
 
   // 每次重建 colgroup 后同步重建手柄。花名册的 thead 会复用，如果沿用旧手柄，
   // 其事件闭包仍指向已被 cg.innerHTML 清掉的旧 col，拖动就不会作用于当前表格。

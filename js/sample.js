@@ -57,20 +57,8 @@ export function buildSample() {
   });
 
   // 5) 节假日 + 组织设置（示例用内置 2026 国家法定节假日与默认设置）
-  employees.forEach(employee => {
-    employee.employmentStatus = "active";
-    employee.leaveDate = "";
-    employee.deletedAt = null;
-  });
-
-  return {
-    schemaVersion: SCHEMA_VERSION,
-    employees,
-    attendance,
-    payroll,
-    holidays: { ...HOLIDAYS_2026 },
-    settings: { ...DEFAULT_SETTINGS }
-  };
+  employees.forEach(e => { e.employmentStatus = "active"; e.leaveDate = ""; e.deletedAt = null; });
+  return { schemaVersion: SCHEMA_VERSION, employees, attendance, payroll, holidays: { ...HOLIDAYS_2026 }, settings: { ...DEFAULT_SETTINGS } };
 }
 
 // #endregion 示例组织构造

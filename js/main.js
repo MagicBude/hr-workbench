@@ -9,21 +9,7 @@
 // 业务模块通过 ui.requestRefresh 声明受影响视图；全量刷新仅用于组织切换和整包数据替换。
 // ============================================================
 
-import {
-  ensureSeed,
-  state,
-  persist,
-  emptyData,
-  getOrgs,
-  getCurrentOrgId,
-  getCurrentOrg,
-  setCurrentOrg,
-  addOrg,
-  createSnapshot,
-  createSnapshotForOrg,
-  prepareImportedData,
-  selectImportedOrg
-} from "./store.js";
+import { ensureSeed, state, persist, emptyData, getOrgs, getCurrentOrgId, getCurrentOrg, setCurrentOrg, addOrg, createSnapshot, createSnapshotForOrg, prepareImportedData, selectImportedOrg } from "./store.js";
 import { buildSample } from "./sample.js";
 import { openModal, closeModal, downloadFile, curMonth, curDay, showHelp, showToast } from "./ui.js";
 import { initRoster, renderRoster, resetEmpColWidths } from "./roster.js";
@@ -117,14 +103,7 @@ function renderAll() {
 // 暴露轻量调度入口，供 ui.requestRefresh 在不产生循环 import 的前提下调用。
 window.__renderAll = renderAll;
 window.__refresh = (...modules) => {
-  const refreshers = {
-    orgs: renderOrgs,
-    today: renderToday,
-    roster: renderRoster,
-    attendance: renderAttendance,
-    payroll: renderPayroll,
-    dashboard: renderDashboard
-  };
+  const refreshers = { orgs: renderOrgs, today: renderToday, roster: renderRoster, attendance: renderAttendance, payroll: renderPayroll, dashboard: renderDashboard };
   [...new Set(modules)].forEach(name => refreshers[name]?.());
 };
 
@@ -224,12 +203,8 @@ function bindTabs() {
 // ---------- 绑定各模块"导出 Excel"按钮 ----------
 function bindExport() {
   document.getElementById("expRosterBtn").addEventListener("click", exportRosterXlsx);
-  document.getElementById("expAttBtn").addEventListener("click", () => {
-    exportAttendanceXlsx(document.getElementById("attMonth").value || "2026-08");
-  });
-  document.getElementById("expPayBtn").addEventListener("click", () => {
-    exportPayrollXlsx(document.getElementById("payMonth").value || "2026-08");
-  });
+  document.getElementById("expAttBtn").addEventListener("click", () => exportAttendanceXlsx(document.getElementById("attMonth").value || "2026-08"));
+  document.getElementById("expPayBtn").addEventListener("click", () => exportPayrollXlsx(document.getElementById("payMonth").value || "2026-08"));
 }
 
 // ---------- 绑定"恢复默认列宽"按钮 ----------
