@@ -33,6 +33,68 @@ function ratioInputs(cls, keys, values) {
   return keys.map(key => `<div class="field"><label>${key}</label><input class="${cls}" data-k="${key}" type="number" step="0.001" min="0" max="1" value="${values[key] ?? 0}"></div>`).join("");
 }
 
+function makeActionButton(text, className, datasetName, datasetValue) {
+  const button = document.createElement("button");
+  button.className = className;
+  button.textContent = text;
+  button.dataset[datasetName] = String(datasetValue ?? "");
+  return button;
+}
+
+// 快照元数据和回收站员工可能来自损坏的 localStorage，不能假设它们已经经过导入校验。
+// 动态字段全部通过 textContent/dataset 写入，避免 ID、原因或姓名进入 HTML 解析上下文。
+function renderSafetyLists() {
+  const snapshotContainer = document.getElementById("snapshotList");
+  const snapshots = listSnapshots();
+  if (!snapshots.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "暂无快照";
+    snapshotContainer.appendChild(empty);
+  }
+  snapshots.forEach(snapshot => {
+    const row = document.createElement("div");
+    row.className = "settings-row";
+    const info = document.createElement("div");
+    const time = document.createElement("b");
+    const parsedTime = new Date(snapshot.createdAt);
+    time.textContent = Number.isNaN(parsedTime.getTime()) ? "时间未知" : parsedTime.toLocaleString();
+    const reason = document.createElement("div");
+    reason.className = "hint";
+    reason.textContent = String(snapshot.reason ?? "未注明原因");
+    info.append(time, reason);
+    const actions = document.createElement("div");
+    actions.append(
+      makeActionButton("恢复", "btn btn-sm", "restoreSnapshot", snapshot.id),
+      makeActionButton("删除", "btn btn-sm btn-quiet-danger", "deleteSnapshot", snapshot.id)
+    );
+    row.append(info, actions);
+    snapshotContainer.appendChild(row);
+  });
+
+  const recycleContainer = document.getElementById("employeeRecycleList");
+  const recycledEmployees = state.data.employees.filter(employee => employee.deletedAt);
+  if (!recycledEmployees.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "回收站为空";
+    recycleContainer.appendChild(empty);
+  }
+  recycledEmployees.forEach(employee => {
+    const row = document.createElement("div");
+    row.className = "settings-row";
+    const info = document.createElement("div");
+    const name = document.createElement("b");
+    name.textContent = String(employee.name ?? "未命名员工");
+    const department = document.createElement("div");
+    department.className = "hint";
+    department.textContent = String(employee.dept || "无部门");
+    info.append(name, department);
+    row.append(info, makeActionButton("恢复", "btn btn-sm", "restoreEmp", employee.id));
+    recycleContainer.appendChild(row);
+  });
+}
+
 // #endregion 设置字段与模板工具
 
 // #region 设置应用与入口
@@ -100,16 +162,16 @@ export function openSettings(section = "attendance") {
         <option value="hours"${settings.restBalanceDisplay === "hours" ? " selected" : ""}>总小时（19.5小时）</option>
         <option value="days"${settings.restBalanceDisplay === "days" ? " selected" : ""}>天数小数（2.44天）</option>
       </select></div>
-      <div class="settings-row"><div><b>列宽记忆</b><div class="hint">清除当前组织的花名册和考勤列宽</div></div><button class="btn" id="settingsResetCols">恢复默认列宽</button></div>
+      <div class="settings-row"><div><b>列宽记忆</b><div class="hint">清除当前组织的花名册、考勤和薪资列宽</div></div><button class="btn" id="settingsResetCols">恢复默认列宽</button></div>
     </div>
     <div class="settings-page" data-settings-page="safety">
       <div class="settings-row"><div><b>本地存储占用</b><div class="hint">当前浏览器内全部组织与快照</div></div><span>${(getStorageUsage() / 1024).toFixed(1)} KB</span></div>
       <div class="settings-row"><div><b>数据快照</b><div class="hint">最多保留最近 10 份，导入、清空、回收前会自动创建</div></div><button class="btn" id="createSnapshotBtn">立即备份</button></div>
       <div class="settings-row"><div><b>诊断信息</b><div class="hint">仅含错误类别和操作位置，不含员工、薪资与考勤内容</div></div><button class="btn" id="exportDiagnosticsBtn">导出诊断</button></div>
       <div class="grp-title">最近快照 <button class="btn btn-sm" id="clearSnapshotsBtn">清空快照</button></div>
-      <div class="snapshot-list">${listSnapshots().map(s => `<div class="settings-row"><div><b>${new Date(s.createdAt).toLocaleString()}</b><div class="hint">${escapeHtml(s.reason)}</div></div><div><button class="btn btn-sm" data-restore-snapshot="${s.id}">恢复</button><button class="btn btn-sm btn-quiet-danger" data-delete-snapshot="${s.id}">删除</button></div></div>`).join("") || '<div class="empty">暂无快照</div>'}</div>
+      <div class="snapshot-list" id="snapshotList"></div>
       <div class="grp-title">员工回收站</div>
-      <div class="snapshot-list">${state.data.employees.filter(e => e.deletedAt).map(e => `<div class="settings-row"><div><b>${escapeHtml(e.name)}</b><div class="hint">${escapeHtml(e.dept || "无部门")}</div></div><button class="btn btn-sm" data-restore-emp="${e.id}">恢复</button></div>`).join("") || '<div class="empty">回收站为空</div>'}</div>
+      <div class="snapshot-list" id="employeeRecycleList"></div>
     </div>
     <div class="modal-actions settings-actions">
       <button class="btn" id="settingsCancel">取消</button>
@@ -117,6 +179,7 @@ export function openSettings(section = "attendance") {
       <button class="btn btn-primary" id="settingsSave">保存设置</button>
     </div>`);
   document.getElementById("modal").classList.add("modal-wide");
+  renderSafetyLists();
 
   const activate = name => {
     document.querySelectorAll("[data-settings-tab]").forEach(button => {
@@ -134,7 +197,8 @@ export function openSettings(section = "attendance") {
   document.getElementById("settingsResetCols").addEventListener("click", () => {
     removePreference("colw_emp");
     removePreference("colw_att");
-    requestRefresh("roster", "attendance");
+    removePreference("colw_pay");
+    requestRefresh("roster", "attendance", "payroll");
     showToast("已清除当前组织的列宽记忆");
   });
   document.getElementById("settingsReset").addEventListener("click", async () => {
