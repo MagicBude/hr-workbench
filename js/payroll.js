@@ -11,10 +11,10 @@
 
 import { state, persist, loadPreference, savePreference, removePreference } from "./store.js";
 import { fmtMoney, downloadFile, enableColResize, normalizeColumnWidths, requestRefresh, showToast, requestConfirm } from "./ui.js";
-import { INSURANCE_RATIO, BIG_SICKNESS } from "./config.js";
+import { INSURANCE_RATIO, BIG_SICKNESS, PAYROLL_DISCLAIMER } from "./config.js";
 import { openSettings } from "./settings.js";
 import { estimateTax, escapeHtml, PAYROLL_STATUS, isEmployeeActiveInMonth, buildPayrollRecord, requireNonNegativeNumber } from "./domain.js";
-import { rowsToCsv } from "./spreadsheet.js";
+import { appendConstantColumn, rowsToCsv } from "./spreadsheet.js";
 
 // #region 核算字段与领域辅助
 
@@ -269,7 +269,7 @@ function exportCSV() {
       ...PERS_KEYS.map(k => round2(p.pers[k])),
       round2(p.tax), round2(p.net), PAYROLL_STATUS[p.status || "draft"]]);
   });
-  const csv = "﻿" + rowsToCsv(rows);
+  const csv = "﻿" + rowsToCsv(appendConstantColumn(rows, "核算说明", PAYROLL_DISCLAIMER));
   downloadFile(csv, "薪资_" + month + ".csv", "text/csv");
 }
 

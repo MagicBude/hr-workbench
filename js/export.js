@@ -11,9 +11,9 @@
  */
 
 import { state, computeRestMinutes } from "./store.js";
-import { WEEK_LABEL, SUM_KEYS } from "./config.js";
+import { WEEK_LABEL, SUM_KEYS, PAYROLL_DISCLAIMER } from "./config.js";
 import { EMPLOYMENT_STATUS, PAYROLL_STATUS, isEmployeeActiveInMonth } from "./domain.js";
-import { safeSpreadsheetRows } from "./spreadsheet.js";
+import { appendConstantColumn, safeSpreadsheetRows } from "./spreadsheet.js";
 
 // #region 日期辅助
 // 该月实际天数
@@ -108,7 +108,12 @@ export function exportPayrollXlsx(month) {
       ...PERS_KEYS.map(k => round2(pers[k] || 0)),
       round2(p.tax), round2(p.net), PAYROLL_STATUS[p.status || "draft"]]);
   });
-  writeBook(rows, "薪资表_" + month, "薪资表_" + month + ".xlsx");
+  writeBook(
+    appendConstantColumn(rows, "核算说明", PAYROLL_DISCLAIMER),
+    "薪资表_" + month,
+    "薪资表_" + month + ".xlsx",
+    { notice: PAYROLL_DISCLAIMER }
+  );
 }
 
 // #endregion 薪资导出
@@ -119,11 +124,25 @@ export function exportPayrollXlsx(month) {
 function round2(n) { return Math.round((n || 0) * 100) / 100; }
 function round1(n) { return Math.round((n || 0) * 10) / 10; }
 // 用 SheetJS 生成并触发下载
-function writeBook(aoa, sheetName, filename) {
+export function createWorkbook(aoa, sheetName, { notice = "" } = {}) {
   const wb = XLSX.utils.book_new();
+  if (notice) {
+    const noticeSheet = XLSX.utils.aoa_to_sheet([
+      ["HR Workbench 薪资核算说明"],
+      [notice],
+      ["当前规则未覆盖累计预扣、税率级距、专项附加扣除、社保上下限及地区生效日期。"]
+    ]);
+    noticeSheet["!cols"] = [{ wch: 96 }];
+    XLSX.utils.book_append_sheet(wb, noticeSheet, "重要说明");
+  }
   // 明确把用户文本保持为字符串；公式前缀加单引号后，SheetJS 不会生成公式单元格。
   const ws = XLSX.utils.aoa_to_sheet(safeSpreadsheetRows(aoa));
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  return wb;
+}
+
+function writeBook(aoa, sheetName, filename, options = {}) {
+  const wb = createWorkbook(aoa, sheetName, options);
   XLSX.writeFile(wb, filename);
 }
 

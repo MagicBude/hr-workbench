@@ -129,5 +129,6 @@ export const INSURANCE_RATIO = {
 export const BIG_SICKNESS = 5;     // 大病医疗个人固定 5 元/月
 export const TAX_THRESHOLD = 5000; // 个税起征点（每月）
 export const TAX_RATE = 0.1;       // 个税简化税率（演示用，非真实累进税率）
+export const PAYROLL_DISCLAIMER = "演示估算，不构成正式薪资、社保或税务结果；正式使用前须由财税专业人员复核。";
 
 // #endregion 演示薪资参数

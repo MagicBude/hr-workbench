@@ -348,6 +348,10 @@ td.ops{ white-space:nowrap; }
 #payTable thead [data-col="1"],#payTable tbody td:nth-child(2){ position:sticky; left:90px; z-index:2; background:#fff; }
 #payTable thead [data-col="0"],#payTable thead [data-col="1"]{ z-index:4; background:var(--bg); }
 #payTable .p-status{ min-width:86px; width:86px; }
+.payroll-disclaimer{
+  margin-top:10px; padding:9px 11px; border-left:3px solid var(--warn);
+  background:var(--warn-bg); color:#755019; font-size:12px;
+}
 .status-badge{ display:inline-flex; align-items:center; border-radius:999px; padding:2px 8px; font-size:12px; white-space:nowrap; }
 .status-active{ color:#047857; background:#ecfdf5; }.status-probation{ color:#1d4ed8; background:#eff6ff; }
 .status-suspended{ color:#b45309; background:#fffbeb; }.status-departed{ color:#64748b; background:#f1f5f9; }

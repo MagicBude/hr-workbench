@@ -6,7 +6,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { escapeCsvCell, rowsToCsv, safeSpreadsheetRows, safeSpreadsheetText } from "../js/spreadsheet.js";
+import { appendConstantColumn, escapeCsvCell, rowsToCsv, safeSpreadsheetRows, safeSpreadsheetText } from "../js/spreadsheet.js";
 
 test("危险公式前缀被转换为普通文本", () => {
   for (const value of ["=1+1", "+cmd", "-2+3", "@SUM(A1)", "  =HYPERLINK()"] ) {
@@ -22,4 +22,13 @@ test("CSV 正确处理逗号、引号、换行和公式", () => {
 
 test("XLSX 行只转换文本，不改变数字类型", () => {
   assert.deepEqual(safeSpreadsheetRows([["=1+1", 1000]]), [["'=1+1", 1000]]);
+});
+
+test("固定核算说明追加到表头和每条数据且不修改原数组", () => {
+  const rows = [["姓名", "实发"], ["张三", 8000]];
+  assert.deepEqual(appendConstantColumn(rows, "核算说明", "演示估算"), [
+    ["姓名", "实发", "核算说明"],
+    ["张三", 8000, "演示估算"]
+  ]);
+  assert.deepEqual(rows, [["姓名", "实发"], ["张三", 8000]]);
 });

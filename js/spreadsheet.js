@@ -18,6 +18,12 @@ export function safeSpreadsheetRows(rows) {
   return rows.map(row => row.map(value => typeof value === "string" ? safeSpreadsheetText(value) : value));
 }
 
+// 给现有二维表追加固定说明列，不修改调用方传入的数组。薪资 CSV/XLSX 用它让
+// 合规边界随每条记录保留，即使用户只复制明细行也不会丢失说明。
+export function appendConstantColumn(rows, header, value) {
+  return rows.map((row, index) => [...row, index === 0 ? header : value]);
+}
+
 // #endregion 单元格安全
 
 // #region CSV 编码
