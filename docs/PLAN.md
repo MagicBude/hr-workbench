@@ -2,6 +2,8 @@
 
 > 本文保留早期 Phase 1–10 的实施过程，便于追溯，不再作为当前数据结构和验收口径的权威来源。当前实现以 [`SPEC.md`](SPEC.md)、[`STANDARD.md`](STANDARD.md)、[`ARCHITECTURE.md`](ARCHITECTURE.md) 为准；最新优化状态与后续事项见 [`OPTIMIZATION_BACKLOG.md`](OPTIMIZATION_BACKLOG.md)。
 
+> 导出实现后续已从早期 `xlsx.mini.min.js` 升级为支持单元格样式的本地 `xlsx-js-style.min.js`，并增加综合多月份报表；本文件下方仍保留 Phase 4 当时的技术记录。
+
 > 目标：把当前 MVP 逐步升级为一个更完整、更易用、更像 Excel 的通用人事考勤薪资工作台。  
 > 节奏：**分 5 个 Phase，每个 Phase 独立完成并提交一次 git commit**，方便随时回退和验收。
 

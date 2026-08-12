@@ -1,8 +1,8 @@
 # HR Workbench · 通用人事考勤薪资工作台
 
-一个**零依赖、纯前端、可离线使用**的通用人事工作台，适用于任意公司的考勤与薪资管理。支持多组织（公司）数据隔离、浏览器本地存储与 JSON 备份，可一键部署到 GitHub Pages，在手机和电脑上使用。
+一个**免安装、纯前端、可离线使用**的人事学习与轻量管理工作台。提供员工花名册、分时段考勤、薪资估算和月度看板，支持多组织本地数据分区、JSON 备份与快照恢复，以及可组合模块、连续 1～12 个月的格式化 Excel 报表。项目可直接部署到 GitHub Pages，并适配电脑和手机浏览器。
 
-> A zero-dependency, pure-frontend generic HR workbench usable by any company for attendance & payroll. Features multi-org data isolation, browser-local storage with JSON backup, and modules for employee roster, attendance log, monthly payroll, and a dashboard. Deployable to GitHub Pages.
+> An install-free, pure-frontend HR learning and lightweight management workbench. It includes employee roster, time-segment attendance, payroll estimation, a monthly dashboard, multi-organization local data separation, backup and snapshot recovery, and styled multi-sheet Excel reports for up to 12 consecutive months. Deployable to GitHub Pages and usable on desktop and mobile browsers.
 
 ---
 
@@ -14,7 +14,7 @@
 - **月度看板**：在职人数、出勤率环形图、工资趋势折线图（全部内联 SVG，不引图表库）
 - **多组织分区**：可在多家公司间切换，localStorage 按组织分键（这是数据分区，不是账号权限隔离）
 - **数据备份**：导出 / 导入 JSON，清空有二次确认
-- **综合 Excel 报表**：可组合花名册、考勤和薪资，连续导出 1～12 个月并按月份生成格式化工作表
+- **综合 Excel 报表**：可组合花名册、考勤和薪资，连续导出 1～12 个月；工作表提供分组表头、统一字体、列宽、行高、边框、筛选和金额格式
 - **今天要处理**：逾期考勤、待核算薪资置顶标红，一键直达
 - **数据安全**：导入/清空/回收前自动快照，最多保留 10 份并可在设置中心恢复
 
@@ -38,6 +38,7 @@ hr-workbench/
     ├── roster.js        # 模块一：员工花名册
     ├── attendance.js    # 模块二：考勤记录
     ├── payroll.js       # 模块三：薪资核算
+    ├── export.js        # 单模块与综合多月份 Excel 导出及工作簿样式
     ├── settings.js      # 组织级功能、考勤、薪资、界面和数据安全设置
     ├── dashboard.js     # 模块四：月度看板 + SVG 图表
     └── main.js          # 入口：组装所有模块、绑定事件、首次渲染
@@ -113,12 +114,12 @@ python -m http.server 8000
 npm run verify
 ```
 
-`verify` 会对 `js/*.js` 逐文件执行语法检查并运行领域测试；提交前还应在 `localhost:8090` 回归花名册、考勤、薪资、看板和设置中心。
+`verify` 会对 `js/*.js` 逐文件执行语法检查并运行领域测试；提交前还应启动本地静态服务器，回归花名册、考勤、薪资、看板、设置中心和文件导出。
 
 ---
 
 ## 技术栈
 
 - 原生 HTML + CSS + JavaScript（ES Modules）
-- **零框架、零 CDN、零构建**：不依赖 React/Vue、不引外部图表库，图表用内联 SVG 手画
+- **零框架、零 CDN、零构建**：不依赖 React/Vue；Excel 样式库随仓库放在 `vendor/`，无需联网安装依赖；图表用内联 SVG 手画
 - 纯静态，可直接托管到任意静态空间（GitHub Pages / Vercel / Nginx …）
