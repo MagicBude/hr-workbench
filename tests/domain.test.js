@@ -8,7 +8,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { attendanceMetrics, buildPayrollRecord, canTransitionPayrollStatus, escapeHtml, estimateTax, isEmployeeActiveInMonth, isEmployeeActiveOn, isWorkdayDate, requireNonNegativeNumber, summarizeAttendance, validateImportPayload } from "../js/domain.js";
+import { attendanceMetrics, buildPayrollRecord, canTransitionPayrollStatus, escapeHtml, estimateTax, isEmployeeActiveInMonth, isEmployeeActiveOn, isWorkdayDate, requireNonNegativeNumber, suggestedRestMinutes, summarizeAttendance, validateImportPayload } from "../js/domain.js";
 
 // #region 员工与工作日边界
 
@@ -92,6 +92,13 @@ test("薪资状态必须按核算流程前进或显式解锁", () => {
   assert.equal(canTransitionPayrollStatus("paid", "confirmed"), false);
   assert.equal(canTransitionPayrollStatus("paid", "draft"), true);
   assert.equal(canTransitionPayrollStatus("unknown", "paid"), false);
+});
+
+test("调休余额不足整段时建议实际可用时长", () => {
+  assert.equal(suggestedRestMinutes(60, 240, true), 60);
+  assert.equal(suggestedRestMinutes(300, 240, true), 240);
+  assert.equal(suggestedRestMinutes(-30, 240, true), 0);
+  assert.equal(suggestedRestMinutes(60, 240, false), 240);
 });
 
 test("半天为空或只填加班时仍计入待补录分钟", () => {

@@ -143,7 +143,7 @@ export function openSettings(section = "attendance") {
       <div class="settings-row"><div><b>加班转调休比例</b><div class="hint">例如 1.5 表示加班 1 小时增加 1.5 小时调休</div></div><div class="setting-input"><input id="setOtRatio" type="number" min="0" max="5" step="0.1" value="${settings.overtimeToRestRatio}"><span>倍</span></div></div>
     </div>
     <div class="settings-page" data-settings-page="features">
-      <label class="settings-row switch-row"><div><b>允许迟到 / 早退状态</b><div class="hint">关闭后考勤循环和批量工具不再提供“迟、退”</div></div><input id="setLateEarly" type="checkbox"${checked(settings.enableLateEarly !== false)}></label>
+      <label class="settings-row switch-row"><div><b>允许迟到 / 早退状态</b><div class="hint">关闭后状态选择、Shift 循环和批量工具不再提供“迟、退”</div></div><input id="setLateEarly" type="checkbox"${checked(settings.enableLateEarly !== false)}></label>
       <label class="settings-row switch-row"><div><b>强制校验调休余额</b><div class="hint">关闭后允许调休余额为负数</div></div><input id="setRestCheck" type="checkbox"${checked(settings.enforceRestBalance !== false)}></label>
       <label class="settings-row switch-row"><div><b>显示“今天要处理”</b><div class="hint">控制顶部考勤补录和薪资待核算提醒</div></div><input id="setToday" type="checkbox"${checked(settings.showTodayTodos !== false)}></label>
     </div>

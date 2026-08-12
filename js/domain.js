@@ -39,6 +39,13 @@ export function canTransitionPayrollStatus(currentStatus, nextStatus) {
   return PAYROLL_STATUS_TRANSITIONS[current].includes(nextStatus);
 }
 
+// 强制校验余额时，单击调休若不足一个整段，应把可用分钟带入时长编辑器，
+// 而不是跳过调休状态。关闭强制校验后仍返回整段默认值，允许余额变负。
+export function suggestedRestMinutes(availableMinutes, defaultMinutes, enforceBalance = true) {
+  if (!enforceBalance) return defaultMinutes;
+  return Math.max(0, Math.min(availableMinutes, defaultMinutes));
+}
+
 // 判断员工在某个自然日是否应参与考勤。入职日和离职日都包含在任职区间内，
 // 因此只有 date 严格早于入职日或晚于离职日时才排除。
 export function isEmployeeActiveOn(employee, date) {

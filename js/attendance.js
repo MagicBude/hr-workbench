@@ -13,7 +13,7 @@
 import { state, persist, getDepartments, computeRestMinutes, loadPreference, savePreference, removePreference } from "./store.js";
 import { STATUSES, STATUS_LABEL, STATUS_COLOR, SHIFTS, SHIFT_LABEL, WEEK_LABEL, HOLIDAYS_2026, SUM_KEYS, HALF_DAY_MINUTES } from "./config.js";
 import { openModal, closeModal, showToast, enableColResize, normalizeColumnWidths, requestRefresh, requestText } from "./ui.js";
-import { escapeHtml, isEmployeeActiveInMonth, summarizeAttendance } from "./domain.js";
+import { escapeHtml, isEmployeeActiveInMonth, suggestedRestMinutes, summarizeAttendance } from "./domain.js";
 
 // #region 时长与单元格显示
 
@@ -192,7 +192,7 @@ export function initAttendance() {
     document.getElementById("toggleAttSummaryBtn").textContent = attFilter.summaryCollapsed ? "展开汇总列" : "收起汇总列";
     renderAttendance();
   });
-  // 事件委托：单击循环切换 + 拖拽框选批量应用 + 时长角标
+  // 事件委托：单击快捷录入/选择状态 + Shift 单击循环 + 拖拽框选 + 时长角标
   const grid = document.getElementById("attGrid");
   grid.addEventListener("mousedown", onGridMouseDown);
   document.addEventListener("mousemove", onGridMouseMove);
@@ -383,71 +383,51 @@ function refreshAttendanceCellAndSummary(month, empId, day, shift) {
   });
 }
 
-// 单元格点击：点格子循环切换状态；点「时长」角标打开时长编辑（不切换状态）
+// 空格单击录入最常用状态；已有状态单击打开选择条；Shift 单击保留原循环操作。
+// 这样日常补“√”只需一次点击，同时仍能随时比较直接选择和循环两种操作方式。
 function onCellClick(td, ev) {
-  const empId = td.dataset.emp, day = td.dataset.day, shift = td.dataset.shift;
+  const empId = td.dataset.emp;
+  if (ev && ev.target.closest(".dur")) {
+    openDurationEditor(empId, td.dataset.day, td.dataset.shift);
+    return;
+  }
+  if (ev?.shiftKey) {
+    applyNextStatus(td);
+    return;
+  }
   const month = document.getElementById("attMonth").value || "2026-08";
-  const emp = state.data.employees.find(x => x.id === empId);
-  if (!emp) return;
-  // 点「时长」角标 → 打开时长编辑，不切换状态
-  if (ev && ev.target.closest(".dur")) { openDurationEditor(empId, day, shift); return; }
-
-  const rec = { ...getAtt(month, empId) };
-  const cell = { ...(rec[day] || { am: "", pm: "", ot: "" }) };
-  const cur = cell[shift] || "";
-  const curS = (typeof cur === "object") ? cur.s : cur;
-
-  // 根据时段与日期类型决定可循环状态：
-  //   - 加班行（ot）只能「加 / 空」切换；
-  //   - 上午/下午行（am/pm）在普通工作日不能选「加」，循环 √→事→病→缺→调→年→空；
-  //   - 上午/下午行在周末或节假日放假时允许「加」（来上班算加班），走完整循环（含迟/退/加）。
-  const d = Number(day);
-  const wd = weekdayOf(month, d);
-  const hol = holidayOf(month, d);
-  const isRestDay = (wd === 0 || wd === 6) || (hol && hol.type === "holiday");
-  const isOt = shift === "ot";
-  const st = state.data.settings || {};
-  const balanceBefore = computeRestMinutes(empId);
-  const enabledStatuses = st.enableLateEarly === false ? STATUSES.filter(s => s !== "迟" && s !== "退") : STATUSES;
-  const cycle = isOt
-    ? ["加", ""]
-    : isRestDay
-      ? [...enabledStatuses, ""]
-      : ["√", "事", "病", "缺", "调", "年", ""];
-  let idx = (cycle.indexOf(curS) + 1) % cycle.length;
-  let next = cycle[idx];
-
-  // 调休余额（动态计算）不足时跳过「调」，继续循环（不阻断）
-  const half = st.halfDayMinutes || HALF_DAY_MINUTES;
-  if (!isOt && next === "调" && st.enforceRestBalance !== false) {
-    // 当前格子若已占「调」，先把这部分释放再判断可用
-    const curMin = (typeof cur === "object" && cur.s === "调" && cur.min != null) ? cur.min : (curS === "调" ? half : 0);
-    const avail = computeRestMinutes(empId) + curMin;
-    if (avail < half) {
-      showToast(emp.name + " 可调休余额不足（可用 " + (avail / 60).toFixed(1) + " 小时，需 " + (half / 60) + " 小时），已跳过「调休」");
-      idx = (idx + 1) % cycle.length;
-      next = cycle[idx];
-    }
+  const current = getAtt(month, empId)[td.dataset.day]?.[td.dataset.shift] || "";
+  if (!current) {
+    applySingleStatus(td, td.dataset.shift === "ot" ? "加" : "√");
+    return;
   }
+  td.classList.add("sel");
+  showBulkBar(ev);
+}
 
-  // 存储：加/迟/退 存为带时长的对象（默认 1h / 30m），其余状态存为纯字符串（整段=半天）
-  if (next === "") cell[shift] = "";
-  else if (next === "加" || next === "迟" || next === "退") cell[shift] = { s: next, min: defaultMinFor(next) };
-  else cell[shift] = next;
-
-  rec[day] = cell;
-  saveAtt(month, empId, rec);
-  const balanceAfter = computeRestMinutes(empId);
-  if (st.enforceRestBalance === false && balanceBefore >= 0 && balanceAfter < 0) {
-    showToast(`${emp.name} 调休余额已透支 ${Math.abs(balanceAfter / 60).toFixed(1)} 小时`);
-  }
-  refreshAttendanceCellAndSummary(month, empId, day, shift);
-  requestRefresh("roster", "dashboard", "today");
+// 备用循环入口：规则保持与旧版一致，状态应用仍复用统一校验，避免两套业务口径漂移。
+function applyNextStatus(td) {
+  const { empId, day, shift } = cellCoord(td);
+  const month = document.getElementById("attMonth").value || "2026-08";
+  const current = getAtt(month, empId)[day]?.[shift] || "";
+  const currentStatus = typeof current === "object" ? current.s : current;
+  const settings = state.data.settings || {};
+  const enabledStatuses = settings.enableLateEarly === false
+    ? STATUSES.filter(status => status !== "迟" && status !== "退")
+    : STATUSES;
+  const cycle = shift === "ot"
+    ? ["加", "清除"]
+    : !isWorkday(month, Number(day))
+      ? [...enabledStatuses, "清除"]
+      : ["√", "事", "病", "缺", "调", "年", "清除"];
+  const currentIndex = cycle.indexOf(currentStatus);
+  const nextStatus = cycle[(currentIndex + 1) % cycle.length];
+  applySingleStatus(td, nextStatus);
 }
 
 // ---------- 拖拽框选 + 批量应用 ----------
 // 设计：在单元格上按下并拖动 → 高亮一个矩形区域；松手弹出工具条，点某状态即应用给区域内所有格。
-//       加班行只接受“加/清除”；若只是单击（未拖动），保持原“循环切换”手感。
+//       加班行只接受“加/清除”；若只是单击（未拖动），打开同款单格状态选择条。
 let selStart = null, selMoved = false, dragging = false;
 function cellCoord(td) {
   return { ei: +td.dataset.ei, di: +td.dataset.di, si: +td.dataset.si, empId: td.dataset.emp, day: td.dataset.day, shift: td.dataset.shift };
@@ -483,7 +463,7 @@ function onGridMouseUp(ev) {
   if (selMoved && td) {
     showBulkBar(ev);              // 框选完成 → 弹工具条
   } else if (selStart && td) {
-    const cell = ev.target.closest("td.cell");   // 未拖动：等同单击 → 循环切换（或点时长角标）
+    const cell = ev.target.closest("td.cell");   // 未拖动：执行单击快捷录入、选择状态或 Shift 循环
     if (cell) onCellClick(cell, ev);
   } else {
     document.querySelectorAll("#attGrid td.cell.sel").forEach(x => x.classList.remove("sel")); // 表格外松开：清高亮
@@ -513,7 +493,7 @@ function showBulkBar(ev) {
   bar.className = "att-bulk-bar";
   let items = [["√", "出勤"], ["事", "事假"], ["病", "病假"], ["缺", "缺勤"], ["调", "调休"], ["年", "年假"], ["加", "加班"], ["迟", "迟到"], ["退", "早退"], ["清除", "清除/重置"]];
   if (state.data.settings.enableLateEarly === false) items = items.filter(([s]) => s !== "迟" && s !== "退");
-  bar.innerHTML = `<span class="ttl">批量（${cells.length} 格）</span>`
+  bar.innerHTML = `<span class="ttl">${cells.length === 1 ? "选择状态" : `批量（${cells.length} 格）`}</span>`
     + (state.data.settings.enforceRestBalance === false ? '<span class="bulk-warning">允许透支</span>' : "")
     + items.map(([s, t]) => `<button class="bk" data-s="${s}" title="${t}">${s === "清除" ? "✕" : s}</button>`).join("")
     + `<button class="bk close" data-close="1" title="关闭">×</button>`;
@@ -523,9 +503,53 @@ function showBulkBar(ev) {
   x = Math.max(8, Math.min(x, window.innerWidth - bw - 8));
   y = Math.max(8, Math.min(y, window.innerHeight - bh - 8));
   bar.style.left = x + "px"; bar.style.top = y + "px";
-  bar.querySelectorAll(".bk[data-s]").forEach(b => b.onclick = () => applyBulk(cells, b.dataset.s));
+  bar.querySelectorAll(".bk[data-s]").forEach(button => {
+    button.onclick = () => cells.length === 1
+      ? applySingleStatus(cells[0], button.dataset.s)
+      : applyBulk(cells, button.dataset.s);
+  });
   bar.querySelector("[data-close]").onclick = closeBulkBar;
   setTimeout(() => document.addEventListener("mousedown", outsideClose, true), 0);
+}
+
+// 单格选择复用批量工具条的外观，但保留更细的调休交互：余额不足半天时可输入实际分钟。
+function applySingleStatus(td, status) {
+  const { empId, day, shift } = cellCoord(td);
+  const month = document.getElementById("attMonth").value || "2026-08";
+  const emp = state.data.employees.find(item => item.id === empId);
+  if (!emp) return;
+  const rec = { ...getAtt(month, empId) };
+  const current = rec[day]?.[shift] || "";
+  const half = state.data.settings.halfDayMinutes || HALF_DAY_MINUTES;
+  const currentRestMinutes = typeof current === "object" && current.s === "调"
+    ? (current.min ?? half)
+    : current === "调" ? half : 0;
+  const availableMinutes = computeRestMinutes(empId) + currentRestMinutes;
+
+  if (status === "调" && state.data.settings.enforceRestBalance !== false && availableMinutes < half) {
+    closeBulkBar();
+    const initialMinutes = suggestedRestMinutes(availableMinutes, half, true);
+    if (initialMinutes <= 0) {
+      showToast(`${emp.name} 当前没有可用调休余额`);
+      return;
+    }
+    openDurationEditor(empId, day, shift, { status: "调", initialMinutes });
+    return;
+  }
+
+  const balanceBefore = computeRestMinutes(empId);
+  const result = setCellStatus(emp, rec, day, shift, status, balanceBefore);
+  closeBulkBar();
+  if (!result.applied) {
+    showToast("所选状态不适用于这个单元格");
+    return;
+  }
+  saveAtt(month, empId, rec);
+  if (state.data.settings.enforceRestBalance === false && balanceBefore >= 0 && result.avail < 0) {
+    showToast(`${emp.name} 调休余额已透支`);
+  }
+  refreshAttendanceCellAndSummary(month, empId, day, shift);
+  requestRefresh("roster", "dashboard", "today");
 }
 function outsideClose(e) {
   const bar = document.getElementById("bulkBar");
@@ -623,17 +647,22 @@ function setCellStatus(emp, rec, day, shift, status, avail) {
 }
 
 // 时长编辑弹窗（点单元格里的「时长」角标触发）：步进器设小时/分钟 + 快捷档
-function openDurationEditor(empId, day, shift) {
+// 时长编辑器有两个入口：点击已有状态的时长角标，以及余额不足默认半天时继续选择“调”。
+// 后一种入口通过 options 传入待保存状态和建议时长；取消时不改写原单元格。
+function openDurationEditor(empId, day, shift, options = {}) {
   const month = document.getElementById("attMonth").value || "2026-08";
   const emp = state.data.employees.find(x => x.id === empId);
   if (!emp) return;
   const rec = getAtt(month, empId);
   const cell = rec[day] || {};
   const cur = cell[shift] || "";
-  const curS = (typeof cur === "object") ? cur.s : cur;
-  if (!curS) return;                       // 无状态不弹（角标只在有状态时出现）
+  const storedStatus = (typeof cur === "object") ? cur.s : cur;
+  const curS = options.status || storedStatus;
+  if (!curS) return;                       // 既没有已有状态，也没有调用方指定的待保存状态
   const label = STATUS_LABEL[curS] || curS;
-  const total = (typeof cur === "object" && cur.min != null) ? cur.min : defaultMinFor(curS);
+  const total = options.initialMinutes != null
+    ? options.initialMinutes
+    : ((typeof cur === "object" && cur.min != null) ? cur.min : defaultMinFor(curS));
   let h = Math.floor(total / 60), m = total % 60;
   const st = state.data.settings || {};
   const ratio = st.overtimeToRestRatio ?? 1;
@@ -699,9 +728,15 @@ function openDurationEditor(empId, day, shift) {
   document.getElementById("dCancel").onclick = closeModal;
   document.getElementById("dOk").onclick = () => {
     const min = h * 60 + m;
+    if (min <= 0) {
+      showToast("时长必须大于 0 分钟");
+      return;
+    }
     if (curS === "调" && (state.data.settings || {}).enforceRestBalance !== false) {
       // 余额检查：把当前格子已占的「调」释放后再判断能否负担新时长
-      const curMin = (typeof cur === "object" && cur.min != null) ? cur.min : defaultMinFor("调");
+      const curMin = storedStatus === "调"
+        ? ((typeof cur === "object" && cur.min != null) ? cur.min : defaultMinFor("调"))
+        : 0;
       const avail = computeRestMinutes(empId) + curMin;
       if (min > avail) {
         showToast(emp.name + " 可调休余额不足（可用 " + (avail / 60).toFixed(1) + " 小时），已取消");

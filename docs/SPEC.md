@@ -55,7 +55,7 @@ settings: { overtimeToRest:true, overtimeToRestRatio:1.0, halfDayMinutes:240 }
 
 ### 2.2 时段与状态
 - **三时段**：上午(am)、下午(pm)、加班(ot)。
-- **状态循环**：工作日上午/下午在 `√ / 事 / 病 / 缺 / 调 / 年 / 迟 / 退 / 空` 中循环；加班行仅 `加 / 空`。
+- **状态录入**：空格单击快捷记为出勤（加班行记为加班），已有状态单击直接选择；`Shift + 单击`在合法状态中循环，拖动框选后可批量设置。加班行仅允许 `加 / 空`。
 
 ### 2.3 节假日规则
 - `holiday`：视为休息日，默认不计入应出勤天数，格子灰色 + "休"标签。
@@ -63,7 +63,7 @@ settings: { overtimeToRest:true, overtimeToRestRatio:1.0, halfDayMinutes:240 }
 - **可调**："节假日设置"弹窗可一键"重置为 2026 国家法定节假日"，也可手动增/删/改某天。
 
 ### 2.4 调休联动
-- 选 `调` 时按记录分钟数动态扣减可用余额；开启强制校验后，余额不足会跳过该状态并提示。
+- 选 `调` 时按记录分钟数动态扣减可用余额；开启强制校验后，不足整段但仍有余额时打开时长编辑器，余额为零时提示并拒绝写入。
 - 上午或下午各计 `halfDayMinutes`；全天计 `2*halfDayMinutes`。
 - 选 `加` 且 `settings.overtimeToRest=true` → 按实际加班分钟 × `overtimeToRestRatio` 动态增加可用余额。
 

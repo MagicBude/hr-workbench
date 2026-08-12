@@ -197,7 +197,7 @@ body.col-resizing, body.col-resizing *{ cursor:col-resize !important; user-selec
 .st-dept{ left:106px; min-width:70px; width:70px; color:var(--muted); }
 .st-shift{ left:176px; min-width:44px; width:44px; color:var(--muted); }
 
-/* 日期单元格（可点击循环切换状态）：width:1% 让所有日期列均分剩余宽度 */
+/* 日期单元格（可快捷录入、直接选择或 Shift 循环）：width:1% 让所有日期列均分剩余宽度 */
 .att-table td.cell{ position:relative; min-width:30px; height:32px; cursor:pointer; user-select:none; font-size:13px; text-align:center; }
 .att-table td.cell:hover{ outline:1px solid var(--blue); outline-offset:-1px; }
 .att-table td.cell .dur{ position:absolute; right:1px; bottom:1px; font-size:9px; line-height:1; background:rgba(24,95,165,.78); color:#fff; padding:1px 3px; border-radius:6px; cursor:pointer; pointer-events:auto; min-width:auto; text-align:center; user-select:none; }
