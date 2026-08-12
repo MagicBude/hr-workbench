@@ -73,7 +73,7 @@ hr-workbench 是一个 **零运行时依赖、纯前端、可离线** 的通用�
 | `attendance.js` | 考勤：分时段网格、节假日、调休联动 | `initAttendance` `renderAttendance` |
 | `payroll.js` | 薪资：组织参数核算、编辑、状态锁定与 CSV 导出 | `initPayroll` `renderPayroll` |
 | `dashboard.js` | 看板：KPI、出勤率环图、工资趋势 | `initDashboard` `renderDashboard` |
-| `export.js` | 花名册、考勤、薪资及综合多月份 Excel 导出，并统一工作簿视觉主题 | `exportRosterXlsx` `exportAttendanceXlsx` `exportPayrollXlsx` `exportCombinedXlsx` |
+| `export.js` | 花名册、考勤、薪资及综合多月份 Excel 导出；统一工作簿主题，并为可编辑薪资表生成参数引用公式 | `exportRosterXlsx` `exportAttendanceXlsx` `exportPayrollXlsx` `exportCombinedXlsx` |
 | `main.js` | 入口：组装、全局事件与视图调度 | `renderAll` `window.__refresh` |
 
 ---

@@ -11,7 +11,15 @@
  */
 
 import { state, computeRestMinutes } from "./store.js";
-import { WEEK_LABEL, SUM_KEYS, PAYROLL_DISCLAIMER } from "./config.js";
+import {
+  WEEK_LABEL,
+  SUM_KEYS,
+  PAYROLL_DISCLAIMER,
+  INSURANCE_RATIO,
+  BIG_SICKNESS,
+  TAX_THRESHOLD,
+  TAX_RATE
+} from "./config.js";
 import { EMPLOYMENT_STATUS, PAYROLL_STATUS, isEmployeeActiveInMonth } from "./domain.js";
 import { appendConstantColumn, safeSpreadsheetRows } from "./spreadsheet.js";
 
@@ -105,29 +113,90 @@ export function exportAttendanceXlsx(month) {
 
 // #region 薪资导出
 
-// ---------- 导出薪资表（含考勤统计 + 公司/个人缴纳分项） ----------
+function payrollParameters() {
+  const settings = state.data.settings || {};
+  return {
+    insuranceRatio: settings.insuranceRatio || INSURANCE_RATIO,
+    bigSickness: settings.bigSickness ?? BIG_SICKNESS,
+    taxThreshold: TAX_THRESHOLD,
+    taxRate: TAX_RATE
+  };
+}
+
+function formulaCell(formula, cachedValue = 0) {
+  return { t: "n", f: formula, v: round2(cachedValue) };
+}
+
+// 公式固定引用“计算参数”页；输入列变化后，Excel/WPS 会重新计算草稿和模板行。
+function payrollFormulaRow(rowNumber, cached = {}) {
+  const personalTotal = `SUM(S${rowNumber}:W${rowNumber})`;
+  return {
+    gross: formulaCell(`SUM(G${rowNumber}:I${rowNumber},K${rowNumber})`, cached.gross),
+    company: ["$B$2", "$B$3", "$B$4", "$B$5", "$B$6", "$B$7"].map((parameterCell, index) =>
+      formulaCell(`J${rowNumber}*'计算参数'!${parameterCell}`, cached.company?.[index])),
+    personal: ["$B$8", "$B$9", "$B$10", "$B$11"].map((parameterCell, index) =>
+      formulaCell(`J${rowNumber}*'计算参数'!${parameterCell}`, cached.personal?.[index])),
+    bigSickness: formulaCell(`IF(COUNTA(A${rowNumber}:K${rowNumber})=0,0,'计算参数'!$B$12)`, cached.personal?.[4]),
+    personalTotal: formulaCell(personalTotal, cached.personalTotal),
+    tax: formulaCell(`IF(Y${rowNumber}="",MAX(0,(L${rowNumber}-X${rowNumber}-'计算参数'!$B$13)*'计算参数'!$B$14),Y${rowNumber})`, cached.tax),
+    net: formulaCell(`L${rowNumber}-X${rowNumber}-Z${rowNumber}`, cached.net)
+  };
+}
+
+function payrollParameterRows() {
+  const parameters = payrollParameters();
+  return [
+    ["参数", "数值", "说明"],
+    ["公司养老", parameters.insuranceRatio.company.养老, "社保基数 × 比例"],
+    ["公司医疗", parameters.insuranceRatio.company.医疗, "社保基数 × 比例"],
+    ["公司工伤", parameters.insuranceRatio.company.工伤, "社保基数 × 比例"],
+    ["公司失业", parameters.insuranceRatio.company.失业, "社保基数 × 比例"],
+    ["公司生育", parameters.insuranceRatio.company.生育, "社保基数 × 比例"],
+    ["公司公积金", parameters.insuranceRatio.company.公积金, "社保基数 × 比例"],
+    ["个人养老", parameters.insuranceRatio.personal.养老, "社保基数 × 比例"],
+    ["个人医疗", parameters.insuranceRatio.personal.医疗, "社保基数 × 比例"],
+    ["个人失业", parameters.insuranceRatio.personal.失业, "社保基数 × 比例"],
+    ["个人公积金", parameters.insuranceRatio.personal.公积金, "社保基数 × 比例"],
+    ["大病医疗", parameters.bigSickness, "固定金额（元/月）"],
+    ["个税起征点", parameters.taxThreshold, "演示用月度起征点"],
+    ["个税简化税率", parameters.taxRate, "演示用单一税率，非真实累进税率"]
+  ];
+}
+
+// ---------- 导出薪资表（含可追溯公式、考勤统计和公司/个人缴纳分项） ----------
 export function buildPayrollRows(month) {
   const COMP_KEYS = ["养老", "医疗", "工伤", "失业", "生育", "公积金"];
   const PERS_KEYS = ["养老", "医疗", "失业", "公积金", "大病医疗"];
-  const rows = [["姓名", "部门", "入职日期", "出勤", "缺勤", "实出勤", "出差补贴", "奖金", "基本月薪", "加班费", "本月应发",
+  const rows = [["姓名", "部门", "入职日期", "出勤", "缺勤", "实出勤", "出差补贴", "奖金", "基本月薪", "社保基数", "加班费", "本月应发",
     "公司养老", "公司医疗", "公司工伤", "公司失业", "公司生育", "公司公积金",
-    "个人养老", "个人医疗", "个人失业", "个人公积金", "大病医疗", "个税", "实发薪资", "核算状态"]];
+    "个人养老", "个人医疗", "个人失业", "个人公积金", "大病医疗", "个人缴纳合计", "人工个税", "个税", "实发薪资", "核算状态"]];
   state.data.employees.filter(e => !e.deletedAt && isEmployeeActiveInMonth(e, month)).forEach(e => {
     const p = state.data.payroll.find(x => x.month === month && x.empId === e.id);
     const a = state.data.attendance.find(x => x.month === month && x.empId === e.id);
     const s = a ? a.summary : { 出勤: 0, 缺勤: 0 };
-    if (!p) {
-      // 未生成薪资：只导基础信息
-      rows.push([e.name, e.dept, e.hireDate || "", s.出勤, s.缺勤, s.出勤,
-        0, 0, e.baseSalary, 0, e.baseSalary, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, e.baseSalary, "未生成"]);
-      return;
-    }
-    const comp = p.comp || {}, pers = p.pers || {};
+    const source = p || { travel: 0, bonus: 0, baseSalary: e.baseSalary, overtime: 0, status: "draft" };
+    const comp = source.comp || {}, pers = source.pers || {};
+    const cached = {
+      gross: source.gross ?? source.baseSalary,
+      company: COMP_KEYS.map(key => comp[key] || 0),
+      personal: PERS_KEYS.map(key => pers[key] || 0),
+      personalTotal: source.persTotal || 0,
+      tax: source.tax || 0,
+      net: source.net ?? source.baseSalary
+    };
+    const insuranceBase = e.insuranceBase ?? source.baseSalary;
+    const isSnapshot = source.status === "confirmed" || source.status === "paid";
+    const formulas = payrollFormulaRow(rows.length + 1, cached);
     rows.push([e.name, e.dept, e.hireDate || "", s.出勤, s.缺勤, s.出勤,
-      p.travel, p.bonus, p.baseSalary, p.overtime, round2(p.gross),
-      ...COMP_KEYS.map(k => round2(comp[k] || 0)),
-      ...PERS_KEYS.map(k => round2(pers[k] || 0)),
-      round2(p.tax), round2(p.net), PAYROLL_STATUS[p.status || "draft"]]);
+      source.travel, source.bonus, source.baseSalary, insuranceBase, source.overtime,
+      isSnapshot ? round2(cached.gross) : formulas.gross,
+      ...(isSnapshot ? cached.company.map(round2) : formulas.company),
+      ...(isSnapshot ? cached.personal.map(round2) : [...formulas.personal, formulas.bigSickness]),
+      isSnapshot ? round2(cached.personalTotal) : formulas.personalTotal,
+      source.taxManual ? round2(source.tax) : "",
+      isSnapshot ? round2(cached.tax) : formulas.tax,
+      isSnapshot ? round2(cached.net) : formulas.net,
+      p ? PAYROLL_STATUS[source.status || "draft"] : "未生成"]);
   });
   return appendConstantColumn(rows, "核算说明", PAYROLL_DISCLAIMER);
 }
@@ -182,9 +251,15 @@ function bodyStyle(rowIndex, columnIndex, kind) {
   };
   if (rowIndex % 2 === 1) base.fill = { patternType: "solid", fgColor: { rgb: "F8FAFC" } };
   if (kind === "attendance" && columnIndex >= 4) base.alignment.horizontal = "center";
-  if (kind === "payroll" && columnIndex >= 3 && columnIndex <= 23) {
+  if (kind === "payroll" && columnIndex >= 3 && columnIndex <= 28) {
     base.alignment.horizontal = "right";
     base.numFmt = '#,##0.00;[Red]-#,##0.00';
+  }
+  if (kind === "payroll" && [6, 7, 8, 9, 10, 24].includes(columnIndex)) {
+    base.fill = { patternType: "solid", fgColor: { rgb: EXPORT_THEME.amberLight } };
+  }
+  if (kind === "payroll" && [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26, 27].includes(columnIndex)) {
+    base.fill = { patternType: "solid", fgColor: { rgb: EXPORT_THEME.greenLight } };
   }
   if (kind === "roster" && [6, 7, 8].includes(columnIndex)) {
     base.alignment.horizontal = "right";
@@ -200,10 +275,10 @@ function headerStyle(columnIndex, kind, headerRow) {
     fill = EXPORT_THEME.blueLight;
     color = EXPORT_THEME.blue;
   } else if (kind === "payroll") {
-    if (columnIndex >= 3 && columnIndex <= 10) fill = "DCEAF7";
-    else if (columnIndex >= 11 && columnIndex <= 16) fill = "E7EAFE";
-    else if (columnIndex >= 17 && columnIndex <= 22) fill = EXPORT_THEME.greenLight;
-    else if (columnIndex === 23) fill = EXPORT_THEME.amberLight;
+    if (columnIndex >= 3 && columnIndex <= 11) fill = "DCEAF7";
+    else if (columnIndex >= 12 && columnIndex <= 17) fill = "E7EAFE";
+    else if (columnIndex >= 18 && columnIndex <= 27) fill = EXPORT_THEME.greenLight;
+    else if (columnIndex === 28) fill = EXPORT_THEME.amberLight;
     if (fill !== EXPORT_THEME.blue) color = EXPORT_THEME.text;
   } else if (kind === "roster") {
     if (columnIndex <= 2) fill = EXPORT_THEME.blueLight;
@@ -267,14 +342,31 @@ function appendNoticeSheet(workbook, title, lines) {
   XLSX.utils.book_append_sheet(workbook, noticeSheet, "导出说明");
 }
 
+function appendPayrollParameterSheet(workbook) {
+  const worksheet = worksheetFromRows(payrollParameterRows(), { kind: "parameters" });
+  worksheet["!cols"] = [{ wch: 18 }, { wch: 16 }, { wch: 34 }];
+  for (let rowIndex = 1; rowIndex <= 10; rowIndex += 1) {
+    if (worksheet[`B${rowIndex + 1}`]) worksheet[`B${rowIndex + 1}`].z = "0.00%";
+  }
+  if (worksheet.B14) worksheet.B14.z = "0.00%";
+  XLSX.utils.book_append_sheet(workbook, worksheet, "计算参数");
+}
+
+function enableFormulaRecalculation(workbook) {
+  workbook.Workbook ||= {};
+  workbook.Workbook.CalcPr = { calcMode: "auto", fullCalcOnLoad: true, forceFullCalc: true };
+}
+
 // 用 SheetJS 生成并触发下载
 export function createWorkbook(aoa, sheetName, { notice = "", kind = "table" } = {}) {
   const wb = XLSX.utils.book_new();
   if (notice) {
     appendNoticeSheet(wb, "HR Workbench 薪资核算说明", [notice, "当前规则未覆盖累计预扣、税率级距、专项附加扣除、社保上下限及地区生效日期。"]);
   }
+  if (kind === "payroll") appendPayrollParameterSheet(wb);
   const ws = worksheetFromRows(aoa, { kind });
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  if (kind === "payroll") enableFormulaRecalculation(wb);
   return wb;
 }
 
@@ -293,11 +385,13 @@ export function createCombinedWorkbook({ modules, months, orgName = "当前组�
   ];
   if (includesPayroll) lines.push(PAYROLL_DISCLAIMER);
   appendNoticeSheet(workbook, "HR Workbench 综合报表", lines);
+  if (includesPayroll) appendPayrollParameterSheet(workbook);
   if (modules.includes("roster")) XLSX.utils.book_append_sheet(workbook, worksheetFromRows(buildRosterRows(), { kind: "roster" }), "花名册");
   months.forEach(month => {
     if (modules.includes("attendance")) XLSX.utils.book_append_sheet(workbook, worksheetFromRows(buildAttendanceRows(month), { kind: "attendance" }), `考勤_${month}`);
     if (modules.includes("payroll")) XLSX.utils.book_append_sheet(workbook, worksheetFromRows(buildPayrollRows(month), { kind: "payroll" }), `薪资_${month}`);
   });
+  if (includesPayroll) enableFormulaRecalculation(workbook);
   return workbook;
 }
 
