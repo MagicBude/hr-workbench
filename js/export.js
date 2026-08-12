@@ -4,9 +4,9 @@
  * 输入：当前组织的员工、考勤、薪资数据和目标月份。
  * 输出：可下载的花名册、考勤表或薪资表 .xlsx 文件。
  * 协作：store.js 提供数据和调休余额，domain.js 提供状态与任职区间，
- * vendor/xlsx.mini.min.js 在本模块之前加载并暴露全局 XLSX。
+ * vendor/xlsx-js-style.min.js 在本模块之前加载并暴露全局 XLSX。
  *
- * SheetJS 固定放在本地 vendor 中以保持离线能力。导出字段必须与页面业务口径同步，
+ * 样式版 SheetJS 兼容库固定放在本地 vendor 中以保持离线能力。导出字段必须与页面业务口径同步，
  * 用户文本还需要遵守审查计划中的电子表格公式注入防护要求。
  */
 
@@ -157,6 +157,73 @@ function excelColumnName(index) {
   return name;
 }
 
+const EXPORT_THEME = {
+  blue: "185FA5",
+  blueLight: "DCEAF7",
+  greenLight: "E7F6EF",
+  amberLight: "FFF4D6",
+  grayLight: "F3F5F7",
+  border: "D9E1E8",
+  text: "243447",
+  muted: "66788A",
+  white: "FFFFFF"
+};
+
+function applyCellStyle(worksheet, rowIndex, columnIndex, style) {
+  const cell = worksheet[`${excelColumnName(columnIndex)}${rowIndex + 1}`];
+  if (cell) cell.s = style;
+}
+
+function bodyStyle(rowIndex, columnIndex, kind) {
+  const base = {
+    font: { name: "微软雅黑", sz: 10, color: { rgb: EXPORT_THEME.text } },
+    alignment: { vertical: "center", horizontal: columnIndex === 0 ? "center" : "left" },
+    border: { bottom: { style: "thin", color: { rgb: EXPORT_THEME.border } } }
+  };
+  if (rowIndex % 2 === 1) base.fill = { patternType: "solid", fgColor: { rgb: "F8FAFC" } };
+  if (kind === "attendance" && columnIndex >= 4) base.alignment.horizontal = "center";
+  if (kind === "payroll" && columnIndex >= 3 && columnIndex <= 23) {
+    base.alignment.horizontal = "right";
+    base.numFmt = '#,##0.00;[Red]-#,##0.00';
+  }
+  if (kind === "roster" && [6, 7, 8].includes(columnIndex)) {
+    base.alignment.horizontal = "right";
+    base.numFmt = '#,##0.00;[Red]-#,##0.00';
+  }
+  return base;
+}
+
+function headerStyle(columnIndex, kind, headerRow) {
+  let fill = EXPORT_THEME.blue;
+  let color = EXPORT_THEME.white;
+  if (kind === "attendance" && headerRow === 1) {
+    fill = EXPORT_THEME.blueLight;
+    color = EXPORT_THEME.blue;
+  } else if (kind === "payroll") {
+    if (columnIndex >= 3 && columnIndex <= 10) fill = "DCEAF7";
+    else if (columnIndex >= 11 && columnIndex <= 16) fill = "E7EAFE";
+    else if (columnIndex >= 17 && columnIndex <= 22) fill = EXPORT_THEME.greenLight;
+    else if (columnIndex === 23) fill = EXPORT_THEME.amberLight;
+    if (fill !== EXPORT_THEME.blue) color = EXPORT_THEME.text;
+  } else if (kind === "roster") {
+    if (columnIndex <= 2) fill = EXPORT_THEME.blueLight;
+    else if (columnIndex <= 5) fill = EXPORT_THEME.greenLight;
+    else fill = EXPORT_THEME.amberLight;
+    color = EXPORT_THEME.text;
+  }
+  return {
+    font: { name: "微软雅黑", sz: 10, bold: true, color: { rgb: color } },
+    fill: { patternType: "solid", fgColor: { rgb: fill } },
+    alignment: { horizontal: "center", vertical: "center", wrapText: true },
+    border: {
+      top: { style: "thin", color: { rgb: EXPORT_THEME.border } },
+      bottom: { style: "thin", color: { rgb: EXPORT_THEME.border } },
+      left: { style: "thin", color: { rgb: EXPORT_THEME.border } },
+      right: { style: "thin", color: { rgb: EXPORT_THEME.border } }
+    }
+  };
+}
+
 function worksheetFromRows(rows, { kind = "table" } = {}) {
   const safeRows = safeSpreadsheetRows(rows);
   const worksheet = XLSX.utils.aoa_to_sheet(safeRows);
@@ -166,12 +233,17 @@ function worksheetFromRows(rows, { kind = "table" } = {}) {
     return { wch: Math.min(32, Math.max(8, width + 2)) };
   });
   const headerRows = kind === "attendance" ? 2 : 1;
+  worksheet["!rows"] = Array.from({ length: safeRows.length }, (_, rowIndex) => ({ hpt: rowIndex < headerRows ? 28 : 22 }));
   worksheet["!autofilter"] = { ref: `A${headerRows}:${excelColumnName(columnCount - 1)}${Math.max(headerRows, safeRows.length)}` };
   worksheet["!freeze"] = { xSplit: kind === "attendance" ? 4 : 2, ySplit: headerRows };
-  for (let rowIndex = 0; rowIndex < headerRows; rowIndex += 1) {
+  for (let rowIndex = 0; rowIndex < safeRows.length; rowIndex += 1) {
     for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
-      const cell = worksheet[`${excelColumnName(columnIndex)}${rowIndex + 1}`];
-      if (cell) cell.s = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "185FA5" } }, alignment: { horizontal: "center", vertical: "center" } };
+      applyCellStyle(
+        worksheet,
+        rowIndex,
+        columnIndex,
+        rowIndex < headerRows ? headerStyle(columnIndex, kind, rowIndex) : bodyStyle(rowIndex, columnIndex, kind)
+      );
     }
   }
   return worksheet;
@@ -180,6 +252,18 @@ function worksheetFromRows(rows, { kind = "table" } = {}) {
 function appendNoticeSheet(workbook, title, lines) {
   const noticeSheet = XLSX.utils.aoa_to_sheet([[title], ...lines.map(line => [line])]);
   noticeSheet["!cols"] = [{ wch: 96 }];
+  noticeSheet["!rows"] = [{ hpt: 34 }, ...lines.map(() => ({ hpt: 24 }))];
+  applyCellStyle(noticeSheet, 0, 0, {
+    font: { name: "微软雅黑", sz: 16, bold: true, color: { rgb: EXPORT_THEME.white } },
+    fill: { patternType: "solid", fgColor: { rgb: EXPORT_THEME.blue } },
+    alignment: { vertical: "center" }
+  });
+  lines.forEach((_, index) => applyCellStyle(noticeSheet, index + 1, 0, {
+    font: { name: "微软雅黑", sz: 10, color: { rgb: index === lines.length - 1 ? "9A5B00" : EXPORT_THEME.text } },
+    fill: { patternType: "solid", fgColor: { rgb: index === lines.length - 1 ? EXPORT_THEME.amberLight : "F8FAFC" } },
+    alignment: { vertical: "center", wrapText: true },
+    border: { bottom: { style: "thin", color: { rgb: EXPORT_THEME.border } } }
+  }));
   XLSX.utils.book_append_sheet(workbook, noticeSheet, "导出说明");
 }
 

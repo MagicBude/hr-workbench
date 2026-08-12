@@ -9,7 +9,7 @@ test("薪资工作簿先展示重要说明，再保留明细工作表", () => {
   globalThis.XLSX = {
     utils: {
       book_new: () => ({ sheets: [] }),
-      aoa_to_sheet: rows => ({ rows }),
+      aoa_to_sheet: rows => Object.assign({ rows }, Object.fromEntries(rows.flatMap((row, rowIndex) => row.map((value, columnIndex) => [`${String.fromCharCode(65 + columnIndex)}${rowIndex + 1}`, { v: value }])))),
       book_append_sheet: (workbook, worksheet, name) => workbook.sheets.push({ name, worksheet })
     }
   };
@@ -18,6 +18,10 @@ test("薪资工作簿先展示重要说明，再保留明细工作表", () => {
     assert.deepEqual(workbook.sheets.map(sheet => sheet.name), ["导出说明", "薪资表_2026-08"]);
     assert.equal(workbook.sheets[0].worksheet.rows[1][0], "演示估算");
     assert.deepEqual(workbook.sheets[1].worksheet.rows[0], ["姓名", "实发"]);
+    assert.equal(workbook.sheets[1].worksheet.A1.s.font.bold, true);
+    assert.equal(workbook.sheets[1].worksheet.A1.s.font.name, "微软雅黑");
+    assert.equal(workbook.sheets[1].worksheet.A2.s.font.name, "微软雅黑");
+    assert.deepEqual(workbook.sheets[1].worksheet["!rows"], [{ hpt: 28 }, { hpt: 22 }]);
   } finally {
     if (previousXlsx === undefined) delete globalThis.XLSX;
     else globalThis.XLSX = previousXlsx;
@@ -36,7 +40,7 @@ test("综合工作簿按模块和月份生成可辨识的工作表", () => {
   globalThis.XLSX = {
     utils: {
       book_new: () => ({ sheets: [] }),
-      aoa_to_sheet: rows => ({ rows }),
+      aoa_to_sheet: rows => Object.assign({ rows }, Object.fromEntries(rows.flatMap((row, rowIndex) => row.map((value, columnIndex) => [`${String.fromCharCode(65 + columnIndex)}${rowIndex + 1}`, { v: value }])))),
       book_append_sheet: (workbook, worksheet, name) => workbook.sheets.push({ name, worksheet })
     }
   };
