@@ -195,12 +195,12 @@ export function renderRoster() {
   if (cnt) cnt.textContent = `共 ${list.length} / ${activeEmployees.length} 人`;
 
   if (!activeEmployees.length) {
-    tb.innerHTML = '<tr><td colspan="8" class="empty">暂无员工，添加一条试试。</td></tr>';
+    tb.innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="empty-state-icon">＋</span><div><b>还没有员工档案</b><p>点击上方“新增员工”开始建立花名册。</p></div></div></td></tr>';
     return;
   }
 
   if (!list.length) {
-    tb.innerHTML = '<tr><td colspan="8" class="empty">没有匹配的员工</td></tr>';
+    tb.innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="empty-state-icon">⌕</span><div><b>没有匹配的员工</b><p>尝试更换姓名、部门或任职状态筛选条件。</p></div></div></td></tr>';
     return;
   }
 

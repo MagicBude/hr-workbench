@@ -48,10 +48,10 @@ export function renderDashboard() {
 
   // —— KPI 卡片 ——
   document.getElementById("kpi").innerHTML = `
-    <div class="box"><div class="v">${emps.length}</div><div class="l">在职员工</div></div>
-    <div class="box"><div class="v">${rate}%</div><div class="l">本月出勤率</div></div>
-    <div class="box"><div class="v">${fmtMoney(grossSum)}</div><div class="l">本月应发合计</div></div>
-    <div class="box"><div class="v" style="color:var(--ok)">${fmtMoney(netSum)}</div><div class="l">本月实发合计</div></div>
+    <div class="box kpi-secondary"><div class="v">${emps.length}</div><div class="l">在职员工</div></div>
+    <div class="box kpi-primary"><div class="v">${rate}%</div><div class="l">本月出勤率</div><span class="kpi-note">实际出勤 / 应出勤</span></div>
+    <div class="box kpi-secondary"><div class="v">${fmtMoney(grossSum)}</div><div class="l">本月应发合计</div></div>
+    <div class="box kpi-primary kpi-net"><div class="v">${fmtMoney(netSum)}</div><div class="l">本月实发合计</div><span class="kpi-note">员工实际到手金额</span></div>
     <button class="box kpi-alert ${overdrawnCount ? "active" : ""}" id="overdrawnKpi" type="button" ${overdrawnCount ? "" : "disabled"}>
       <span class="v">${overdrawnCount}</span><span class="l">调休透支人数</span>
       <span class="kpi-action">${overdrawnCount ? "查看花名册 →" : "暂无异常"}</span>
@@ -73,7 +73,7 @@ export function renderDashboard() {
 // 环形图：用一个完整的灰圈 + 一段绿色弧（stroke-dasharray 控制长度）表示占比
 function renderDonut(actual, total, leave, absent, missing) {
   const el = document.getElementById("donut");
-  if (total === 0) { el.innerHTML = '<div class="empty">本月暂无考勤数据</div>'; return; }
+  if (total === 0) { el.innerHTML = '<div class="empty-state empty-state-compact"><span class="empty-state-icon">○</span><div><b>暂无考勤统计</b><p>录入本月考勤后显示出勤率。</p></div></div>'; return; }
 
   const r = 70, cx = 150, cy = 80, circumference = 2 * Math.PI * r;
   const ratio = actual / total;
@@ -100,7 +100,7 @@ function renderTrend() {
   const months = [...new Set(state.data.payroll.map(p => p.month))].sort(); // 去重并排序
 
   if (months.length === 0) {
-    el.innerHTML = '<div class="empty">暂无薪资数据，生成薪资后可见趋势</div>';
+    el.innerHTML = '<div class="empty-state empty-state-compact"><span class="empty-state-icon">↗</span><div><b>暂无薪资趋势</b><p>生成至少一个月的薪资后显示走势。</p></div></div>';
     legend.innerHTML = "";
     return;
   }

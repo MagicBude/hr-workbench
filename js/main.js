@@ -74,8 +74,11 @@ function renderOrgs() {
 
 // ---------- 顶部：“今天要处理”置顶区 ----------
 // 规则：本月之前未填的考勤算“逾期”（红色）；本月有考勤但无薪资算“待核算”。
+let todoExpanded = false;
 function renderToday() {
   const box = document.getElementById("todoList");
+  const count = document.getElementById("todoCount");
+  const toggle = document.getElementById("todoToggle");
   box.innerHTML = "";
   const month = curMonth();
   const today = curDay();
@@ -110,10 +113,23 @@ function renderToday() {
     items.push({ danger: false, text: `${month} 薪资待核算或确认（${pendingPay} 人）`, tab: "payroll" });
   }
 
-  if (!items.length) { box.innerHTML = '<div class="empty">暂无待处理事项，一切正常。</div>'; return; }
-  items.forEach(it => {
+  count.textContent = items.length ? `${items.length} 项` : "";
+  toggle.hidden = items.length <= 3;
+  toggle.textContent = todoExpanded ? "收起" : `展开全部（${items.length}）`;
+  if (!toggle.dataset.bound) {
+    toggle.dataset.bound = "true";
+    toggle.addEventListener("click", () => {
+      todoExpanded = !todoExpanded;
+      renderToday();
+    });
+  }
+  if (!items.length) {
+    box.innerHTML = '<div class="empty-state empty-state-compact"><span class="empty-state-icon">✓</span><div><b>今天没有待处理事项</b><p>考勤和薪资状态一切正常。</p></div></div>';
+    return;
+  }
+  items.forEach((it, index) => {
     const el = document.createElement("div");
-    el.className = "todo" + (it.danger ? " danger" : "");
+    el.className = "todo" + (it.danger ? " danger" : "") + (!todoExpanded && index >= 3 ? " todo-hidden" : "");
     el.innerHTML = `<span class="dot"></span><span class="txt">${it.text}</span>`;
     const b = document.createElement("button"); b.className = "go"; b.textContent = "去处理";
     b.addEventListener("click", () => switchTab(it.tab));

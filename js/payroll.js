@@ -152,7 +152,7 @@ export function renderPayroll() {
 
   const employees = employeesForMonth(month);
   if (!employees.length) {
-    tableBody.innerHTML = '<tr><td colspan="21" class="empty">请先在花名册添加员工。</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="21"><div class="empty-state"><span class="empty-state-icon">¥</span><div><b>暂无可核算员工</b><p>请先在花名册添加员工并确认任职日期。</p></div></div></td></tr>';
     return;
   }
 
@@ -181,16 +181,17 @@ export function renderPayroll() {
       return `<option value="${value}" ${selected} ${disabled}>${label}</option>`;
     }).join("");
     const row = document.createElement("tr");
+    row.className = `payroll-row payroll-${payrollRecord.status || "draft"}`;
     row.innerHTML = `
       <td>${escapeHtml(employee.name)}</td><td>${escapeHtml(employee.dept)}</td>
       <td class="num"><input class="p-base" type="number" min="0" value="${payrollRecord.baseSalary}" data-id="${employee.id}" ${payrollRecord.status !== "draft" ? "disabled" : ""}></td>
       <td class="num"><input class="p-travel" type="number" min="0" value="${payrollRecord.travel}" data-id="${employee.id}" ${payrollRecord.status !== "draft" ? "disabled" : ""}></td>
       <td class="num"><input class="p-bonus" type="number" min="0" value="${payrollRecord.bonus}" data-id="${employee.id}" ${payrollRecord.status !== "draft" ? "disabled" : ""}></td>
       <td class="num"><input class="p-ot" type="number" min="0" value="${payrollRecord.overtime}" data-id="${employee.id}" ${payrollRecord.status !== "draft" ? "disabled" : ""}></td>
-      <td class="num mono">${fmtMoney(payrollRecord.gross)}</td>
+      <td class="num mono pay-gross-value">${fmtMoney(payrollRecord.gross)}</td>
       ${companyCells}${personalCells}
       <td class="num"><input class="p-tax" type="number" min="0" value="${round2(payrollRecord.tax)}" data-id="${employee.id}" ${payrollRecord.status !== "draft" ? "disabled" : ""} title="${payrollRecord.taxManual ? "人工覆盖" : "演示估算"}"></td>
-      <td class="num mono" style="color:var(--ok)">${fmtMoney(payrollRecord.net)}</td>
+      <td class="num mono pay-net-value">${fmtMoney(payrollRecord.net)}</td>
       <td><select class="p-status" data-id="${employee.id}" title="状态按草稿 → 已确认 → 已发放流转；解锁需回到草稿">${statusOptions}</select></td>`;
     tableBody.appendChild(row);
   });
