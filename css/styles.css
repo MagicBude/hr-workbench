@@ -261,6 +261,24 @@ body.col-resizing, body.col-resizing *{ cursor:col-resize !important; user-selec
 .kpi .kpi-alert.active .kpi-action{ color:var(--danger); }
 .charts{ display:grid; grid-template-columns:300px 1fr; gap:16px; }
 .charts .box{ background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; }
+.dashboard-chart-title{ margin-bottom:4px; color:var(--muted); font-size:13px; }
+.dashboard-charts .dashboard-chart-card{ padding:12px 14px; min-width:0; }
+.dashboard-charts #donut>svg,
+.dashboard-charts #trend>svg{ display:block; width:100%; height:180px; }
+.dashboard-charts #donut .legend,
+.dashboard-charts #trendLegend{ margin-top:4px; }
+
+/* 宽屏看板优先在单个视口内完成浏览。图表用固定显示高度承接不同窗口宽度，
+ * 避免 SVG 只按宽度等比放大，导致趋势图越宽反而越高。 */
+@media (min-width:769px){
+  body:has(#dashboard.active) main{ padding-bottom:0; }
+  #dashboard>.card{ padding:14px 16px; }
+  #dashboard .module-head{ margin-bottom:10px; }
+  #dashboard .kpi{ grid-template-columns:repeat(7,minmax(0,1fr)); gap:10px; margin-bottom:10px; }
+  #dashboard .kpi .box{ padding:10px 12px; }
+  #dashboard .kpi .kpi-note{ margin-top:4px; }
+  #dashboard .dashboard-charts{ gap:12px; }
+}
 .legend{ display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:8px; }
 .legend i{ display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:middle; }
 

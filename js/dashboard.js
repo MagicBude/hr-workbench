@@ -106,22 +106,30 @@ function renderTrend() {
   }
 
   const vals = months.map(m => state.data.payroll.filter(p => p.month === m).reduce((s, p) => s + p.net, 0));
-  const W = 560, H = 200, pad = 34;
+  // SVG 的坐标宽度跟随容器，而不是把固定 560px 画布等比缩进超宽卡片。
+  // 这样折线能利用横向空间，同时日期和金额仍保持可读字号。
+  // Tab 切换时看板可能尚处于 display:none，clientWidth 会暂时为 0；因此桌面端改按
+  // 视口宽度预估图表可用空间，移动端仍保留 560 的紧凑坐标系。
+  const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 560;
+  const W = viewportWidth > 768 ? Math.max(720, Math.min(1200, viewportWidth - 420)) : 560;
+  const H = 180;
+  const padX = 48;
+  const padY = 30;
   const max = Math.max(...vals), min = Math.min(...vals, 0);
   const span = Math.max(1, max - min);
 
   // 把数据值映射到画布坐标：x 均匀分布，y 按数值高低换算
-  const x = i => pad + i * (W - 2 * pad) / (months.length - 1 || 1);
-  const y = v => H - pad - (v - min) / span * (H - 2 * pad);
+  const x = i => padX + i * (W - 2 * padX) / (months.length - 1 || 1);
+  const y = v => H - padY - (v - min) / span * (H - 2 * padY);
 
   const pts = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   const dots = vals.map((v, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4" fill="#185FA5"/>`).join("");
-  const labels = months.map((m, i) => `<text x="${x(i).toFixed(1)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="#6b7280">${m.slice(2)}</text>`).join("");
-  const yLabel = `<text x="6" y="${pad}" font-size="10" fill="#9aa0a6">${fmtMoney(max)}</text>`;
+  const labels = months.map((m, i) => `<text x="${x(i).toFixed(1)}" y="${H - 10}" text-anchor="middle" font-size="11" fill="#6b7280">${m.slice(2)}</text>`).join("");
+  const yLabel = `<text x="6" y="${padY}" font-size="11" fill="#6b7280">${fmtMoney(max)}</text>`;
 
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%">
-    <line x1="${pad}" y1="${H - pad}" x2="${W - pad}" y2="${H - pad}" stroke="#e5e7eb"/>
-    <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${H - pad}" stroke="#e5e7eb"/>
+    <line x1="${padX}" y1="${H - padY}" x2="${W - padX}" y2="${H - padY}" stroke="#e5e7eb"/>
+    <line x1="${padX}" y1="${padY}" x2="${padX}" y2="${H - padY}" stroke="#e5e7eb"/>
     <polyline points="${pts}" fill="none" stroke="#185FA5" stroke-width="2"/>${dots}${labels}${yLabel}
   </svg>`;
   legend.innerHTML = `<span><i style="background:#185FA5"></i>实发工资总额（¥）</span>`;
