@@ -206,12 +206,11 @@ export function renderRoster() {
 
   list.forEach((e, i) => {
     const tr = document.createElement("tr");
-    tr.draggable = true;                 // 允许整行被拖拽
     tr.dataset.id = e.id;                // 记员工 id（拖拽时按 id 定位，兼容筛选后的顺序）
     const restMinutes = computeRestMinutes(e.id);
     tr.innerHTML = `
       <td class="seq">${i + 1}</td>
-      <td><span class="drag-handle" title="拖拽排序">≡</span>${escapeHtml(e.name)}</td>
+      <td><span class="drag-handle" draggable="true" title="按住拖动排序" aria-label="拖动 ${escapeHtml(e.name)} 调整顺序">⠿</span>${escapeHtml(e.name)}</td>
       <td>${escapeHtml(e.dept || "")}</td>
       <td>${e.hireDate || "-"}</td>
       <td><span class="status-badge status-${e.employmentStatus || "active"}">${EMPLOYMENT_STATUS[e.employmentStatus || "active"]}</span></td>
@@ -264,37 +263,71 @@ export function renderRoster() {
 
 // #region 拖拽排序
 
-// 拖拽排序：拖起一行 → 放到另一行 → 交换两行在数组里的位置
+// 拖拽排序：只能从手柄开始，拖到目标行的上半区/下半区表示插到目标之前/之后。
+// 自定义拖拽影像只展示必要信息，原行和落点分别用占位框、插入线表达，避免默认整表影像遮挡内容。
 function bindDnD(tb) {
-  let dragId = null;   // 当前被拖拽的员工 id（用 id 而非行号，兼容筛选后的顺序）
+  let dragId = null;
+  let dropPosition = "before";
+  let dragImage = null;
+
+  const clearDropTarget = () => {
+    tb.querySelectorAll("tr.drop-before, tr.drop-after").forEach(row => {
+      row.classList.remove("drop-before", "drop-after");
+    });
+  };
+
+  const cleanup = () => {
+    clearDropTarget();
+    tb.querySelector("tr.dragging")?.classList.remove("dragging");
+    dragImage?.remove();
+    dragImage = null;
+    dragId = null;
+  };
+
   tb.querySelectorAll("tr").forEach(tr => {
-    // 拖拽开始：记住起点 + 加半透明样式
-    tr.addEventListener("dragstart", (ev) => {
+    const handle = tr.querySelector(".drag-handle");
+    handle.addEventListener("dragstart", (ev) => {
       dragId = tr.dataset.id;
       tr.classList.add("dragging");
       ev.dataTransfer.effectAllowed = "move";
+      ev.dataTransfer.setData("text/plain", dragId);
+
+      dragImage = document.createElement("div");
+      dragImage.className = "roster-drag-preview";
+      const employee = state.data.employees.find(item => item.id === dragId);
+      dragImage.textContent = employee ? `${employee.name} · ${employee.dept || "未分部门"}` : "移动员工";
+      document.body.appendChild(dragImage);
+      ev.dataTransfer.setDragImage(dragImage, 18, 18);
     });
-    // 拖拽经过：必须 preventDefault 才允许“放下”
-    tr.addEventListener("dragover", (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; });
-    // 放下：与目标行交换位置
+
+    tr.addEventListener("dragover", (ev) => {
+      if (!dragId || tr.dataset.id === dragId) return;
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = "move";
+      dropPosition = ev.clientY < tr.getBoundingClientRect().top + tr.offsetHeight / 2 ? "before" : "after";
+      clearDropTarget();
+      tr.classList.add(dropPosition === "before" ? "drop-before" : "drop-after");
+    });
+
     tr.addEventListener("drop", (ev) => {
       ev.preventDefault();
       const overId = tr.dataset.id;
       if (overId !== dragId && dragId !== null) {
         const arr = state.data.employees;
         const from = arr.findIndex(x => x.id === dragId);
-        const to = arr.findIndex(x => x.id === overId);
-        if (from !== -1 && to !== -1) {
-          const [moved] = arr.splice(from, 1);  // 取出被拖的行
-          arr.splice(to, 0, moved);             // 插入到目标位置
+        if (from !== -1) {
+          const [moved] = arr.splice(from, 1);
+          const targetIndex = arr.findIndex(x => x.id === overId);
+          const insertIndex = targetIndex + (dropPosition === "after" ? 1 : 0);
+          arr.splice(insertIndex, 0, moved);
           persist();
           requestRefresh("roster");
         }
       }
-      dragId = null;
+      cleanup();
     });
-    // 拖拽结束：去掉样式
-    tr.addEventListener("dragend", () => tr.classList.remove("dragging"));
+
+    handle.addEventListener("dragend", cleanup);
   });
 }
 
