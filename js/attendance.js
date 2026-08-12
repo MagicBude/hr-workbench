@@ -397,8 +397,13 @@ function onCellClick(td, ev) {
   }
   const month = document.getElementById("attMonth").value || "2026-08";
   const current = getAtt(month, empId)[td.dataset.day]?.[td.dataset.shift] || "";
+  // 加班行只有“加 / 空”两个合法值，单击直接切换比再打开状态条更省操作。
+  if (td.dataset.shift === "ot") {
+    applySingleStatus(td, current ? "清除" : "加");
+    return;
+  }
   if (!current) {
-    applySingleStatus(td, td.dataset.shift === "ot" ? "加" : "√");
+    applySingleStatus(td, "√");
     return;
   }
   td.classList.add("sel");
