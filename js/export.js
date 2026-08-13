@@ -4,7 +4,7 @@
  * 输入：当前组织的员工、考勤、薪资数据和目标月份。
  * 输出：可下载的花名册、考勤表或薪资表 .xlsx 文件。
  * 协作：store.js 提供数据和调休余额，domain.js 提供状态与任职区间，
- * vendor/xlsx-js-style.min.js 在本模块之前加载并暴露全局 XLSX。
+ * vendor/xlsx-js-style.min.js 与 fflate 在本模块之前加载，分别负责生成工作簿和封装 XLSX。
  *
  * 样式版 SheetJS 兼容库固定放在本地 vendor 中以保持离线能力。导出字段必须与页面业务口径同步，
  * 用户文本还需要遵守审查计划中的电子表格公式注入防护要求。
@@ -398,12 +398,62 @@ export function createCombinedWorkbook({ modules, months, orgName = "当前组�
 export function exportCombinedXlsx(options) {
   const workbook = createCombinedWorkbook(options);
   const range = options.months.length === 1 ? options.months[0] : `${options.months[0]}_至_${options.months.at(-1)}`;
-  XLSX.writeFile(workbook, `HR综合报表_${range}.xlsx`);
+  downloadWorkbook(workbook, `HR综合报表_${range}.xlsx`);
 }
 
 function writeBook(aoa, sheetName, filename, options = {}) {
   const wb = createWorkbook(aoa, sheetName, options);
-  XLSX.writeFile(wb, filename);
+  downloadWorkbook(wb, filename);
+}
+
+// xlsx-js-style 会保留 !freeze 供业务层描述冻结范围，但不会把它写进工作表 XML。
+// 因此统一在文件封装阶段补入 pane，避免网页与导出文件的固定表头体验不一致。
+export function patchWorksheetFreezeXml(xml, freeze) {
+  if (!freeze || (!freeze.xSplit && !freeze.ySplit) || /<pane\b/.test(xml)) return xml;
+  const xSplit = Number(freeze.xSplit) || 0;
+  const ySplit = Number(freeze.ySplit) || 0;
+  const topLeftCell = `${excelColumnName(xSplit)}${ySplit + 1}`;
+  const activePane = xSplit && ySplit ? "bottomRight" : xSplit ? "topRight" : "bottomLeft";
+  const attributes = [
+    xSplit ? `xSplit="${xSplit}"` : "",
+    ySplit ? `ySplit="${ySplit}"` : "",
+    `topLeftCell="${topLeftCell}"`,
+    `activePane="${activePane}"`,
+    'state="frozen"'
+  ].filter(Boolean).join(" ");
+  const pane = `<pane ${attributes}/>`;
+  if (/<sheetView\b[^>]*\/>/.test(xml)) {
+    return xml.replace(/<sheetView\b([^>]*)\/>/, `<sheetView$1>${pane}</sheetView>`);
+  }
+  return xml.replace(/(<sheetView\b[^>]*>)/, `$1${pane}`);
+}
+
+export function workbookBytes(workbook) {
+  if (!globalThis.fflate) throw new Error("Excel 冻结窗格组件未加载，请刷新页面后重试");
+  const rawBytes = new Uint8Array(XLSX.write(workbook, { bookType: "xlsx", type: "array" }));
+  const archive = globalThis.fflate.unzipSync(rawBytes);
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  workbook.SheetNames.forEach((sheetName, sheetIndex) => {
+    const freeze = workbook.Sheets[sheetName]?.["!freeze"];
+    if (!freeze) return;
+    const path = `xl/worksheets/sheet${sheetIndex + 1}.xml`;
+    if (!archive[path]) throw new Error(`Excel 工作表文件缺失：${path}`);
+    archive[path] = encoder.encode(patchWorksheetFreezeXml(decoder.decode(archive[path]), freeze));
+  });
+  return globalThis.fflate.zipSync(archive, { level: 6 });
+}
+
+function downloadWorkbook(workbook, filename) {
+  const blob = new Blob([workbookBytes(workbook)], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 // #endregion 工作簿工具

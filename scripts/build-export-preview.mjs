@@ -11,15 +11,18 @@
 
 import fs from "node:fs";
 import vm from "node:vm";
-import { createCombinedWorkbook } from "../js/export.js";
+import { createCombinedWorkbook, workbookBytes } from "../js/export.js";
 import { state } from "../js/store.js";
 
 const vendorSource = fs.readFileSync(new URL("../vendor/xlsx-js-style.min.js", import.meta.url), "utf8");
+const fflateSource = fs.readFileSync(new URL("../vendor/fflate-0.8.3.umd.js", import.meta.url), "utf8");
 const browserLikeContext = { console, setTimeout, clearTimeout };
 browserLikeContext.global = browserLikeContext;
 browserLikeContext.window = browserLikeContext;
 vm.runInNewContext(vendorSource, browserLikeContext);
+vm.runInNewContext(fflateSource, browserLikeContext);
 globalThis.XLSX = browserLikeContext.XLSX;
+globalThis.fflate = browserLikeContext.fflate;
 
 state.data = {
   employees: [
@@ -42,12 +45,7 @@ const workbook = createCombinedWorkbook({
 fs.mkdirSync(new URL("../tmp/", import.meta.url), { recursive: true });
 
 // 在隔离上下文中使用纯内存写入，再由当前脚本保存文件，避免依赖库直接访问 Node 文件系统。
-const workbookBytes = XLSX.write(workbook, {
-  bookType: "xlsx",
-  type: "array",
-});
-
 fs.writeFileSync(
   new URL("../tmp/export-preview.xlsx", import.meta.url),
-  new Uint8Array(workbookBytes),
+  workbookBytes(workbook),
 );

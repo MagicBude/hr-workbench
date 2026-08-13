@@ -119,7 +119,7 @@
           <span class="hint" id="empFilterCount"></span>
           <button class="btn btn-sm" id="resetEmpColBtn" title="清除列宽记忆，恢复默认宽度">恢复默认列宽</button>
         </div>
-        <div style="overflow-x:auto;">
+        <div class="table-viewport roster-table-viewport">
           <table id="empTable">
             <thead><tr><th class="seq" data-col="0">#</th><th data-col="1">姓名</th><th data-col="2">部门</th><th data-col="3">入职日期</th><th data-col="4">状态</th><th class="num" data-col="5">基本月薪</th><th class="num" data-col="6">可调休余额</th><th class="ops" data-col="7">操作</th></tr></thead>
             <tbody></tbody>
@@ -156,7 +156,7 @@
           <button class="btn btn-sm" id="resetAttColBtn" title="清除列宽记忆，恢复默认宽度">恢复默认列宽</button>
           <button class="btn btn-sm" id="toggleAttSummaryBtn">收起汇总列</button>
         </div>
-        <div class="att-wrap"><div class="att-grid" id="attGrid"></div></div>
+        <div class="att-wrap table-viewport attendance-table-viewport"><div class="att-grid" id="attGrid"></div></div>
       </div>
     </section>
 
@@ -172,7 +172,7 @@
           <button class="btn btn-sm help-btn" id="helpPayBtn" title="薪资计算说明">?</button>
           <button class="btn btn-sm" id="resetPayColBtn" title="清除列宽记忆，恢复默认宽度">恢复默认列宽</button>
         </div></div>
-        <div style="overflow-x:auto;">
+        <div class="table-viewport payroll-table-viewport">
           <table id="payTable">
             <thead>
               <tr>
@@ -241,6 +241,8 @@
 
   <!-- 本地 xlsx-js-style：兼容 SheetJS API，并支持把字体、填充和边框写入 Excel；零 CDN。 -->
   <script src="vendor/xlsx-js-style.min.js"></script>
+  <!-- 本地 fflate：重新封装 XLSX，使冻结窗格等原生 OOXML 配置真正写入文件；零 CDN。 -->
+  <script src="vendor/fflate-0.8.3.umd.js"></script>
   <!-- 入口脚本：type="module" 开启 ES Modules 模块化 -->
   <script type="module" src="js/main.js"></script>
   <!-- #endregion 公共弹窗与脚本 -->

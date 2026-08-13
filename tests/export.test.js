@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildPayrollRows, createCombinedWorkbook, createWorkbook, monthRange } from "../js/export.js";
+import { buildPayrollRows, createCombinedWorkbook, createWorkbook, monthRange, patchWorksheetFreezeXml } from "../js/export.js";
 import { state } from "../js/store.js";
 
 test("薪资工作簿先展示重要说明，再保留明细工作表", () => {
@@ -32,6 +32,13 @@ test("月份范围按月展开并限制最多十二个月", () => {
   assert.deepEqual(monthRange("2025-11", "2026-02"), ["2025-11", "2025-12", "2026-01", "2026-02"]);
   assert.throws(() => monthRange("2026-03", "2026-02"), /不能早于/);
   assert.throws(() => monthRange("2025-01", "2026-01"), /最多导出/);
+});
+
+test("冻结窗格配置会写入工作表 XML", () => {
+  const source = '<worksheet><sheetViews><sheetView workbookViewId="0"/></sheetViews></worksheet>';
+  const attendance = patchWorksheetFreezeXml(source, { xSplit: 4, ySplit: 2 });
+  assert.match(attendance, /<pane xSplit="4" ySplit="2" topLeftCell="E3" activePane="bottomRight" state="frozen"\/>/);
+  assert.equal(patchWorksheetFreezeXml(attendance, { xSplit: 4, ySplit: 2 }), attendance);
 });
 
 test("综合工作簿按模块和月份生成可辨识的工作表", () => {
